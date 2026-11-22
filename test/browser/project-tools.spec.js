@@ -3,24 +3,26 @@ import os from 'node:os';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {workspaceModules} from '../../src/modules/index.js';
+import {ModuleReader} from '../../src/modules/reader.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
-import {saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {startServer} from '../../src/server.js';
 
 test('project tools are opt-in, saved explicitly, retained when disabled and highlight only their own scope',async({page})=>{
  test.setTimeout(120000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-tools-')),root=path.join(directory,'workspace'),book=sampleNotebook(),parent=book.projects[0];
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-tools-')),book=sampleNotebook(),parent=book.projects[0];
  parent.title='Collective';
  const child={...parent,id:randomUUID(),title:'Music studio',parentId:parent.id},other={...parent,id:randomUUID(),title:'Field team'};book.projects.push(child,other);
  book.notebooks[0].title='Inventory';
- const workspace=new Workspace(root);await workspace.create(book);const store=workspaceModules(workspace),item=randomUUID();
+ const {workspace,vault,deviceStore}=await encryptedFixture(directory,book),root=workspace.root;const store=workspaceModules(workspace),item=randomUUID();
  await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'resource.save',payload:{id:item,expectedRevision:null,data:{projectId:child.id,name:'Audio interface',code:'',kind:'equipment',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'',capacity:1,status:'available',links:[]}}});
  const settings=defaultDashboard(),preferencesFile=path.join(directory,'preferences.json');settings.enabledModules.push('resources','planning');
- await saveDashboard(preferencesFile,settings,dashboardSnapshot(defaultDashboard()).etag);
- const app=await startServer({root,port:0,preferencesFile}),main=page.locator('#main'),nav=page.locator('#main-navigation'),errors=[];
+ await writeWorkspaceDashboard(workspace,settings,(await readWorkspaceDashboard(workspace)).etag);
+ const app=await startServer({root,port:0,preferencesFile,deviceStore}),main=page.locator('#main'),nav=page.locator('#main-navigation'),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  const project=id=>nav.locator('details[data-project-id="'+id+'"]');
  const prefs=async()=>{await nav.getByRole('button',{name:'Preferences',exact:true}).click();await main.getByRole('button',{name:'Modules',exact:true}).click();};
@@ -53,7 +55,8 @@ test('project tools are opt-in, saved explicitly, retained when disabled and hig
   await page.evaluate(()=>document.querySelectorAll('.tree-project').forEach(n=>n.open=true));
   await prefs();await choose();await controls().locator('[data-tool-project="'+child.id+'"]').uncheck();
   await controls().getByRole('button',{name:'Save changes',exact:true}).click();await expect(nav.locator('.location-tool-link')).toHaveCount(0);
-  expect((await store.read()).entities.find(e=>e.id===item).data.name).toBe('Audio interface');
+  // Current workspaces read one module item at a time.
+  expect((await new ModuleReader(workspace).selected({workspaceId:book.id,id:item})).entity.data.name).toBe('Audio interface');
   await page.goto(new URL('/#/modules/resources/scope/'+child.id+'/resource',app.url).href);
   await expect(main).toContainText('This tool is not enabled for this project.');
   await nav.locator('[data-module-nav="resources"]').getByRole('button',{name:'Inventory',exact:true}).click();
@@ -62,6 +65,8 @@ test('project tools are opt-in, saved explicitly, retained when disabled and hig
   await nav.locator('[data-action="open-project"][data-id="'+child.id+'"]').click();
   await main.getByRole('button',{name:'Settings',exact:true}).click();
   const dialog=page.getByRole('dialog');
+  // Project tools sit with the optional project details (src/web/project-settings.js:116).
+  await dialog.getByText('Optional project details and template',{exact:true}).click();
   await dialog.getByRole('checkbox',{name:'Inventory',exact:true}).check();
   await dialog.getByRole('button',{name:'Save project',exact:true}).click();
   await main.getByRole('button',{name:/^Inventory/}).click();
@@ -81,5 +86,5 @@ test('project tools are opt-in, saved explicitly, retained when disabled and hig
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect((await workspace.read()).book.notebooks[0].title).toBe('Inventory');
   expect(errors).toEqual([]);
- }finally{await app.close();await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

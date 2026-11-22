@@ -3,32 +3,36 @@ import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {workspaceModules} from '../../src/modules/index.js';
+import {ModuleReader} from '../../src/modules/reader.js';
 import {defaultDashboard,createPanel} from '../../src/web/dashboard-model.js';
-import {saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {startServer} from '../../src/server.js';
 
 test('location inventory, combined calendars, save/discard and persistent navigation work together',async({page})=>{
  test.setTimeout(120000);
- const directory=await mkdtemp(path.join(await workDirectory('test-work'),'project-operations-')),root=path.join(directory,'workspace'),book=sampleNotebook(),wing=book.projects[0];
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'project-operations-')),book=sampleNotebook(),wing=book.projects[0];
  const parent={...wing,id:randomUUID(),title:'Creative collective',parentId:null},other={...wing,id:randomUUID(),title:'Field team',parentId:parent.id};wing.parentId=parent.id;wing.title='Music studio';book.projects.push(parent,other);
  for(const project of book.projects)project.tools=['planning','resources'];
- const workspace=new Workspace(root);await workspace.create(book);const store=workspaceModules(workspace);
+ const {workspace,deviceStore}=await encryptedFixture(directory,book),root=workspace.root;const store=workspaceModules(workspace),reader=new ModuleReader(workspace);
+ // Current workspaces read module items one at a time; commands still go through the module store.
+ const first=async type=>{const [item]=(await reader.list({workspaceId:book.id,type})).items;return item?(await reader.selected({workspaceId:book.id,id:item.id})).entity:null;};
  const save=(type,id,data)=>store.execute({workspaceId:book.id,commandId:randomUUID(),action:type+'.save',payload:{id,expectedRevision:null,data}});
  const calendar=randomUUID(),otherCal=randomUUID();
  await save('calendar',calendar,{name:'Rehearsals',projectId:wing.id,color:'#3958ba',archived:false});await save('calendar',otherCal,{name:'Field visits',projectId:other.id,color:'#38786c',archived:false});
  const now=new Date(),day=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),'15'].join('-'),end=day.slice(0,8)+'16';
  const event={title:'Band rehearsal',calendarId:calendar,startsAt:day,endsAt:end,allDay:true,timeZone:'UTC',location:'Studio',notes:'',status:'confirmed'};
  await save('event',randomUUID(),event);await save('event',randomUUID(),{...event,title:'Habitat visit',calendarId:otherCal});
- const linkedRoot=path.join(directory,'linked-workspace'),linkedBook=sampleNotebook();linkedBook.title='Partner gallery';
- const linkedWorkspace=new Workspace(linkedRoot);await linkedWorkspace.create(linkedBook);const linkedStore=workspaceModules(linkedWorkspace),linkedCal=randomUUID();
+ const linkedBook=sampleNotebook();linkedBook.title='Partner gallery';
+ // The linked workspace trusts the same test device, so the app can unlock it.
+ const {workspace:linkedWorkspace}=await encryptedFixture(path.join(directory,'linked'),linkedBook,undefined,{deviceDirectory:directory}),linkedRoot=linkedWorkspace.root;const linkedStore=workspaceModules(linkedWorkspace),linkedCal=randomUUID();
  const linkedSave=(type,id,data,expectedRevision=null)=>linkedStore.execute({workspaceId:linkedBook.id,commandId:randomUUID(),action:type+'.save',payload:{id,expectedRevision,data}});
  await linkedSave('calendar',linkedCal,{name:'Programme',projectId:null,color:'#916730',archived:false});
  const linkedEvent=randomUUID();await linkedSave('event',linkedEvent,{...event,calendarId:linkedCal,title:'Gallery opening'});
- const preferencesFile=path.join(directory,'preferences.json'),settings=defaultDashboard();settings.enabledModules.push('resources','planning');const agenda=createPanel('calendar-agenda','calendar-overview','wide');agenda.moduleId='planning';agenda.options.projectId=parent.id;settings.views[0].panels.push(agenda);await saveDashboard(preferencesFile,settings,dashboardSnapshot(defaultDashboard()).etag);
- const app=await startServer({root,port:0,preferencesFile}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const preferencesFile=path.join(directory,'preferences.json'),settings=defaultDashboard();settings.enabledModules.push('resources','planning');const agenda=createPanel('calendar-agenda','calendar-overview','wide');agenda.moduleId='planning';agenda.options.projectId=parent.id;settings.views[0].panels.push(agenda);await writeWorkspaceDashboard(workspace,settings,(await readWorkspaceDashboard(workspace)).etag);
+ const app=await startServer({root,port:0,preferencesFile,deviceStore}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const main=page.locator('#main');
  try{
   await page.goto(app.url);await page.locator('#main-navigation [data-action="open-project"][data-id="'+parent.id+'"]').click();
@@ -49,14 +53,14 @@ test('location inventory, combined calendars, save/discard and persistent naviga
   let moduleReads=0;page.on('request',r=>{if(new URL(r.url()).pathname==='/api/modules/data')moduleReads++;});
   for(let i=0;i<3;i++){const checked=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/modules/version');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await checked;}
   expect(moduleReads).toBe(0);
-  const item=(await store.read()).entities.find(e=>e.type==='resource');
+  const item=await first('resource');
   await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'resource.save',payload:{id:item.id,expectedRevision:item.revision,data:{...item.data,location:'Updated storage shelf'}}});
   const refreshed=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/modules/version');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await refreshed;expect(moduleReads).toBe(0);
   await expect(page.getByLabel('Item name',{exact:true})).toHaveValue('Accidental edit');
   await main.getByRole('button',{name:'Discard edits',exact:true}).click();
   await expect(page.getByLabel('Item name',{exact:true})).toHaveValue('Audio interface');
   await expect(page.getByLabel('Storage place',{exact:true})).toHaveValue('Updated storage shelf');
-  await main.getByRole('button',{name:'Back to items',exact:true}).click();
+  await main.getByRole('button',{name:'Back to Items',exact:true}).click();
   await expect(main.getByRole('heading',{name:'Audio interface',exact:true})).toBeVisible();
   await page.getByLabel('Include locations inside').uncheck();await expect(main.getByRole('heading',{name:'Audio interface',exact:true})).toHaveCount(0);
   await page.getByLabel('Include locations inside').check();
@@ -105,11 +109,11 @@ test('location inventory, combined calendars, save/discard and persistent naviga
   await page.getByLabel('Calendar subscription URL').fill('https://calendar.example/programme.ics');
   await main.getByRole('button',{name:'Save subscription',exact:true}).click();
   await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  expect((await store.read()).entities.find(e=>e.type==='subscription').data.projectId).toBe(wing.id);
+  expect((await first('subscription')).data.projectId).toBe(wing.id);
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:path.join(directory,'subscription-mobile.png'),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
-  const subscription=(await store.read()).entities.find(e=>e.type==='subscription');
+  const subscription=await first('subscription');
   await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'subscription.save',payload:{id:subscription.id,expectedRevision:subscription.revision,data:{...subscription.data,enabled:false}}});
   await page.setViewportSize({width:1440,height:1000});
   await page.locator('#main-navigation button[data-action="workspace"]').click();
