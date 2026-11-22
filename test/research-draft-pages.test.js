@@ -35,7 +35,8 @@ test('recovery pages and reverse ranges stay bounded without reading draft or re
   ResearchCatalogue.prototype.objectValue=function(id,...args){assert.ok(!id.startsWith(source));if(id.startsWith('metadata:.observanda/draft-list/'))summaries++;return original.objectValue.call(this,id,...args);};
   try{
    const first=await f.drafts.list({workspaceId:f.book.id,excludeId:f.commands.at(-1).id});
-   assert.equal(first.drafts.length,10);assert.equal(first.previousCursor,null);assert.ok(first.nextCursor);assert.equal(summaries,10);
+   // Ten summaries are shown and one more is read to learn whether a visible next page exists.
+   assert.equal(first.drafts.length,10);assert.equal(first.previousCursor,null);assert.ok(first.nextCursor);assert.equal(summaries,11);
    assert.ok(JSON.stringify(first).length<12000);assert.ok(!JSON.stringify(first).includes('Private working source'));
    const second=await f.drafts.list({workspaceId:f.book.id,excludeId:f.commands.at(-1).id,cursor:first.nextCursor});
    const back=await f.drafts.list({workspaceId:f.book.id,excludeId:f.commands.at(-1).id,cursor:second.previousCursor});
