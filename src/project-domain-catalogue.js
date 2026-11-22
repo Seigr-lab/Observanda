@@ -10,9 +10,11 @@ import {AppError} from './errors.js';
 import {validModuleDomain,moduleDomain} from './modules/domains.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 export class ProjectDomainCatalogue{
- constructor(workspace,db,domain,namespaceId,{writable=false,catalogueDb=null,readOnly=false}={}){
+ constructor(workspace,db,domain,namespaceId,{writable=false,catalogueDb=null,readOnly=false,beforeCommit=null}={}){
   if(!workspace.vault?.key||!validModuleDomain(domain)||typeof readOnly!=='boolean'||readOnly&&writable)throw new AppError('INVALID');
   this.workspace=workspace;this.db=db;this.catalogueDb=catalogueDb;this.domain=domain;this.namespaceId=namespaceId;this.writable=writable;
+  // Work that must run in this transaction after the caller's final check, just before it commits.
+  this.beforeCommit=beforeCommit;
   this.readOnly=readOnly;this.readCache=readOnly?new CatalogueReadCache():null;
   this.scope=moduleDomainKeyScope(workspace,namespaceId);
   this.key=Buffer.from(hkdfSync('sha256',workspace.vault.key,this.scope.salt,this.scope.label+'/'+workspace.vault.id+'/'+domain,32));

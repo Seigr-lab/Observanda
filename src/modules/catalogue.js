@@ -34,6 +34,17 @@ export const moduleCurrentBytes=(workspaceId,revision,members)=>{
  const count=Array.isArray(members)?members.length:members.count,bytes=Array.isArray(members)?members.reduce((sum,m)=>sum+m.bytes,0):members.bytes;
  return Buffer.byteLength(serialize({formatVersion:1,workspaceId,revision,entities:[]}))+bytes+(count?2*count+2:0);
 };
+// Calculators with a structured engine or a calculation policy need catalogue features that
+// lock the catalogue format table until their transaction commits. In a project domain
+// transaction they run after the final check, just before commit (see project-domains.js).
+export async function moduleCatalogueFeaturesPresent(db,entities){
+ const format=await catalogueFormat(db);
+ return !(entities.some(entity=>hasStructuredCalculator(entity?.type,entity?.data))&&!catalogueRequiresStructuredCalculator(format)||entities.some(entity=>hasCalculationPolicy(entity?.type,entity?.data))&&!catalogueRequiresCalculationPolicies(format));
+}
+export async function requireModuleCatalogueFeatures(db,entities){
+ if(entities.some(entity=>hasStructuredCalculator(entity?.type,entity?.data)))await requireStructuredCalculator(db);
+ if(entities.some(entity=>hasCalculationPolicy(entity?.type,entity?.data)))await requireCalculationPolicies(db);
+}
 export class ModuleCatalogue{
  constructor(store){this.store=store;this.currentSizes=new WeakMap();this.membersIndex=new ModuleMemberIndex(store);}
  async checkPolicy(entity){if(usesResourceQuality(entity))await assertResourceQualityFormat(this.store);if(hasStructuredCalculator(entity?.type,entity?.data)&&!catalogueRequiresStructuredCalculator(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
@@ -196,8 +207,9 @@ export class ModuleCatalogue{
   if(entities.some(usesResourceQuality))await requireResourceQualityFormat(this.store);
   await this.store.assertModuleWrite?.(entities,event);
   await assertProjectSourceModuleWrite(this,previous,entities);
-  if(entities.some(entity=>hasStructuredCalculator(entity.type,entity.data)))await requireStructuredCalculator(this.store.catalogueDb??this.store.db);
-  if(entities.some(entity=>hasCalculationPolicy(entity.type,entity.data)))await requireCalculationPolicies(this.store.catalogueDb??this.store.db);
+  const db=this.store.catalogueDb??this.store.db;
+  if(this.store.beforeCommit&&!await moduleCatalogueFeaturesPresent(db,entities))this.store.beforeCommit(()=>requireModuleCatalogueFeatures(db,entities));
+  else await requireModuleCatalogueFeatures(db,entities);
   const s=this.store,empty=(previous.memberVersion===1?previous.root?.count??0:previous.entities.length)===0;
   let root=previous.root??null,{bytes:totalBytes}=await this.currentSize(previous);
   const browse=new ModuleBrowseIndex(this);

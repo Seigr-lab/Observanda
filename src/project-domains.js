@@ -61,7 +61,7 @@ export class ProjectDomains{
   if(!Array.isArray(authoring)||new Set(authoring).size!==authoring.length||authoring.some(id=>!moduleDraftOwners.includes(id)||!domains.includes(moduleDraftDomain(id))))throw new AppError('INVALID');
   signal?.throwIfAborted();await this.storage.requireStorageKey();
   return catalogueConnection(this.storage,write.length||authoring.length?'domain-write':'domain-read',{},async db=>{
-  await this.#verifyConnection(db);const session=databaseSchemaSession(db),stores=new Map();
+  await this.#verifyConnection(db);const session=databaseSchemaSession(db),stores=new Map(),beforeCommit=[];
   try{
    await db.run(write.length||authoring.length?(consistent?'BEGIN ISOLATION LEVEL REPEATABLE READ':'BEGIN'):'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
    // Separate from the research writer. Lifecycle handoff takes this gate
@@ -77,7 +77,7 @@ export class ProjectDomains{
    if(authoring.length&&registry?.authoringVersion!==1)throw new AppError('ACCESS_UPGRADE');
    if(domains.some(domain=>!registry?.domains.includes(domain)))throw new AppError('CATALOGUE_UNAVAILABLE');
    for(const domain of domains){
-    const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:write.includes(domain),catalogueDb:research.db,readOnly:!write.length&&!authoring.length});stores.set(domain,store);await checkProjectDomainOwner(store);
+    const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:write.includes(domain),catalogueDb:research.db,beforeCommit:task=>beforeCommit.push(task),readOnly:!write.length&&!authoring.length});stores.set(domain,store);await checkProjectDomainOwner(store);
    }
    const get=domain=>{const store=stores.get(domain);if(!store)throw new AppError('INVALID');return store;};
    // inspect is an internal, read-only identity lookup in the same snapshot;
@@ -90,7 +90,10 @@ export class ProjectDomains{
     return stores.get(domain);
    };
    const participant=domain=>{if(!domains.includes(domain))throw new AppError('INVALID');return get(domain);};
-   const result=await db.scope(()=>operation(participant,{research,registry,inspect}));signal?.throwIfAborted();await check();await db.run('COMMIT');return result;
+   // Catalogue feature upgrades lock the format table until commit, while the final check may read
+   // this catalogue on other connections; they run after that check, in the same transaction.
+   const result=await db.scope(()=>operation(participant,{research,registry,inspect}));signal?.throwIfAborted();await check();
+   for(const task of beforeCommit)await db.scope(task);await db.run('COMMIT');return result;
   }finally{session.close();for(const store of stores.values())store.close();}
   });
  }

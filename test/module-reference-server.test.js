@@ -20,8 +20,9 @@ import {ProjectReferenceAliases} from '../src/project-reference-aliases.js';
 import {referenceOriginKey} from '../src/research-reference-namespace.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {TestDeviceStore} from './device-fixture.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 async function result(response,status=200){const value=await response.json();assert.equal(response.status,status,JSON.stringify(value));return value;}
-const calculation=(workspaceId,id,name,links=[])=>({workspaceId,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:null,data:{name,links,engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
+const calculation=(workspaceId,id,name,links=[])=>({workspaceId,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:null,data:{name,links,engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-reference-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];let app;
  t.after(async()=>{await app?.close();await provider.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-module-reference-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
