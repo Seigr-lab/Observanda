@@ -8,7 +8,7 @@ import {withWriterLease} from './writer-lease.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 import {assertNoImportHold} from './import-source-hold.js';
-const journals={'workspace-move':'project-workspace-moves',rename:'project-renames',copy:'project-copies',archive:'project-archives',delete:'project-deletions','retire-records':'project-record-retirements','retire-originals':'project-original-retirements','retire-metadata':'project-metadata-retirements','retire-modules':'project-module-retirements','retire-media':'project-media-retirements','retire-uploads':'project-upload-retirements','retire-intakes':'project-intake-retirements','retire-publications':'project-publication-retirements'};
+const journals={'workspace-move':'project-workspace-moves',rename:'project-renames',copy:'project-copies',archive:'project-archives',delete:'project-deletions'};
 export async function withProjectLifecycle(registry,projectId,kind,operation,{wait=true}={}){
  if(!researchId(projectId)||!['open',...Object.keys(journals)].includes(kind)||typeof operation!=='function')throw new AppError('INVALID');
  const directory=await privateDirectory(registry.workspace.root,'.observanda/project-lifecycle');

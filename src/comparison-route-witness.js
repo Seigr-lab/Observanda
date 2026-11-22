@@ -12,8 +12,8 @@ const changed=()=>{throw new AppError('WORKSPACE_CHANGED');};
 // A live dependency walk may see any number of identities. Keep its exact
 // routing witnesses in encrypted temporary storage, never in a growing Map.
 // Only a validated command's bounded witness list may outlive this reader.
-export function comparisonRouteWitness({root,changes,locate,signal}){
- let current=structuredClone(root),closed=false,tail=Promise.resolve(),opening,finish,lifetime;
+export function comparisonRouteWitness({locate,signal}){
+ let closed=false,tail=Promise.resolve(),opening,finish,lifetime;
  const check=()=>{signal?.throwIfAborted();if(closed)changed();};
  const storage=()=>{
   check();if(opening)return opening;
@@ -39,13 +39,6 @@ export function comparisonRouteWitness({root,changes,locate,signal}){
   observe:(reference,owner)=>serial(async()=>{
    if(!validReference(reference)||!validOwner(owner))throw new AppError('INVALID');
    await remember(await storage(),reference,owner);
-  }),
-  verify:root=>serial(async()=>{
-   if(same(root,current))return;
-   if(opening){const work=await opening;for await(const entry of changes(current,root)){
-    check();const saved=await work.get(entry.id);if(saved&&!same(await locate(saved.reference),saved.owner))changed();
-   }}
-   current=structuredClone(root);
   }),
   capture:references=>serial(async()=>{
    if(!Array.isArray(references)||references.length>196||!references.every(validReference))throw new AppError('INVALID');

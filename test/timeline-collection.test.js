@@ -1,4 +1,3 @@
-import {moduleMigrationDependencies} from '../src/project-module-ownership.js';
 import {timelineCollectionChoices} from '../src/timeline-collection-choices.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,7 +41,6 @@ test('qualified timeline sources stay scoped and saved filters retain external o
  const data={name:'Chronology',links:[],engine:1,...timelineDefaults(),books:[source]};validateTool('timeline-view',data);let saved;
  await toolDefinitions.commands['timeline-view.save']({book,get:()=>null,expect(){},put:(type,id,data)=>{saved=data;}},{id:id(),expectedRevision:null,data});assert.deepEqual(saved.books,[source]);
  assert.deepEqual(moduleReferences({type:'timeline-view',data}).links,[{workspaceId:foreign,type:'notebook',id:notebookId}]);
- assert.deepEqual([...moduleMigrationDependencies({type:'timeline-view',data},workspaceId)],[{kind:'external',workspaceId:foreign,type:'notebook',id:notebookId}]);
 });
 test('timeline client rejects duplicate owner identities, unordered records and original bodies',async()=>{
  const f=fixture(10),page=await f.read({}),options={...f.command,collection:true};assert.equal(validateTimelinePage(page,options),page);

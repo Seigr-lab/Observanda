@@ -20,7 +20,7 @@ export async function createComparisonSourceAccess(application,client,{workspace
   let entry;try{entry=await registry.namespace(id);}catch(error){if(error.code!=='NOT_FOUND')throw error;entry=await new LabBookDirectory(registry).locate(id);if(!entry)throw error;}
   return {workspaceId:entry.namespaceId,projectId:entry.projectId,labBookId:entry.labBookId??null};
  }
- const routes=comparisonRouteWitness({root:null,changes:async function*(){},locate,signal});
+ const routes=comparisonRouteWitness({locate,signal});
  const active=()=>{signal?.throwIfAborted();if(closed)throw new AppError('WORKSPACE_CHANGED');};
  const service={workspaceId,
   async use(reference,consume){
@@ -35,7 +35,7 @@ export async function createComparisonSourceAccess(application,client,{workspace
   },
   async selected(id,consume){active();const owner=await namespace(id);return reader.use(owner,null,(store,snapshot,{storage})=>consume(storage,{owner,store,snapshot}));},
   async verify(){
-   active();await reader.verify();await routes.verify(null);await reader.verify();
+   active();await reader.verify();
   },
   verifyGrants:()=>reader.verify(),
   captureRoutes:references=>{active();return routes.capture(references.map(ref=>materialReference({...ref,workspaceId:ref.workspaceId??workspaceId})));},

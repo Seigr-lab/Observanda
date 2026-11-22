@@ -8,7 +8,6 @@ import {validateBOMReceipt,validateExternalBOMStock,validateManagedReservation} 
 import {validateBOMSource} from '../src/modules/bom-constraints.js';
 import {moduleConstraint,moduleCommandOriginals} from '../src/modules/constraints.js';
 import {moduleReferences} from '../src/modules/references.js';
-import {moduleMigrationDependencies} from '../src/project-module-ownership.js';
 import {InventoryReader} from '../src/modules/inventory-reader.js';
 import {inventoryQuantities} from '../src/modules/inventory-query.js';
 import {blankBOM,bomLine} from '../src/web/modules/bom-model.js';
@@ -84,7 +83,6 @@ test('qualified BOM references hydrate only the selected owner and preserve fore
  assert.deepEqual(new Set(selected),new Set([f.bom.id,f.resourceId,f.reservationId]));
  const foreignOnly=structuredClone(f.bom);foreignOnly.data.lines=[foreignOnly.data.lines[1]];foreignOnly.data.allocations=[foreignOnly.data.allocations[1]];selected.length=0;
  await moduleCommandOriginals({async selected(_head,id){selected.push(id);return foreignOnly;}},{},{workspaceId:f.workspaceId,payload:{id:f.bom.id}});assert.deepEqual(selected,[f.bom.id]);
- const dependencies=[...moduleMigrationDependencies(foreignOnly,f.workspaceId)];assert.ok(dependencies.some(value=>value.kind==='external'&&value.type==='resource'&&value.workspaceId===f.foreign&&value.id===f.resourceId));assert.ok(dependencies.some(value=>value.kind==='external'&&value.type==='reservation'&&value.workspaceId===f.foreign));assert.ok(!dependencies.some(value=>value.kind==='module'));
  assert.ok(moduleReferences(foreignOnly).links.some(value=>value.workspaceId===f.foreign&&value.type==='resource'&&value.id===f.resourceId));
 });
 

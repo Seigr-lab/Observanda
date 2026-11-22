@@ -11,7 +11,6 @@ import {evaluateTaskPrerequisites} from '../src/modules/task-prerequisite-graph.
 import {ProjectDomains} from '../src/project-domains.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {moduleConstraint} from '../src/modules/constraints.js';
-import {moduleMigrationDependencies} from '../src/project-module-ownership.js';
 import {taskConstraintDraft,taskPrerequisiteEffect,validTaskDependencies,validTaskObservations,taskReferenceKey} from '../src/web/task-prerequisite-model.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {AppError} from '../src/errors.js';
@@ -107,7 +106,6 @@ test('portable owner verification survives deleting its source owner and rejects
   return new ProjectDomains(source.workspace,sourceBook.id).run(['tasks'],async get=>{const catalogue=new ModuleCatalogue(get('tasks')),head=await catalogue.head(sourceBook.id),member=await catalogue.member(head,sourceTask.id);return {reference:foreign,revision:member.revision,hash:member.hash,constraintHash:member.constraintHash,constraint:await catalogue.constraint(head,member)};});
  },{observedAt:at});
  const item=entity({...draft,prerequisiteObservations:result.observations},itemId);await seedModuleCurrent(f.workspace,book.id,[item]);
- assert.deepEqual([...moduleMigrationDependencies(item,book.id)],[{kind:'external',...foreign}]);
  await f.workspace.catalogue(store=>workspaceModules(f.workspace).verifyCatalogue(store,book.id));
  const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault});
  assert.equal(path.relative(directory,source.workspace.root),path.join('source','workspace'));clearVault(source.vault);await rm(source.workspace.root,{recursive:true,force:true});await assert.rejects(stat(source.workspace.root),{code:'ENOENT'});

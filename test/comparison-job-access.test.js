@@ -38,8 +38,8 @@ test('a different result worker cannot use an originating result grant after rev
  const f=await comparisonFixture(t,{groups:1}),command=structuredClone(f.command);
  let allowed=true,opened=0,closed=0;const baseline=databaseCapacity().active,owner={workspaceId:f.book.id,projectId:null,labBookId:null},readers=[];
  const sourceAccess=async storage=>{
-  opened++;const routes=comparisonRouteWitness({root:null,changes:async function*(){},locate:async()=>owner});readers.push(routes);
-  return {use:async(ref,consume)=>{await routes.observe(ref,owner);return consume(storage,ref);},verify:()=>routes.verify(null),verifyGrants:async()=>{},captureRoutes:refs=>routes.capture(refs),assertRoutes:value=>routes.assert(value),close:async()=>{closed++;await routes.close();}};
+  opened++;const routes=comparisonRouteWitness({locate:async()=>owner});readers.push(routes);
+  return {use:async(ref,consume)=>{await routes.observe(ref,owner);return consume(storage,ref);},verify:async()=>{},verifyGrants:async()=>{},captureRoutes:refs=>routes.capture(refs),assertRoutes:value=>routes.assert(value),close:async()=>{closed++;await routes.close();}};
  };
  const check=async()=>{if(!allowed)throw new AppError('ACCESS_LOCKED');};
  const admission=await prepareComparisonAdmission(f.m,command,{sourceAccess,check}),grants=new ComparisonJobAccess(),job={id:randomUUID(),input:{command}};
