@@ -64,14 +64,17 @@ test('navigation retains an unfinished item after a lost checkpoint reply and re
    if(lost)await route.fulfill({status:503,json:{message:'Synthetic lost checkpoint reply'}});else await route.fulfill({response});
   });
   await main.getByLabel('Name',{exact:true}).fill('Unfinished protected calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(81)');
-  await main.getByRole('button',{name:'Back to calculations',exact:true}).click();
+  await main.getByRole('button',{name:'Back to Calculations',exact:true}).click();
   await expect(main.locator('[data-recovery-status]')).toContainText('could not save');await main.locator('.module-drafts').getByRole('button',{name:'Unfinished protected calculation',exact:true}).click();await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(81)');
-  lost=false;await main.getByRole('button',{name:'Back to calculations',exact:true}).click();
+  lost=false;await main.getByRole('button',{name:'Back to Calculations',exact:true}).click();
   await expect(main.locator('[data-recovery-item]')).toHaveCount(1);await expect(main.locator('[data-module-form]')).toHaveCount(0);
   await page.reload();await expect(main.locator('[data-recovery-item]')).toHaveCount(1);
   await main.getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished protected calculation');await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(81)');
   expect(writes).toBeGreaterThan(1);expect(f.errors).toEqual([]);
- }finally{await f.close();}
+ }finally{
+  // A later autosave may still pass through the interception while the server closes; it belongs to no assertion.
+  await page.context().unrouteAll({behavior:'ignoreErrors'});await f.close();
+ }
 });
 
 test('module history pages open one original, retain drafts and recover failed navigation',async({page})=>{

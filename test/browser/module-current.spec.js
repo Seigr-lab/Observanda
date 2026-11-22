@@ -23,7 +23,9 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),original={read:ModuleCatalogue.prototype.read,selected:ModuleCatalogue.prototype.selected},loaded=[],requests=[],errors=[],sizes=[];
  ModuleCatalogue.prototype.read=()=>{throw Error('Full module state loaded during paged authoring');};
  ModuleCatalogue.prototype.selected=async function(head,id){const value=await original.selected.call(this,head,id);if(value)loaded.push(id);return value;};
- page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('response',async r=>{if(new URL(r.url()).pathname==='/api/modules/items'&&r.ok())sizes.push((await r.body()).length);});
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('response',async r=>{if(new URL(r.url()).pathname!=='/api/modules/items'||!r.ok())return;
+  // A page that navigated on may have released this body; the size sample simply skips it.
+  try{sizes.push((await r.body()).length);}catch(error){if(!/No data found for resource|Target page, context or browser has been closed/.test(error.message))throw error;}});
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  try{
   const session=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
@@ -38,7 +40,7 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   await main.getByLabel('Name',{exact:true}).fill('Authored table');await main.getByRole('button',{name:'Choose module item',exact:true}).click();await dialog.getByLabel('Search linked work',{exact:true}).fill('Reference calculation');await expect(dialog.locator('[data-reference-command="choose"]')).toHaveCount(1);await dialog.getByRole('button',{name:'Reference calculation',exact:true}).click();
   await expect(main.locator('.module-link-list')).toContainText('Reference calculation');expect(loaded).toEqual([entities[30].id]);
   await main.getByRole('button',{name:'Save spreadsheet',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');expect(new Set(loaded)).toEqual(new Set([entities[30].id]));
-  await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);await expect(main.locator('[data-module-form]')).not.toBeVisible();
+  await main.getByRole('button',{name:'Back to Spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);await expect(main.locator('[data-module-form]')).not.toBeVisible();
   const checkpointSizes=[];page.on('request',request=>{if(new URL(request.url()).pathname==='/api/modules/drafts/write')checkpointSizes.push(request.postDataJSON().drafts.length);});
   const edits=count===65?6:60;
   for(let i=0;i<edits;i++){
@@ -46,18 +48,20 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
    await main.getByLabel('Search items',{exact:true}).fill('Sheet '+String(i).padStart(3,'0'));await expect(main.locator('.module-item')).toHaveCount(1);
    await main.getByRole('button',{name:'Open spreadsheet',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Sheet '+String(i).padStart(3,'0'));await measure();
    await main.getByLabel('Name',{exact:true}).fill('Unfinished sheet '+i);
-   await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
+   await main.getByRole('button',{name:'Back to Spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
    await expect(main.locator('.module-drafts')).toHaveCount(0);await measure();
   }
   expect(Math.max(...checkpointSizes)).toBe(1);
   const recover=main.locator('[data-recovery-item]').filter({hasText:'Unfinished sheet '+(edits-1)});await expect(recover).toHaveCount(1);await recover.getByRole('button',{name:'Restore draft',exact:true}).click();
   await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished sheet '+(edits-1));await expect(main.getByLabel('Cell A1',{exact:true})).toHaveValue(entities[edits-1].data.cells[0][0]);
-  await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
+  await main.getByRole('button',{name:'Back to Spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect(requests.filter(p=>p==='/api/modules/data')).toEqual([]);expect(errors).toEqual([]);expect(heap).toBeLessThan(96*1024*1024);expect(Math.max(...sizes)).toBeLessThan(24000);
   const {entity:saved}=await new ProjectModuleReader(f.workspace,book.id).selected({workspaceId:book.id,id:entities[30].id});expect(saved.data.cells).toEqual(entities[30].data.cells);expect(saved.data.links).toEqual([recordLink,{workspaceId:book.id,type:'calculation',id:reference.id}]);
   await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
   const originalCount=loaded.length;await page.goto(app.origin+'/#/records/'+book.entries[0].id);
+  // Connected items are shown in the record's evidence area.
+  await main.getByRole('button',{name:'Evidence and results',exact:true}).click();
   const connected=main.locator('[data-module-links]');await expect(connected.getByRole('status')).toContainText('of '+count);await expect(connected.locator('[data-action="module-reference-open"]')).toHaveCount(25);expect(loaded).toHaveLength(originalCount);
   await connected.getByRole('button',{name:'Next items',exact:true}).click();await expect(connected.getByRole('status')).toContainText('26');expect(loaded).toHaveLength(originalCount);
   await connected.getByRole('button',{name:'Previous items',exact:true}).click();await connected.getByRole('button',{name:'Authored table',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Authored table');expect(loaded.at(-1)).toBe(entities[30].id);
@@ -66,9 +70,9 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   // A late selected-original response must not reopen a module after navigation.
   let release,started;const gate=new Promise(resolve=>{release=resolve;}),waiting=new Promise(resolve=>{started=resolve;});
   await page.context().route('**/api/modules/item',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
-  await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
+  await main.getByRole('button',{name:'Back to Spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
   await main.locator('.module-item').filter({hasText:'Sheet 000'}).getByRole('button').click();await waiting;
-  await page.goto(app.origin+'/#/records/'+book.entries[1].id);await expect(connected.getByRole('status')).toHaveText('No matching items.');release();
+  await page.goto(app.origin+'/#/records/'+book.entries[1].id);await main.getByRole('button',{name:'Evidence and results',exact:true}).click();await expect(connected.getByRole('status')).toHaveText('No matching items.');release();
   await expect(page).toHaveURL(new RegExp('/records/'+book.entries[1].id+'$'));await expect(main.locator('[data-module-links]')).toBeVisible();
   expect(requests.filter(p=>p==='/api/modules/data')).toEqual([]);expect(errors).toEqual([]);
   console.log(JSON.stringify({items:count,largestPage:Math.max(...sizes),sampledBrowserHeapMiB:Math.round(heap/1024/1024),originalIds:new Set(loaded).size}));

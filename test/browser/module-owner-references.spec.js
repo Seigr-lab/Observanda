@@ -48,6 +48,8 @@ async function chooseBook(page){
  const project=picker.locator('li').filter({hasText:'Reference project'});await project.getByRole('button',{name:'Lab books',exact:true}).click();await picker.getByRole('button',{name:'Choose Reference book',exact:true}).click();return picker;
 }
 
+// Resolves when a module draft checkpoint carrying the given text has been stored.
+const checkpointWith=(page,text)=>page.waitForResponse(response=>response.url().endsWith('/modules/drafts/write')&&response.ok()&&(response.request().postData()??'').includes(text));
 test('generic links retain owner-qualified labels, draft return, saved history and incoming connected work',async({page})=>{
  test.setTimeout(210000);page.setDefaultTimeout(15000);const f=await fixture(page),main=page.locator('main');let releaseReturn;
  try{
@@ -61,14 +63,16 @@ test('generic links retain owner-qualified labels, draft return, saved history a
   const reader=new ProjectModuleReader(f.project,f.model.id),saved=(await reader.list({workspaceId:f.model.id,type:'calculation'})).items[0],sourceURL=page.url();
   const links=[{workspaceId:f.model.id,type:'record',id:f.model.entries[0].id},{workspaceId:f.bookEntry.namespaceId,type:'record',id:f.record.id},{workspaceId:f.bookEntry.namespaceId,type:'calculation',id:f.targetCalculation}];
   expect((await reader.selected({workspaceId:f.model.id,id:saved.id})).entity.data.links).toEqual(links);
-  await main.getByLabel('Name',{exact:true}).fill('Unfinished project calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(36)');
+  // Edits are kept as a draft checkpoint shortly after typing; leaving waits until that checkpoint is stored.
+  const unfinishedCheckpoint=checkpointWith(page,'sqrt(36)');
+  await main.getByLabel('Name',{exact:true}).fill('Unfinished project calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(36)');await unfinishedCheckpoint;
   await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});await expect(main).toContainText('The selected book owns this observation.');
   await expect(main.locator('[data-module-links]')).toContainText('Project calculation');await page.screenshot({path:test.info().outputPath('connected-work-desktop.png'),fullPage:true});
   await main.locator('[data-action="back-to-records"]').click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished project calculation',{timeout:15000});await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(36)');expect(page.url()).toBe(sourceURL);
   await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
   await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});
   await main.locator('[data-module-links]').getByRole('button',{name:'Unfinished project calculation',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished project calculation',{timeout:15000});expect(page.url()).toBe(sourceURL);
-  await main.getByLabel('Name',{exact:true}).fill('Pending return draft');await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});
+  const pendingCheckpoint=checkpointWith(page,'Pending return draft');await main.getByLabel('Name',{exact:true}).fill('Pending return draft');await pendingCheckpoint;await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});
   let arrived;const started=new Promise(resolve=>arrived=resolve),held=new Promise(resolve=>releaseReturn=resolve),heldRoute='**/api/projects/'+f.projectId+'/workspace/read/start';
   await page.context().route(heldRoute,async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await main.locator('[data-action="back-to-records"]').click();await started;await page.locator('[data-action="preferences"]').click();await expect(main.getByRole('heading',{name:'Preferences',exact:true})).toBeVisible({timeout:15000});const preferenceURL=page.url();releaseReturn();await page.unrouteAll({behavior:'wait'});
