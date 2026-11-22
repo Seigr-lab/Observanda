@@ -35,7 +35,7 @@ function holdingsTable(item,esc,options){
 const comparison=({item,esc,options,panelId})=>{
  if(!selectedMetrics(options).length)return `<p class="desk-empty">${esc(dt("chooseQuantity"))}</p>`;
  const figure=inventoryComparisonFigure(item,options);
- return '<figure class="desk-inventory-chart"><div class="desk-inventory-plot" data-desk-figure="'+esc(item.key)+'">'+renderFigure(figure,{idPrefix:'inventory-'+panelId})+`</div><figcaption>${esc(dt("stockHelp"))}</figcaption></figure><details class="desk-inventory-values"><summary>${esc(dt("exactQuantities"))}</summary>`+holdingsTable(item,esc,options)+'</details>';
+ return '<figure class="desk-inventory-chart"><div class="desk-inventory-plot" data-desk-figure="'+esc(item.key)+'">'+renderFigure(figure,{idPrefix:'inventory-'+panelId})+`</div><figcaption>${esc(dt("stockHelp"))}</figcaption></figure><details class="desk-inventory-values" data-disclosure="${esc('dashboard-values:'+panelId+':'+item.key)}"><summary>${esc(dt("exactQuantities"))}</summary>`+holdingsTable(item,esc,options)+'</details>';
 };
 export function registerInventoryDashboard(registry){
  const presentation=()=>({label:dt('inventory'),group:dt('inventory'),purpose:dt('purposeInventory'),

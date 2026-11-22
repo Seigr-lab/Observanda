@@ -5,6 +5,7 @@ import {moduleDashboardFixture} from './module-dashboard-fixture.js';
 import {ProjectApplication,projectRequest} from '../src/project-application.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {ProjectDomains} from '../src/project-domains.js';
+import {ProjectModuleQueries} from '../src/project-module-queries.js';
 import {defaultPanelConfig} from '../src/web/dashboard-model.js';
 import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 
@@ -34,6 +35,12 @@ test('planning and inventory cards compose dedicated owners with bounded origina
  const missing=randomUUID(),labels=await read({area:'inventory',type:'resource',mode:'labels',limit:25,keys:[f.books[0].namespaceId+'/'+f.resourceId,f.resourceId,missing]});assert.equal(labels.items.length,2);assert.deepEqual(labels.missing,[missing]);assert.equal(originals.length,amount);
  const chosen=await read({area:'inventory',type:'resource',options:{resourceMode:'selected',resourceIds:[f.books[0].namespaceId+'/'+f.resourceId]}});assert.equal(chosen.total,1);assert.equal(chosen.items[0].owner.labBookId,f.books[0].labBookId);
  await assert.rejects(read({area:'inventory',type:'resource',options:{resourceMode:'selected',resourceIds:[missing]}}),{code:'NOT_FOUND'});
+ // A committed stock change is read live by the next card request: no cache outlives the owner's revision.
+ const central={scopeMode:'selected',projectIds:[],includeWorkspace:true,includeDescendants:false,resourceMode:'selected',resourceIds:[f.resourceId]},root=f.owners[0],quantity=async()=>(await read({area:'inventory',type:'resource',options:central})).items.map(item=>[item.owner.workspaceId,item.data.physical,item.holdings.map(row=>row.physical)]);
+ assert.deepEqual(await quantity(),[[root.workspaceId,'1',['1']]]);
+ const resourceRevision=await new ProjectModuleQueries(root.storage,root.workspaceId).context('inventory','resource',async c=>(await c.member(f.resourceId)).revision);
+ await root.command('stock.move',{resourceId:f.resourceId,expectedRevision:resourceRevision,projectId:null,delta:'4',reason:'Received centrally',links:[]});
+ assert.deepEqual(await quantity(),[[root.workspaceId,'5',['5']]]);
  t.mock.restoreAll();
  let release,started;const ready=new Promise(resolve=>started=resolve),gate=new Promise(resolve=>release=resolve),owner=f.owners[3];
  const writing=new ProjectDomains(owner.storage,owner.workspaceId).run(['calculator'],async()=>{started();await gate;},{write:['calculator']});await ready;

@@ -215,7 +215,11 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,f
    }
    node.querySelector('[data-desk-move]').setAttribute('aria-label',dt('moveCard',{title:title(panel)}));
    node.querySelector('[data-desk-resize]').setAttribute('aria-label',dt('resizeCard',{title:title(panel)}));
-   const body=node.querySelector('[data-dashboard-body]'),html=content(panel);if(bodyMarkup.get(body)!==html){body.innerHTML=html;bodyMarkup.set(body,html);}
+   const body=node.querySelector('[data-dashboard-body]'),html=content(panel);if(bodyMarkup.get(body)!==html){
+    // Fresh live data keep the disclosures a person opened, as a full page render does (application-shell.js).
+    const open=new Map([...body.querySelectorAll('details[data-disclosure]')].map(d=>[d.dataset.disclosure,d.open]));body.innerHTML=html;bodyMarkup.set(body,html);
+    for(const d of body.querySelectorAll('details[data-disclosure]'))if(open.has(d.dataset.disclosure))d.open=open.get(d.dataset.disclosure);
+   }
    mountPlots(panel,body);const page=cardPages.get(panel.id);if(page?.focusAction&&read(panel).status==='ready'){const next=body.querySelector('[data-action="'+page.focusAction+'"]');(next?.disabled?body.querySelector('.desk-card-pages button:not([disabled])'):next)?.focus({preventScroll:true});delete page.focusAction;}
   }previews.prune();status();
  }
