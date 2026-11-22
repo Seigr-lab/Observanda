@@ -44,9 +44,19 @@ test('independent book credentials survive rename and isolate session locks and 
  await result(await first(base+'/workspace/read/start',{}));await result(await first(sibling+'/access/details',{}));await result(await second(own+'/access/details',{}));
  await result(await first(own+'/access/unlock',{username:'Researcher',password:'Incorrect passphrase'}),401);
  await result(await first(own+'/access/unlock',{username:'Researcher',password}));
- const updated=await result(await second(own+'/access/password',{etag:saved.etag,username:'Researcher',password:nextPassword}));assert.notEqual(updated.etag,saved.etag);
+ // An unlocked session still needs the book's current password to replace it.
+ for(const currentPassword of [undefined,'','Incorrect passphrase'])assert.equal((await result(await second(own+'/access/password',{etag:saved.etag,username:'Researcher',password:nextPassword,...(currentPassword===undefined?{}:{currentPassword})}),401)).code,'ACCESS_DENIED');
+ assert.equal((await result(await second(own+'/access/details'))).etag,saved.etag);
+ const updated=await result(await second(own+'/access/password',{etag:saved.etag,username:'Researcher',password:nextPassword,currentPassword:password}));assert.notEqual(updated.etag,saved.etag);
  assert.equal((await result(await first(own+'/access/details'),401)).labBookId,a.labBookId);await result(await first(own+'/access/unlock',{username:'Researcher',password:nextPassword}));
  await result(await second(base+'/access/lock'));const parentDenied=await result(await second(own+'/access/details'),401);assert.equal(parentDenied.projectId,projectId);assert.equal(parentDenied.labBookId,undefined);
  await result(await second(base+'/access/unlock'));await result(await second(own+'/access/unlock',{username:'Researcher',password:nextPassword}));await result(await second(own+'/access/details'));
  const observed=await first.activity();assert.equal(observed.operations.some(entry=>/\/access\/(?:lock|unlock)$/.test(entry.kind)),false);
+ // A project's first password needs none; replacing it needs the current one, refused when missing, empty or wrong.
+ const project=await result(await second(base+'/access/details'));assert.equal(project.passwordAvailable,false);
+ const projectPassword='Project passphrase 618!',projectNext='Project replacement 274!';
+ const protectedProject=await result(await second(base+'/access/password',{etag:project.etag,username:'',password:projectPassword}));assert.equal(protectedProject.passwordAvailable,true);
+ for(const currentPassword of [undefined,'','Incorrect passphrase'])assert.equal((await result(await second(base+'/access/password',{etag:protectedProject.etag,username:'',password:projectNext,...(currentPassword===undefined?{}:{currentPassword})}),401)).code,'ACCESS_DENIED');
+ const renewed=await result(await second(base+'/access/password',{etag:protectedProject.etag,username:'',password:projectNext,currentPassword:projectPassword}));assert.notEqual(renewed.etag,protectedProject.etag);
+ await result(await second(base+'/access/lock'));await result(await second(base+'/access/unlock',{username:'',password:projectPassword}),401);await result(await second(base+'/access/unlock',{username:'',password:projectNext}));
 });

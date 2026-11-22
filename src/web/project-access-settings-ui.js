@@ -1,5 +1,7 @@
 import {localizedText} from './i18n/index.js';
+import './i18n/catalogues/workspaceSecurity.js';
 import {accessCheckpointView,bindAccessCheckpoint} from './access-checkpoint-view.js';
+const security=localizedText('workspaceSecurity');
 const text=localizedText('projectStorage');
 // A project's credentials are edited in its own page. Passwords remain only
 // in the mounted form and are never kept as workspace drafts or UI cache data.
@@ -8,7 +10,7 @@ export function projectAccessSettingsUI({state,api,esc,field}){
  function current(id){if(context!==state.storage?.contextId){entries.clear();context=state.storage?.contextId;}if(!entries.has(id))entries.set(id,{id,context,data:null,loading:false,error:'',saved:false});return entries.get(id);}
  const host=entry=>entry.context===state.storage?.contextId?document.querySelector('[data-project-access="'+entry.id+'"]'):null;
  function paint(entry){const node=host(entry);if(!node)return;const data=entry.data;const signature=JSON.stringify([data,entry.error,entry.saved]);if(node.dataset.signature===signature)return;node.dataset.signature=signature;
-  node.innerHTML='<h2>'+esc(text('accessTitle'))+'</h2>'+(data?'<form id="project-storage-access-form" data-no-draft><p>'+esc(text(data.passwordAvailable?'passwordReady':'passwordHint'))+'</p>'+field(text('accessUsername'),'<input name="username" autocomplete="username" maxlength="80" value="'+esc(data.username)+'">')+field(text('newPassword'),'<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="1024">')+field(text('confirmPassword'),'<input name="confirmPassword" type="password" autocomplete="new-password" required maxlength="1024">')+'<button class="button primary" type="submit">'+esc(text('savePassword'))+'</button></form>':'<p role="status">'+esc(text('loadingAccess'))+'</p>')+'<p role="'+(entry.error?'alert':'status')+'">'+esc(entry.error||(entry.saved?text('passwordSaved'):''))+'</p>';
+  node.innerHTML='<h2>'+esc(text('accessTitle'))+'</h2>'+(data?'<form id="project-storage-access-form" data-no-draft><p>'+esc(text(data.passwordAvailable?'passwordReady':'passwordHint'))+'</p>'+field(text('accessUsername'),'<input name="username" autocomplete="username" maxlength="80" value="'+esc(data.username)+'">')+(data.passwordAvailable?field(security('currentPassword'),'<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="1024">'):'')+field(text('newPassword'),'<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="1024">')+field(text('confirmPassword'),'<input name="confirmPassword" type="password" autocomplete="new-password" required maxlength="1024">')+'<button class="button primary" type="submit">'+esc(text('savePassword'))+'</button></form>':'<p role="status">'+esc(text('loadingAccess'))+'</p>')+'<p role="'+(entry.error?'alert':'status')+'">'+esc(entry.error||(entry.saved?text('passwordSaved'):''))+'</p>';
   if(data)node.insertAdjacentHTML('beforeend',accessCheckpointView(data,esc));
   bindAccessCheckpoint(node,()=>api('/api/projects/'+entry.id+'/access/details',{}, {adopt:false}),error=>{entry.error=error.message;paint(entry);});
   const form=node.querySelector('form');form?.addEventListener('input',()=>form.elements.confirmPassword.setCustomValidity(''));
@@ -19,7 +21,7 @@ export function projectAccessSettingsUI({state,api,esc,field}){
   bind(id){if(!id)return;const entry=current(id);if(!host(entry))return;paint(entry);if(!entry.data&&!entry.loading)void load(entry);},
   async submit(form){if(form.id!=='project-storage-access-form')return false;const id=state.projectOwner?.projectId;if(!id)return true;const entry=current(id);if(entry.loading||!entry.data)return true;
    form.elements.confirmPassword.setCustomValidity(form.elements.password.value===form.elements.confirmPassword.value?'':text('passwordMismatch'));if(!form.reportValidity())return true;
-   const data={etag:entry.data.etag,username:form.elements.username.value,password:form.elements.password.value};entry.loading=true;entry.error='';entry.saved=false;for(const input of form.elements)input.disabled=true;
+   const data={etag:entry.data.etag,username:form.elements.username.value,password:form.elements.password.value,...(form.elements.currentPassword?{currentPassword:form.elements.currentPassword.value}:{})};entry.loading=true;entry.error='';entry.saved=false;for(const input of form.elements)input.disabled=true;
    try{entry.data=await api('/api/projects/'+id+'/access/password',data,{adopt:false});entry.saved=true;}
    catch(error){entry.error=error.message;try{entry.data=await api('/api/projects/'+id+'/access/details',{}, {adopt:false});}catch{}}
    finally{entry.loading=false;paint(entry);}return true;

@@ -119,7 +119,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
    if(selected.bookOperation==='access'){
     const settings=new LabBookAccessSettings(storage);
     if(selected.operation==='lab-books/access/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return settings.details();}
-    await stopJobs();return settings.password(data,{deviceStore,check:()=>current(),changed:async next=>{await bookAccess.changed(storage.root,next,vault);etag=next;}});
+    await stopJobs();return settings.password(data,{deviceStore,authenticate:bookAccess?.application.authenticate,check:()=>current(),changed:async next=>{await bookAccess.changed(storage.root,next,vault);etag=next;}});
    }
    if(selected.bookOperation==='settings'){
     // A title change renames the book's folder: later steps of this command,

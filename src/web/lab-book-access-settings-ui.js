@@ -1,5 +1,7 @@
 import {localizedText} from './i18n/index.js';
+import './i18n/catalogues/workspaceSecurity.js';
 import {accessCheckpointView,bindAccessCheckpoint} from './access-checkpoint-view.js';
+const security=localizedText('workspaceSecurity');
 const text=localizedText('labBookAccess');
 // Password fields exist only in the opened book access section, never drafts.
 export function labBookAccessSettingsUI({state,api,esc,field,enterProject,render}){
@@ -11,7 +13,7 @@ export function labBookAccessSettingsUI({state,api,esc,field,enterProject,render
  function paint(entry){
   const node=host(entry)?.querySelector('[data-access-fields]');if(!node)return;
   const signature=JSON.stringify([entry.data,entry.error,entry.saved]);if(node.dataset.signature===signature)return;node.dataset.signature=signature;
-  node.innerHTML=(entry.data?'<form id="lab-book-access-form" data-no-draft><p>'+esc(text(entry.data.passwordAvailable?'passwordReady':'passwordHint'))+'</p>'+field(text('username'),'<input name="username" autocomplete="username" maxlength="80" value="'+esc(entry.data.username)+'">')+field(text('newPassword'),'<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>')+field(text('confirmPassword'),'<input name="confirmPassword" type="password" autocomplete="new-password" maxlength="1024" required>')+'<div class="inline-actions"><button class="button primary" type="submit">'+esc(text('savePassword'))+'</button><button class="button" type="button" data-action="lab-book-access-lock">'+esc(text('lock'))+'</button></div></form>':'<p role="status">'+esc(text('loading'))+'</p>')+'<p role="'+(entry.error?'alert':'status')+'">'+esc(entry.error||(entry.saved?text('saved'):''))+'</p>';
+  node.innerHTML=(entry.data?'<form id="lab-book-access-form" data-no-draft><p>'+esc(text(entry.data.passwordAvailable?'passwordReady':'passwordHint'))+'</p>'+field(text('username'),'<input name="username" autocomplete="username" maxlength="80" value="'+esc(entry.data.username)+'">')+(entry.data.passwordAvailable?field(security('currentPassword'),'<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="1024">'):'')+field(text('newPassword'),'<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>')+field(text('confirmPassword'),'<input name="confirmPassword" type="password" autocomplete="new-password" maxlength="1024" required>')+'<div class="inline-actions"><button class="button primary" type="submit">'+esc(text('savePassword'))+'</button><button class="button" type="button" data-action="lab-book-access-lock">'+esc(text('lock'))+'</button></div></form>':'<p role="status">'+esc(text('loading'))+'</p>')+'<p role="'+(entry.error?'alert':'status')+'">'+esc(entry.error||(entry.saved?text('saved'):''))+'</p>';
   if(entry.data)node.insertAdjacentHTML('beforeend',accessCheckpointView(entry.data,esc));
   bindAccessCheckpoint(node,()=>api(prefix(entry)+'/access/details',{}, {adopt:false}),error=>{entry.error=error.message;paint(entry);});
   const form=node.querySelector('form');form?.addEventListener('input',()=>form.elements.confirmPassword.setCustomValidity(''));
@@ -22,7 +24,7 @@ export function labBookAccessSettingsUI({state,api,esc,field,enterProject,render
   bind(){const entry=selected(),node=entry&&host(entry);if(!node||node.dataset.bound)return;node.dataset.bound='true';node.addEventListener('toggle',()=>{if(node.open){paint(entry);if(!entry.data)void load(entry);}});},
   async submit(form){if(form.id!=='lab-book-access-form')return false;const entry=selected();if(!entry?.data||entry.busy||!host(entry)?.contains(form))return true;
    form.elements.confirmPassword.setCustomValidity(form.elements.password.value===form.elements.confirmPassword.value?'':text('passwordMismatch'));if(!form.reportValidity())return true;
-   const data={etag:entry.data.etag,username:form.elements.username.value,password:form.elements.password.value};entry.busy=true;entry.error='';entry.saved=false;for(const input of form.elements)input.disabled=true;
+   const data={etag:entry.data.etag,username:form.elements.username.value,password:form.elements.password.value,...(form.elements.currentPassword?{currentPassword:form.elements.currentPassword.value}:{})};entry.busy=true;entry.error='';entry.saved=false;for(const input of form.elements)input.disabled=true;
    try{entry.data=await api(prefix(entry)+'/access/password',data,{adopt:false});entry.saved=true;}
    catch(error){entry.error=error.message;try{entry.data=await api(prefix(entry)+'/access/details',{}, {adopt:false});}catch{}}
    finally{entry.busy=false;paint(entry);}return true;
