@@ -98,7 +98,7 @@ export class RecordQuery{
   if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
    const source=await store.snapshot();if(source.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    if(!await store.member(source,recordId))throw new AppError('RECORD_CHANGED');
-   return (source.metadata.formatVersion>=20)?store.recordPatch(baseEtag):store.read();
+   return store.recordPatch(baseEtag);
   });
   const result=await this.workspace.read();if(result.book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(!result.book.entries.some(r=>r.id===recordId))throw new AppError('RECORD_CHANGED');return result;

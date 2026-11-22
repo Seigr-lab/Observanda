@@ -19,7 +19,7 @@ const extras=result=>({...(result.projectId?{projectId:result.projectId}:{}),mov
 // hierarchy change cannot turn this read admission into stale authority.
 export async function assertExistingNativeStructure(workspace,book,etag){
  if(await workspace.storageKind()!=='catalogue')return;
- const current=await workspace.outline();if(current.metadata.formatVersion<21)return;
+ const current=await workspace.outline();
  if(current.etag!==etag)throw new AppError('CONFLICT');
  if(book?.id!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
  for(const key of ['projects','notebooks']){
@@ -38,11 +38,11 @@ export class StructureCommands{
   if(kind==='reorganize'&&!preview&&data.reviewed!==true)throw new AppError('INVALID');
   const outline=await this.workspace.outline();
   if(outline.etag!==data.etag&&!data.commandId)throw new AppError('CONFLICT');
-  if(await this.workspace.storageKind()==='catalogue'&&outline.metadata.formatVersion>=21){
+  if(await this.workspace.storageKind()==='catalogue'){
    const run=()=>this.workspace.catalogue(async store=>{const result=await this.indexed(store,kind,data,outline.metadata.id,preview,{signal,onProgress});signal?.throwIfAborted();return result;});
    return preview?run():this.workspace.withLock(run);
   }
-  // Older document formats still use their existing upgrade and full validation.
+  // Document storage still uses its full validation.
   if(preview){
    const current=await this.workspace.read();if(current.etag!==data.etag)throw new AppError('CONFLICT');
    return {summary:actions[kind](current.book,data.change).summary,etag:current.etag};

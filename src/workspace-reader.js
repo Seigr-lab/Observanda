@@ -32,23 +32,21 @@ export class WorkspaceReader {
   if(!this.workspace)return {book:null};
   try{
    const outline=await this.workspace.outline();
-   if(await this.workspace.storageKind()==='catalogue'&&outline.metadata.formatVersion>=21){
-    const result=await this.workspace.catalogue(async store=>{
+   if(await this.workspace.storageKind()==='catalogue'){
+    return await this.workspace.catalogue(async store=>{
      const etag=snapshotId??await store.head(),snapshot=await store.snapshot(etag);
      if(workspaceId&&snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
      if(snapshot.metadata.id!==outline.metadata.id)throw new AppError('WORKSPACE_CHANGED');
-     if(snapshot.metadata.formatVersion<21)return null;
      signal?.throwIfAborted();
      const anchor={version:1,workspaceId:snapshot.metadata.id,etag,after:null,offset:0,bytes:0};
      const counts=await catalogueOutline(store,snapshot,{signal});
      return {metadata:snapshot.metadata,etag,...counts,
       cursor:store.encode('workspace-page',anchor.workspaceId,anchor).toString('base64url')};
     });
-    if(result)return result;
    }
    // A pinned request must never silently fall back to the latest snapshot.
    if(snapshotId!==null)throw new AppError('INVALID');
-   // Older documents keep their established validation and upgrade path.
+   // Document storage keeps its full validation.
    const result=await this.workspace.read(),book=upgradeNotebook(result.book);
    signal?.throwIfAborted();return {...result,book,recordRevisions:recordRevisions(book)};
   }catch(error){if(error.code==='MISSING')return {book:null};throw error;}
@@ -86,20 +84,15 @@ export class WorkspaceReader {
   if(!researchId(workspaceId)||!revisionId(baseEtag))throw new AppError('INVALID');
   signal?.throwIfAborted();
   if(!this.workspace)throw new AppError('MISSING');
-  if(await this.workspace.storageKind()==='catalogue'){
-   const result=await this.workspace.catalogue(async store=>{
-    const current=await store.snapshot();
-    if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(current.metadata.formatVersion<21)return null;
-    const base=await store.snapshot(baseEtag);
-    if(base.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(base.metadata.formatVersion<21)return null;
-    signal?.throwIfAborted();
-    const patch=await store.recordPatch(baseEtag,{signal});
-    signal?.throwIfAborted();return patch;
-   });
-   if(result)return result;
-  }
+  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+   const current=await store.snapshot();
+   if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
+   const base=await store.snapshot(baseEtag);
+   if(base.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
+   signal?.throwIfAborted();
+   const patch=await store.recordPatch(baseEtag,{signal});
+   signal?.throwIfAborted();return patch;
+  });
   const result=await this.workspace.read(),book=upgradeNotebook(result.book);
   if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
   signal?.throwIfAborted();return {...result,book,recordRevisions:recordRevisions(book)};
@@ -125,7 +118,7 @@ export class WorkspaceReader {
    if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const snapshot=await store.snapshot(anchor.etag);
    const {total,totalBytes}=snapshotTotals(snapshot);
-   if(snapshot.metadata.id!==workspaceId||snapshot.metadata.formatVersion<21)cursorError();
+   if(snapshot.metadata.id!==workspaceId)cursorError();
    if(anchor.offset>total||anchor.bytes>totalBytes)cursorError();
    const records=[];let bytes=0,after=anchor.after,more=false;
    for await(const row of new SnapshotIndex(store).members(snapshot.membership,{after})){

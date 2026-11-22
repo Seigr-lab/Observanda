@@ -23,7 +23,7 @@ export class RecordTagCommands{
   const request=digest(revisionText(command)),file='.observanda/tag-commands/'+command.id+'.json';
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const etag=await store.head(),snapshot=await store.snapshot(etag);if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');const prior=await this.receipt(file,request);if(prior)return prior;
+   const prior=await this.receipt(file,request);if(prior)return prior;
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
    return withRecordDocument(store,row.id,row.revision,async original=>{
     const count=await original.tree.arrayLength(original.root,['tags']);

@@ -413,7 +413,7 @@ export class Workspace {
     const next = structuredClone(book);
     next.revision = current.book.revision + 1;
     next.updatedAt = new Date().toISOString();
-    const comparable = book.formatVersion >= 13 ? upgradeNotebook(current.book) : current.book;
+    const comparable = upgradeNotebook(current.book);
     const originals = new Map(comparable.entries.map(entry => [entry.id, entry]));
     for (const entry of next.entries) {
       const previous = originals.get(entry.id);

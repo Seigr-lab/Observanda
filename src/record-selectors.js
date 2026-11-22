@@ -16,7 +16,6 @@ export class RecordSelectors{
   return this.workspace.catalogue(async store=>{
    const currentId=await store.head(),current=await store.snapshot(currentId),etag=command.snapshotId??currentId,snapshot=command.snapshotId?await store.snapshot(etag):current;
    if(current.metadata.id!==command.workspaceId||snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
    const request=digest(serialize({workspaceId:command.workspaceId,recordId:command.recordId,etag,search:command.search??''}));let position;
    if(command.cursor){

@@ -11,25 +11,25 @@ import {validateFigureSources} from './figure-provenance.js';
 // These opaque content revisions are independent of the storage adapter and
 // workspace revision. A change elsewhere must not invalidate this record.
 export const recordRevision=record=>recordContentRevision(record);
-// Upgrade a historical record without including unrelated presentation targets.
+// Only workspace metadata formats 21 and 22 are valid; earlier formats are refused.
+const supportedMetadata=metadata=>{if(![21,22].includes(metadata?.formatVersion))throw new AppError('INVALID');};
+// A historical record in a copy of its book without unrelated presentation targets.
 export function historicalBook(metadata,record){
+ supportedMetadata(metadata);
  const book={...metadata,entries:[record]};
  delete book.websites;
- if(book.formatVersion>=3&&book.formatVersion<22)book.branding=[];
+ if(book.formatVersion===21)book.branding=[];
  if(book.website?.layouts)book.website={...book.website,layouts:[]};
  // Catalogue metadata and records have independent budgets. Reconstructing a
- // serialized legacy notebook here charges indentation and unrelated metadata
+ // serialized notebook here would charge indentation and unrelated metadata
  // against a valid record, including during indexing, history and verification.
- if(book.formatVersion>=21){
-  validateRecordChanges(book,[record],[],{capacity:false});
-  return structuredClone(book);
- }
- return upgradeNotebook(book);
+ validateRecordChanges(book,[record],[],{capacity:false});
+ return structuredClone(book);
 }
 // Index and history owners only inspect the validated value. Current records
-// need no upgraded copy; mutable authoring callers still use historicalBook.
+// need no copy; mutable authoring callers still use historicalBook.
 export function historicalRecordValue(metadata,record){
- if(metadata.formatVersion<21)return historicalBook(metadata,record).entries[0];
+ supportedMetadata(metadata);
  validateRecordChanges(metadata,[record],[],{capacity:false});return record;
 }
 export const recordRevisions=book=>Object.fromEntries(book.entries.map(record=>[record.id,recordRevision(record)]));
@@ -55,7 +55,7 @@ export class ResearchRecords {
     if(!exact(command,['workspaceId','recordId','expectedRevision'])||!id(command.workspaceId)||!id(command.recordId)||!revision(command.expectedRevision))throw new AppError('INVALID');
     const outline=await this.workspace.outline();
     if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(outline.metadata.formatVersion<21||await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
+    if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
     return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
       const head=await store.head(),source=await store.snapshot(head);
       if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -80,10 +80,7 @@ export class ResearchRecords {
     if(!exact(command,['workspaceId','changes',...(Object.hasOwn(command??{},'baseEtag')?['baseEtag']:[])])||!id(command.workspaceId)||!Array.isArray(command.changes)||!command.changes.length)throw new AppError('INVALID');
     validateRecordEdits(command.changes);
     if(Object.hasOwn(command,'baseEtag')&&!revision(command.baseEtag))throw new AppError('INVALID');
-    if(await this.workspace.storageKind()==='catalogue'){
-      const eligible=await this.workspace.catalogue(async store=>((await store.snapshot()).metadata.formatVersion>=20));
-      if(eligible)return this.workspace.updateRecords(command,source=>this.prepare(source,command),{compact,recordIds,receipt,storedBases:true});
-    }
+    if(await this.workspace.storageKind()==='catalogue')return this.workspace.updateRecords(command,source=>this.prepare(source,command),{compact,recordIds,receipt,storedBases:true});
     if(receipt)throw new AppError('INVALID');
     return this.workspace.update(source=>this.prepare(source,command));
   }

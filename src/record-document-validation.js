@@ -29,7 +29,6 @@ async function reusableOwners(document,admitted,names,{signal}={}){
  return {resultsChanged};
 }
 export async function validateRecordDocument(document,metadata,{signal,summaries=[],admitted=null}={}){
- if(metadata.formatVersion<21)throw new AppError('FORMAT');
  const header={},names=await document.tree.propertyNames(document.root);
  const reuse=await reusableOwners(document,admitted,names,{signal});
  for(const name of names){

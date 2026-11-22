@@ -17,7 +17,6 @@ export class RecordLocation{
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const etag=await store.head(),current=await store.snapshot(etag);
    if(current.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(current.metadata.formatVersion<21)throw new AppError('FORMAT');
    const file='.observanda/record-locations/'+command.commandId+'.json',fingerprint=digest(serialize(Object.fromEntries(fields.map(key=>[key,command[key]])))),raw=await this.workspace.readMetadata(file,8192);
    if(raw!==null){
     let receipt;try{receipt=JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}

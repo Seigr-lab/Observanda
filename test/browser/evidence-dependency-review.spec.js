@@ -11,7 +11,7 @@ async function fixture(page,{readonly=false,holdExtras=false}={}){
  await page.evaluate(async({readonly,holdExtras})=>{
   const {researchMaterialsUI}=await import('/research-materials-ui.js'),id=()=>crypto.randomUUID();
   window.record={id:id(),title:'Instrument observations',figures:[]};
-  window.state={page:'record-reader',selected:record.id,book:{id:id(),entries:[record],projects:[],notebooks:[]},projectOwner:null,storage:{contextId:id(),researchStorage:'catalogue',researchFormatVersion:21}};
+  window.state={page:'record-reader',selected:record.id,book:{id:id(),entries:[record],projects:[],notebooks:[]},projectOwner:null,storage:{contextId:id(),researchStorage:'catalogue'}};
   window.evidence=Array.from({length:22},(_,index)=>({kind:'artifact',id:id(),revision:(index+1).toString(16).padStart(64,'0'),title:'Original observation '+index,dependencyStatus:'unchecked',changed:[],changedCount:null,file:{name:'reading-'+index+'.txt',size:12,sha256:'f'.repeat(64)},...(index===1?{figureState:'edited'}:{})}));
   window.requests=[];window.errors=[];window.paintCount=0;window.extras=[];
   const esc=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');

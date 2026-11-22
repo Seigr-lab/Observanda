@@ -3,7 +3,7 @@
 export const WORKSPACE_EDIT_FIELDS=['title','description','identity','appearance','themes','activeThemeId'];
 import {sameValue as equal} from './workspace-snapshot.js';
 export function workspaceSaveRequest(before,after,revisions){
- if(!before||before.id!==after.id||before.formatVersion<21||after.formatVersion<21)return null;
+ if(!before||before.id!==after.id)return null;
  const metadata={};
  for(const key of new Set([...Object.keys(before),...Object.keys(after)])){
   if(['entries','projects'].includes(key)||equal(before[key],after[key]))continue;

@@ -24,7 +24,7 @@ export class RecordRunCreation{
  constructor(workspace){this.workspace=workspace;}
  async context(store,command){
   const etag=await store.head(),snapshot=await store.snapshot(etag);if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');return {etag,snapshot};
+  return {etag,snapshot};
  }
  async source(store,snapshot,id){const row=await store.member(snapshot,id);if(!row)throw new AppError('MISSING');return {row,summary:await materialRecordSummary(store,row)};}
  async prepare(command){

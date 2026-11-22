@@ -345,14 +345,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     try{status=await databaseStatus(provider&&context.vault.key&&!moving?await provider.environment(context.root,{vault:context.vault}):undefined);}catch(error){status={engine:'PostgreSQL',ready:false,code:error.code??'DATABASE_UNAVAILABLE'};}
     const database={...status,...(provider?await provider.details(context.workspace):{placement:'external',path:null}),message:status.ready?'PostgreSQL is connected.':safeError(new AppError(status.code)).message};
     if(!context.workspace){const pending=await deletions.list();return {database,root:null,locations:[],preferencesFile:preferencesFile??null,suggestedLocation:defaultLocation(),workspaceParent:path.dirname(defaultLocation()),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available:false,unavailableReason:pending.length?'workspace-deleting':null,encrypted:false,expectedExisting:!!pending.length,deletions:pending};}
-    let available=true,unavailableReason=null,researchFormatVersion=null;
-    try{researchFormatVersion=(await context.workspace.outline()).metadata.formatVersion;}catch(e){
+    let available=true,unavailableReason=null;
+    try{await context.workspace.outline();}catch(e){
       if(!['MISSING','CATALOGUE_UNAVAILABLE','STORAGE_MOVED'].includes(e.code))throw e;
       available=false;
       unavailableReason=e.code==='STORAGE_MOVED'?'workspace-moved':e.code==='CATALOGUE_UNAVAILABLE'?'database-missing':await assertRegular(context.root,{directory:true,missing:true})?'record-missing':'folder-missing';
     }
     const researchStorage=available?await context.workspace.storageKind():null;
-    return {database,nameConflict:(await workspaceDirectory.list()).find(item=>item.path===context.root)?.conflict??false,researchStorage,researchFormatVersion,workspaceParent:path.dirname(context.root),movedTo:moving?.destination??null,move:available?await workspaceMoveStatus(context.root)??await workspaceRelocationStatus(context.root):null,...storageMap(context.root,preferencesFile,path.basename(await workspaceFile(context.root)),{catalogue:researchStorage==='catalogue'}),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available,unavailableReason,encrypted:!!context.vault.id,expectedExisting:context.expectedExisting||!!moving};
+    return {database,nameConflict:(await workspaceDirectory.list()).find(item=>item.path===context.root)?.conflict??false,researchStorage,workspaceParent:path.dirname(context.root),movedTo:moving?.destination??null,move:available?await workspaceMoveStatus(context.root)??await workspaceRelocationStatus(context.root):null,...storageMap(context.root,preferencesFile,path.basename(await workspaceFile(context.root)),{catalogue:researchStorage==='catalogue'}),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available,unavailableReason,encrypted:!!context.vault.id,expectedExisting:context.expectedExisting||!!moving};
   };
   let shuttingDown=false,closePromise,githubMutation=false,collaborationSession;const pending=new Set(),drained=[];
   const server = http.createServer((req, res) => withAccessDevice(deviceStore,()=>withDiagnostics(diagnostics,correlation=>requestWriterWait(req,res,async()=>{

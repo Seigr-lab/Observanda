@@ -24,7 +24,7 @@ export function moduleLinks({state,api,esc}){
    const types=selectedTypes(),next=JSON.stringify([state.storage?.contextId,state.book.id,state.selected,types,state.book.projects.map(p=>[p.id,p.tools])]);
    if(!types.length){clear();const node=document.querySelector('[data-module-links]');if(node)node.hidden=true;return;}
    if(key!==next){
-    clear();key=next;pages=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21?connectedReferencePages({state,api,esc,draw:paint}):moduleItemPages({api,workspaceId:state.book.id,esc,draw:paint,prefix:'connected',action:'connected-work-page'});
+    clear();key=next;pages=state.storage?.researchStorage==='catalogue'?connectedReferencePages({state,api,esc,draw:paint}):moduleItemPages({api,workspaceId:state.book.id,esc,draw:paint,prefix:'connected',action:'connected-work-page'});
     void pages.load({types,reference:{workspaceId:state.book.id,type:'record',id:state.selected}});
    }
    paint();

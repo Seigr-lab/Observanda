@@ -5,9 +5,7 @@ import {digest,serialize} from './storage-format.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 import {withRecordEncodingAudit} from './record-document-encoding.js';
 export function verificationContext(metadata){
- // These values cannot change current-format record validation or projection.
- // Earlier formats retain their complete context for historical upgrades.
- if(metadata.formatVersion<21)return metadata;
+ // These values cannot change record validation or projection.
  const {revision,updatedAt,...context}=metadata;void revision;void updatedAt;return context;
 }
 export async function withCatalogueVerification(store,operation){

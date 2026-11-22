@@ -263,7 +263,6 @@ export class ResearchCatalogue{
  validateMetadata(current,metadata,options){return validateIndexedMetadata(this,current,metadata,options);}
  async recordOutline({signal,snapshotId=null}={}){
   signal?.throwIfAborted();const etag=snapshotId??await this.head(),source=await this.snapshot(etag);
-  if(source.metadata.formatVersion<21)throw new AppError('INVALID');
   const {notebookCounts,total}=await catalogueOutline(this,source,{signal});
   return {outline:true,book:{...source.metadata,entries:[]},etag,recordRevisions:{},notebookCounts,total};
  }
@@ -272,7 +271,6 @@ export class ResearchCatalogue{
   signal?.throwIfAborted();
   const etag=snapshotId??await this.head(),source=await this.snapshot(etag);
   if(workspaceId&&source.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(source.metadata.formatVersion<21)throw new AppError('INVALID');
   const entries=[],recordRevisions={},missing=[];
   let selectedBytes=0;
   for(const id of ids){
@@ -290,22 +288,21 @@ export class ResearchCatalogue{
   if(recordIds!==null&&(!validRecordSelection(recordIds)||command.changes.some(c=>!recordIds.includes(c.id))))throw new AppError('INVALID');
   const currentId=await this.head(),source=await this.snapshot(currentId);
   if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(receipt&&source.metadata.formatVersion<21)throw new AppError('INVALID');
   const oldRows=new Map();
   for(const change of command.changes){const row=await this.member(source,change.id);if(row)oldRows.set(row.id,row);}
-  const useBases=storedBases&&source.metadata.formatVersion>=21,replacementBases=useBases?new Map():null;
+  const replacementBases=storedBases?new Map():null;
   const selected=await operationStage('read-record-bases',{total:oldRows.size,unit:'records'},async()=>{
    const values=[];
-   for(const row of oldRows.values()){if(useBases)replacementBases.set(row.id,await recordReplacementBase(this,row));else values.push(await this.record(row.id,row.revision));operationAdvance();}
+   for(const row of oldRows.values()){if(storedBases)replacementBases.set(row.id,await recordReplacementBase(this,row));else values.push(await this.record(row.id,row.revision));operationAdvance();}
    return values;
   });
-  const original={...source.metadata,entries:selected,partialRecords:true,...(useBases?{replacementBases}:{})},result=await operationStage('prepare-record-edits',{},()=>apply(original));let modified=[];
+  const original={...source.metadata,entries:selected,partialRecords:true,...(storedBases?{replacementBases}:{})},result=await operationStage('prepare-record-edits',{},()=>apply(original));let modified=[];
   if(result){
    if(result.id!==source.metadata.id||result.revision!==source.metadata.revision)throw new AppError('CONFLICT');
    const now=new Date().toISOString(),previous=new Map(selected.map(r=>[r.id,r]));
    for(const record of result.entries){
-    const prior=useBases?replacementBases.get(record.id):previous.get(record.id);record.createdAt=prior?.createdAt??now;
-    record.updatedAt=prior&&(useBases?prior.revision===recordRevision(record):sameJSONData(prior,record))?prior.updatedAt:now;
+    const prior=storedBases?replacementBases.get(record.id):previous.get(record.id);record.createdAt=prior?.createdAt??now;
+    record.updatedAt=prior&&(storedBases?prior.revision===recordRevision(record):sameJSONData(prior,record))?prior.updatedAt:now;
     modified.push(record);
    }
    const current=await operationStage('validate-records',{},async()=>{
@@ -595,11 +592,9 @@ export class ResearchCatalogue{
   await verified.once(['membership',snapshot.membership,snapshot.searchIndex,snapshot.count,snapshot.bytes,snapshot.nextPosition],async()=>{
    if(!previous||!await verifyMembershipChange(this,previous,snapshot))await index.verify(snapshot);
   });
-  if(snapshot.metadata.formatVersion>=21){
-   try{await this.validateMetadata(snapshot,snapshot.metadata);}catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT','WORKSPACE_METADATA_LIMIT'].includes(error.code))fail();throw error;}
-  }
+  try{await this.validateMetadata(snapshot,snapshot.metadata);}catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT','WORKSPACE_METADATA_LIMIT'].includes(error.code))fail();throw error;}
   if(media)await verified.once(['media-metadata',context],()=>media.metadata(snapshot.metadata));
-  const unchangedContext=previous&&snapshot.metadata.formatVersion>=21&&hash(verificationContext(previous.metadata))===context;
+  const unchangedContext=previous&&hash(verificationContext(previous.metadata))===context;
   const members=unchangedContext?changedVerificationMembers(this,previous,snapshot):this.members(snapshot);
   for await(const row of members){
    // The member contains every identity/workflow field used to resolve the
@@ -607,9 +602,9 @@ export class ResearchCatalogue{
    // of the receipt, so changed ownership or run relationships force a check.
    // Full membership verification already proves section identity ownership.
    // Workflow validation needs the parent/child relationships, not every ID.
-   const validation=snapshot.metadata.formatVersion>=21?await index.validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:[],relations:row.runOf.map(target=>({role:'run-of',target}))}]):[];
+   const validation=await index.validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:[],relations:row.runOf.map(target=>({role:'run-of',target}))}]);
    await verified.once(['record',context,row,validation],async()=>{
-   if(snapshot.metadata.formatVersion>=21&&row.queryRevision&&(row.bytes>65535||row.collections||row.hasAttempt)){
+   if(row.queryRevision&&(row.bytes>65535||row.collections||row.hasAttempt)){
     try{await verifyRecordDocument(this,row,snapshot.metadata,validation,media);}
     catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT'].includes(error.code))fail();throw error;}
     return;
@@ -620,10 +615,8 @@ export class ResearchCatalogue{
    if(hash(stored)!==hash(expected))fail();
    if(media)await media.record(record);
    await validateFigureSources(this.workspace,record);
-   if(snapshot.metadata.formatVersion>=21){
-    try{validateRecordChanges(snapshot.metadata,[record],validation);}
-    catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT'].includes(error.code))fail();throw error;}
-   }
+   try{validateRecordChanges(snapshot.metadata,[record],validation);}
+   catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT'].includes(error.code))fail();throw error;}
    await verifyRecordVocabulary(this,row);
    for(const search of row.summaryRevision?[true,false]:[true])for await(const value of this.queryDocuments([row],snapshot.metadata,{revisions:true,search,publication:true,cards:true,inventory:true,publicationDetails:true,stored:true})){
     const {revision:cachedRevision,storageRevision,...query}=value,display=historicalBook(snapshot.metadata,record).entries[0];void storageRevision;

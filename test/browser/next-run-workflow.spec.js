@@ -11,7 +11,6 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {withRetainedFigure} from '../../src/retained-figures.js';
-import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {Workspace} from '../../src/storage.js';
 import {preferences} from './preferences-helper.js';
 import {recoverResearch} from './research-recovery-workflow.js';
@@ -22,7 +21,7 @@ import {openEvidence,revealInEditor} from './record-editor-helper.js';
 test('ordinary next run connects preparation, native evidence, measurements, results, restore and selected publication',async({page,browser},testInfo)=>{
  test.setTimeout(240000);page.setDefaultTimeout(15000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-next-run-')),book=upgradeNotebook(sampleNotebook()),[investigation,method]=book.entries;
- book.formatVersion=20;book.entries=[investigation,method];book.entries.forEach(e=>{e.figures=[];e.relations=[];e.attachments=[];e.sections=[];e.share=false;});
+ book.entries=[investigation,method];book.entries.forEach(e=>{e.figures=[];e.relations=[];e.attachments=[];e.sections=[];e.share=false;});
  investigation.type='experiment';investigation.title='Synthetic apparatus study';method.type='protocol';method.title='PRIVATE decoding method';method.body='Compare the returned bytes with the declared reference.';
  const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),errors=[];
  let app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
@@ -44,17 +43,7 @@ test('ordinary next run connects preparation, native evidence, measurements, res
  const pickProvenance=async(root,key,ref,label)=>{const picker=root.locator('[data-provenance-reference="'+key+'"]');await picker.getByRole('button',{name:'Choose retained revision',exact:true}).click();await picker.getByLabel(label,{exact:true}).selectOption(reference(ref));await picker.getByRole('button',{name:'Use selected revision',exact:true}).click();};
  let runId;
  try{
-  const older=await f.workspace.read();expect(older.book.formatVersion).toBe(20);
-  await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root));await preferences(page,'General');await page.getByLabel('Workspace introduction',{exact:true}).fill('Supported older workspace continued through the app.');
-  // Fail after the upgraded snapshot has been written inside its transaction.
-  // The old snapshot and settings draft must both survive an ordinary retry.
-  const opened=await f.workspace.read(),put=ResearchCatalogue.prototype.put;let failedUpgrade=false;
-  ResearchCatalogue.prototype.put=async function(value,...args){const result=await put.call(this,value,...args);if(this.workspace.root===f.workspace.root&&value.formatVersion===21){failedUpgrade=true;throw Object.assign(Error('Synthetic upgrade interruption'),{code:'ENOSPC'});}return result;};
-  try{
-   const failing=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/notebook/save');await page.getByRole('button',{name:'Save workspace',exact:true}).click();expect((await failing).ok()).toBe(false);expect(failedUpgrade).toBe(true);
-   expect(await f.workspace.read()).toEqual(opened);await expect(page.getByLabel('Workspace introduction',{exact:true})).toHaveValue('Supported older workspace continued through the app.');
-  }finally{ResearchCatalogue.prototype.put=put;}
-  const upgrading=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/notebook/save');await page.getByRole('button',{name:'Save workspace',exact:true}).click();expect((await upgrading).ok()).toBe(true);await expect(page.locator('form[data-busy]')).toHaveCount(0);expect((await f.workspace.read()).book.formatVersion).toBe(21);expect(await f.workspace.catalogue(store=>store.read(older.etag))).toEqual(older);
+  await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root));
   await page.evaluate(id=>location.hash='#/records/'+id,investigation.id);await (await revealInEditor(page,page.getByRole('button',{name:'Add run or take',exact:true}),'Activity and history')).click();await completeRunCreation(page,'Apparatus run one');
   runId=(await f.workspace.read()).book.entries.find(r=>r.title==='Apparatus run one').id;
   await evidence();

@@ -27,7 +27,6 @@ export class RecordContent {
    const currentId=await store.head(),current=await store.snapshot(currentId),etag=command.snapshotId??currentId,snapshot=command.snapshotId?await store.snapshot(etag):current;
    if(current.metadata.id!==command.workspaceId||snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
-   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    return withStoredRecord(store,row.id,row.revision,async({value,blocks})=>{
     const tree=blocks?.tree(),root=value.root;
     const selected=async path=>{signal?.throwIfAborted();if(tree)return (await tree.selected(root,path)).value;let result=value;for(const part of path)result=result?.[part];return structuredClone(result);};

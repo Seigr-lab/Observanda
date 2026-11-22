@@ -35,7 +35,7 @@ export function moduleReferencesUI(services,{moduleId,current,changed,draw}){
    for(let offset=0;offset<ids.length;offset+=25){
     const selected=ids.slice(offset,offset+25);
     let records,missing;
-    if(state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21){
+    if(state.storage?.researchStorage==='catalogue'){
      const result=await api('/api/workspace/read/labels',{workspaceId,etag,ids:selected},{adopt:false,signal:request.signal});
      records=result.records;missing=result.missing;
      if(result?.workspaceId!==workspaceId||result.etag!==etag||!Array.isArray(records)||!Array.isArray(missing)||records.length+missing.length!==selected.length||new Set([...records.map(r=>r?.id),...missing]).size!==selected.length||records.some(r=>!r||!selected.includes(r.id)||!researchId(r.notebookId)||typeof r.title!=='string')||missing.some(id=>!selected.includes(id)))throw Error(tr('invalid'));
