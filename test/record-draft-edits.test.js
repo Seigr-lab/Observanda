@@ -41,9 +41,11 @@ test('unfinished checkpoint values survive edits, restart, source changes and ex
  const draft=await retainedDraft(f.workspace,f.book.id,original,mine),review=new RecordDraftReview(f.workspace,media);let plan=await review.prepare(prepare(f,draft));
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Reconstructed checkpoint record');});
  await assert.rejects(review.apply(target(plan)),{code:'INVALID'});
+ // A workspace catalogue already holds the draft edit generation, so edits leave it unchanged.
+ const generation=await f.workspace.catalogue(s=>catalogueFormat(s.db));
  const first=await edit(review,plan,'title',{value:'Corrected checkpoint'});assert.deepEqual(await review.editWrite(first.command),first.saved);
  await assert.rejects(review.editWrite({...first.command,operationId:randomUUID(),value:{value:'Stale'}}),{code:'DRAFT_CHANGED'});
- assert.equal(await f.workspace.catalogue(s=>catalogueFormat(s.db)),10);
+ assert.equal(await f.workspace.catalogue(s=>catalogueFormat(s.db)),generation);
  await assert.rejects(review.apply(target(plan)),{code:'DRAFT_CHANGED'});
  const fields=await review.editFields({...target(plan),group:'writing',offset:80});assert.equal(fields.total,83);assert.equal(fields.items[2].field,'section:'+mine.sections[81].id);
  await edit(review,plan,fields.items[2].field,{title:'Late correction',body:'Exact recovered observation'});
@@ -83,9 +85,8 @@ test('native domain corrections keep unfinished results and run facts until stri
 test('checkpoint edit rollback, backup and new-record recovery retain the unfinished original',async t=>{
  const f=await figureValueFixture();t.after(f.close);const mine={...structuredClone(f.record),id:randomUUID(),title:'',body:'New writing',sections:[],figures:[],results:{version:1,statements:[]}};
  const draft=await retainedDraft(f.workspace,f.book.id,null,mine),review=new RecordDraftReview(f.workspace,media);let plan=await review.prepare(prepare(f,draft));
- // This checkpoint's original values also satisfy the previous generation;
- // exercise the first correction upgrade from that state, including rollback.
- await f.workspace.withLock(()=>f.workspace.catalogue(s=>s.db.run('UPDATE catalogue_format SET version=9')));
+ // Writing the checkpoint already raised the catalogue to the draft edit generation;
+ // an interrupted edit must leave that generation and the original value unchanged.
  const before=await f.workspace.catalogue(s=>catalogueFormat(s.db)),put=ResearchCatalogue.prototype.putObject;
  t.mock.method(ResearchCatalogue.prototype,'putObject',async function(id,value){await put.call(this,id,value);if(id.startsWith('record-draft-edit-operation:'))throw Error('Interrupted edit');});
  await assert.rejects(edit(review,plan,'title',{value:'Unacknowledged'}),/Interrupted edit/);ResearchCatalogue.prototype.putObject.mock.restore();
@@ -93,6 +94,6 @@ test('checkpoint edit rollback, backup and new-record recovery retain the unfini
  await edit(review,plan,'title',{value:'Recovered new record'});plan=await review.prepare(prepare(f,draft));
  const access=await createAccess('','edited checkpoint recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
- assert.equal(await workspace.catalogue(s=>catalogueFormat(s.db)),10);assert.deepEqual(await restored.prepare(prepare(f,draft)),plan);await restored.apply(target(plan));await workspace.catalogue(s=>verifyRecordDraftReviews(s));
+ assert.equal(await workspace.catalogue(s=>catalogueFormat(s.db)),before);assert.deepEqual(await restored.prepare(prepare(f,draft)),plan);await restored.apply(target(plan));await workspace.catalogue(s=>verifyRecordDraftReviews(s));
  assert.equal((await review.editRead({...target(plan),field:'title'})).value.value,'Recovered new record');
 });
