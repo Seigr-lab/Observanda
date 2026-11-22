@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,rename,symlink,readdir,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {copyWorkspaceTo,prepareCopyDestination,workspaceManifest} from '../src/locations.js';
 import {withNativeDestination} from '../src/native-destination.js';
@@ -17,8 +16,8 @@ async function fixture(t){
  t.after(async()=>{assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-copy-destination-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {root,destination,outside};
 }
 test('copy refuses publication after control-directory replacement and preserves the source',async t=>{
- const f=await fixture(t),source=new Workspace(path.join(f.root,'source'));await source.create(sampleNotebook());const before=await workspaceManifest(source.root),retained=path.join(f.root,'retained');
- await assert.rejects(copyWorkspaceTo(source.root,f.destination,{afterSnapshotVerified:async()=>{await rename(path.join(f.destination,'.observanda'),retained);await symlink(f.outside,path.join(f.destination,'.observanda'),'junction');}}),error=>['UNSAFE','STORAGE_COPY'].includes(error.code));
+ const f=await fixture(t),{workspace:source,vault}=await encryptedFixture(path.join(f.root,'source'),sampleNotebook());t.after(()=>clearVault(vault));const before=await workspaceManifest(source.root),retained=path.join(f.root,'retained');
+ await assert.rejects(copyWorkspaceTo(source.root,f.destination,{vault,afterSnapshotVerified:async()=>{await rename(path.join(f.destination,'.observanda'),retained);await symlink(f.outside,path.join(f.destination,'.observanda'),'junction');}}),error=>['UNSAFE','STORAGE_COPY'].includes(error.code));
  assert.deepEqual(await workspaceManifest(source.root),before);assert.deepEqual(await readdir(f.outside),['keep']);assert.equal(await readFile(path.join(retained,'copy-in-progress'),'utf8'),'incomplete\n');
 });
 test('database backup writes its admitted archive after the destination control path is replaced',async t=>{

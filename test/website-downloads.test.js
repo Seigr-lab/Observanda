@@ -5,7 +5,8 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../src/sample.js';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {MediaStore} from '../src/media.js';
 import {assertPublicFiles} from '../src/privacy.js';
 import {validDownloadName} from '../src/web/website-file.js';
@@ -18,7 +19,7 @@ test('download names and binary admission reject unsafe and executable paths',()
 });
 
 test('immediate imports and empty originals remain exact downloads without conversion',async t=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-empty-download-'));t.after(()=>rm(root,{recursive:true,force:true}));const workspace=new Workspace(root);await workspace.create(sampleNotebook());
- const store=new MediaStore(root),asset=await store.import(Buffer.alloc(0),'file',{name:'empty.txt'});assert.equal(asset.size,0);assert.deepEqual((await store.get(asset.id)).bytes,Buffer.alloc(0));
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-empty-download-')),{workspace,vault}=await encryptedFixture(directory,sampleNotebook());t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ const store=new MediaStore(workspace),asset=await store.import(Buffer.alloc(0),'file',{name:'empty.txt'});assert.equal(asset.size,0);assert.deepEqual((await store.get(asset.id)).bytes,Buffer.alloc(0));
  await assert.rejects(store.import(Buffer.alloc(0),'file',{name:'../wrong'}),{code:'MEDIA_INVALID'});
 });

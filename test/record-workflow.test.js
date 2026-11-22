@@ -8,7 +8,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {validateNotebook} from '../src/model.js';
 import {createRun,runsOf,recordCounts,sectionAnchor,workflowIssues} from '../src/web/record-workflow.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {RecordHistory} from '../src/record-history.js';
@@ -56,9 +57,9 @@ test('experiments and creative series share runs; repeats carry methods and cond
  assert.equal(take.sections.some(s=>s.title==='Hypothesis'),false);
  assert.deepEqual(recordCounts(book.entries),{experiments:1,runs:4,other:2});validateNotebook(book);
 });
-test('saved workflow survives drafts, conflicts, exact method edits and record history',async()=>{
- const {book,experiment,method}=fixture(),root=await mkdtemp(path.join(os.tmpdir(),'observanda-workflow-')),ws=new Workspace(root);
- await ws.create(book);const materials=new ResearchMaterials(ws),pinned=await materials.pinRecord(method.id,recordRevision(method));
+test('saved workflow survives drafts, conflicts, exact method edits and record history',async t=>{
+ const {book,experiment,method}=fixture(),{workspace:ws,vault}=await encryptedFixture(await mkdtemp(path.join(os.tmpdir(),'observanda-workflow-')),book);t.after(()=>clearVault(vault));
+ const materials=new ResearchMaterials(ws),pinned=await materials.pinRecord(method.id,recordRevision(method));
  const run=createRun(book,experiment);run.relations.push({id:randomUUID(),type:'Uses method',role:'uses-method',label:method.title,target:{workspaceId:book.id,kind:'record',id:method.id,revision:pinned.revision}});
  const drafts=new ResearchDrafts(ws),id=randomUUID();
  await drafts.write({id,workspaceId:book.id,expectedRevision:null,changes:[{base:null,record:run,expectedRevision:null}]});

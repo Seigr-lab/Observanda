@@ -9,7 +9,9 @@ import {defaultDashboard,validDashboard,moveItem,createPanel,upgradeDashboard} f
 import {readPreferences,rememberLocation,rememberInterface,saveDashboard,dashboardSnapshot} from '../src/preferences.js';
 import {DEFAULT_INTERFACE} from '../src/web/interface-ui.js';
 import {startServer} from '../src/server.js';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {readWorkspaceDashboard} from '../src/security/dashboard-storage.js';
+import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
 
@@ -65,7 +67,7 @@ test('default website routes remain distinct from application preferences and ro
 });
 
 test('dashboard API enforces session, origin and conflict checks, survives restart and never edits the research manifest',async()=>{
- const root=await temp(),file=path.join(await temp(),'preferences.json'),book=sampleNotebook();book.title=path.basename(root);await new Workspace(root).create(book);const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
+ const file=path.join(await temp(),'preferences.json'),book=sampleNotebook();book.title='workspace';const {workspace,vault,deviceStore}=await encryptedFixture(await temp(),book),root=workspace.root,original=(await workspace.read()).etag;let app=await startServer({root,preferencesFile:file,port:0,deviceStore});
  try{
   assert.equal((await fetch(app.origin+'/api/dashboard')).status,401);
   const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});const cookie=auth.headers.get('x-observanda-session').split(';')[0];
@@ -73,9 +75,10 @@ test('dashboard API enforces session, origin and conflict checks, survives resta
   const initial=await (await request('/api/dashboard')).json();initial.settings.views[0].name='Private dashboard title';
   assert.equal((await request('/api/dashboard',initial,'https://untrusted.invalid')).status,403);
   assert.equal((await request('/api/dashboard',initial)).status,200);assert.equal((await request('/api/dashboard',initial)).status,409);
-  assert.equal(await readFile(path.join(root,'observanda.json'),'utf8'),original);
-  await app.close();app=await startServer({root,preferencesFile:file,port:0});assert.equal((await readPreferences(file)).dashboard.views[0].name,'Private dashboard title');
- }finally{await app.close();}
+  assert.equal((await workspace.read()).etag,original);
+  // The dashboard is kept in the workspace's own encrypted settings.
+  await app.close();app=await startServer({root,preferencesFile:file,port:0,deviceStore});assert.equal((await readWorkspaceDashboard(workspace)).settings.views[0].name,'Private dashboard title');
+ }finally{await app.close();await clearVault(vault);}
 });
 
 

@@ -5,13 +5,14 @@ import path from 'node:path';
 import os from 'node:os';
 import {testServer} from './device-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {GithubConnections} from '../src/github/connections.js';
 
 test('GitHub account changes require the local session and serialize with publication commands',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-github-api-')),root=path.join(directory,'workspace'),ws=new Workspace(root);await ws.create(sampleNotebook());let release,started;const waiting=new Promise(resolve=>{started=resolve;});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-github-api-')),{workspace:ws,vault,deviceStore}=await encryptedFixture(directory,sampleNotebook()),root=ws.root;let release,started;const waiting=new Promise(resolve=>{started=resolve;});
  const connections=new GithubConnections({file:path.join(directory,'github.json'),helper:{available:async()=>true,accounts:async()=>['alice'],credential:async()=>{started();await new Promise(resolve=>{release=resolve;});return {login:'alice',token:'synthetic_token_1234567890'};}},request:async()=>new Response('{"id":1,"login":"alice"}')});
- const app=await testServer({root,port:0,githubConnections:connections});t.after(async()=>{release?.();await app.close();await rm(directory,{recursive:true,force:true});});
+ const app=await testServer({root,port:0,githubConnections:connections,deviceStore});t.after(async()=>{release?.();await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  const route='/api/github-connection/choose';const raw=(url,data,headers={})=>fetch(app.origin+url,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...headers},body:JSON.stringify(data)});
  assert.equal((await raw(route,{login:'alice'})).status,401);
  assert.equal((await raw('/api/publishing/connect',{})).status,401);

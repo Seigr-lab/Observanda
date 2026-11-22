@@ -6,7 +6,8 @@ import {mkdtemp} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {saveStructure} from '../src/structure.js';
 import {validateNotebook} from '../src/model.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
@@ -38,13 +39,12 @@ test('user-defined structure supports direct lab books, nested projects, moves a
  assert.equal(recordsIn(moved,child.id).length,0);
 });
 
-test('lab templates create full canonical records and freeze their field definitions at save',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-unified-')),ws=new Workspace(root);
+test('lab templates create full canonical records and freeze their field definitions at save',async t=>{
  let book=sampleNotebook(),n=book.notebooks[0];n.configuration={profiles:[],sections:[]};
  enableProfile(n.configuration,'arts-creative',true);
  const section=n.configuration.sections.find(s=>s.key==='sessions');section.fields.push({key:'tempo',label:'Tempo',type:'number',unit:'bpm',required:true,choices:[]});
  book.entries=[];
- await ws.create(book);
+ const {workspace:ws,vault}=await encryptedFixture(await mkdtemp(path.join(os.tmpdir(),'observanda-unified-')),book);t.after(()=>clearVault(vault));
  const record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:n.id,title:'Recording',template:templateFrom(section)};
  record.template.values.tempo='92.5';
  const records=new ResearchRecords(ws,{get:async()=>({})});

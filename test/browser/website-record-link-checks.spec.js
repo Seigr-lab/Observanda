@@ -2,15 +2,16 @@ import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {testServer as startServer} from '../device-fixture.js';
 
 // A record copy's link to another record is resolved when the website is
 // published, so the editor's page checks do not report it as a broken link.
 test('page checks accept record links of placed copies and still report broken page links',async({page})=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-link-checks-'));await new Workspace(directory).create(sampleNotebook());
- const app=await startServer({root:directory,port:0,headless:true});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-link-checks-'));const f=await encryptedFixture(directory,sampleNotebook());
+ const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  try{
   await page.goto(app.url);
   const issues=await page.evaluate(async()=>{
@@ -19,5 +20,5 @@ test('page checks accept record links of placed copies and still report broken p
    return checkAuthoredPage(doc,'index.html',new URL('https://site.invalid/'),[{path:'index.html'}]).map(issue=>[issue.key,issue.detail]);
   });
   expect(issues).toEqual([['brokenLink','#missing-anchor']]);
- }finally{await app.close();await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

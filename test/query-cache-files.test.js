@@ -55,12 +55,12 @@ test('substituted internal directory cannot redirect cache reads, writes or clea
  assert.equal(await readFile(path.join(external,'a.data'),'utf8'),'external retained data');assert.equal(await verifiedQueryCacheNamespace(workspace.root,workspace.vault),false);assert.equal((await readdir(path.join(retained,'query-cache'))).includes(files.id),false);
 });
 test('an inventory given the owner key leaves a proved folder-bound query cache out of copies',async t=>{
- const workspace=await fixture(t);await writeFile(path.join(workspace.root,'observanda.json'),'{}');
+ const workspace=await fixture(t);await writeFile(path.join(workspace.root,'workspace.observanda'),'{}');
  const files=await openQueryCacheFiles(workspace);workspace.cleanup.push(files);await files.write('a.data',0,Buffer.from('cached encrypted frame'));
  const listed=async options=>(await Array.fromAsync(workspaceFiles(workspace.root,{hashFiles:false,includeDatabase:false,...options}))).map(file=>file.path);
  // Without a key the cache cannot be proved, so it stays ordinary data.
  assert.equal((await listed()).some(name=>name.startsWith('.observanda/query-cache/')),true);
  const keyed=await listed({vault:workspace.vault});
- assert.equal(keyed.some(name=>name.startsWith('.observanda/query-cache/')),false);assert.equal(keyed.includes('observanda.json'),true);
+ assert.equal(keyed.some(name=>name.startsWith('.observanda/query-cache/')),false);assert.equal(keyed.includes('workspace.observanda'),true);
  await files.close();
 });

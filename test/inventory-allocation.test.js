@@ -6,6 +6,8 @@ import {mkdtemp,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {createNotebook} from '../src/model.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {balance} from '../src/web/modules/quantities.js';
@@ -131,10 +133,12 @@ test('1000 workspace posters stay entirely central when every project enables it
  assert.equal(after.entities.filter(e=>e.type==='resource').length,1);
 });
 
-test('workspace inventory can be created and received without any projects or lab books',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-central-')),book=createNotebook('Independent artist'),ws=new Workspace(root);
- await ws.create(book);const store=workspaceModules(ws),id=randomUUID();
+test('workspace inventory can be created and received without any projects or lab books',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-central-')),book=createNotebook('Independent artist'),{workspace:ws,vault}=await encryptedFixture(directory,book);t.after(()=>clearVault(vault));
+ const store=workspaceModules(ws),id=randomUUID();
  await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'resource.create',payload:{id,data:details({name:'Strings',unit:'sets'}),openingStock:{quantity:'12',projectId:null}}});
- assert.deepEqual(balance((await store.read()).entities,id),{physical:'12',reserved:'0',available:'12'});
+ // A current workspace reads inventory through its reader, not as one module document.
+ const [stock]=(await new InventoryReader(ws).stock({workspaceId:book.id,ids:[id]})).items,central=stock.locations.find(location=>location.projectId===null);
+ assert.deepEqual({physical:central.physical,reserved:central.reserved,available:central.available},{physical:'12',reserved:'0',available:'12'});assert.equal(stock.locations.length,1);
  const saved=(await ws.read()).book;assert.equal(saved.projects.length,0);assert.equal(saved.notebooks.length,0);assert.equal(saved.entries.length,0);
 });

@@ -7,6 +7,8 @@ import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {withWriterLease,releaseWriterLease} from '../src/writer-lease.js';
 import {reviewWriterRecovery,recoverWriter} from '../src/writer-recovery.js';
 
@@ -25,8 +27,8 @@ test('kernel writer ownership excludes live processes and releases after abrupt 
  assert.equal((await lstat(path.join(root,'.observanda','write.lock'))).isFile(),true);
 });
 test('queued local writers serialize, retain revision checks and release after failure',async t=>{
- const root=await fixture(t),ws=new Workspace(root),initial=await ws.create(sampleNotebook());
- const results=await Promise.allSettled([ws.save({...initial.book,title:'first'},initial.etag),new Workspace(root).save({...initial.book,title:'second'},initial.etag)]);
+ const {workspace:ws,vault}=await encryptedFixture(await fixture(t),sampleNotebook()),root=ws.root,initial=await ws.read();t.after(()=>clearVault(vault));
+ const results=await Promise.allSettled([ws.save({...initial.book,title:'first'},initial.etag),new Workspace(root,vault).save({...initial.book,title:'second'},initial.etag)]);
  assert.equal(results.filter(result=>result.status==='fulfilled').length,1);assert.equal(results.find(result=>result.status==='rejected').reason.code,'CONFLICT');
  await assert.rejects(withWriterLease(path.join(root,'temporary.lock'),async()=>{throw Error('failed');}),/failed/);
  assert.equal(await withWriterLease(path.join(root,'temporary.lock'),async()=>37),37);

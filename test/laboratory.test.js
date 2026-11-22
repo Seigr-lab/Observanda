@@ -1,24 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Laboratory } from '../src/laboratory.js';
 import { Workspace } from '../src/storage.js';
 import { createNotebook } from '../src/model.js';
 import { recordCopies, copiesText } from './fixtures/record-copies.js';
+import { encryptedFixture } from './browser/encrypted-fixture.js';
 
 import {sampleDecimal} from './sample-analysis-fixture.js';
 const result = () => ({ method: 'Optical method v1', analyte: 'Absorbance', kind: 'numeric', numericVersion: 2, value: sampleDecimal('0.3'), unit: 'AU', lower: sampleDecimal('0'), upper: sampleDecimal('1'), notes: 'Synthetic result\nSecond line' });
-async function setup() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-lab-')), lab = new Laboratory(root);
-  await new Workspace(root).create(createNotebook('Public research'));
+// The tampering test reads the laboratory file of an unencrypted folder workspace;
+// every other test runs on an encrypted catalogue workspace.
+async function setup(plainFolder = false) {
+  let root, lab, workspace;
+  if (plainFolder) { root = await mkdtemp(path.join(os.tmpdir(), 'observanda-lab-')); workspace = new Workspace(root); await workspace.create(createNotebook('Public research')); lab = new Laboratory(root); }
+  else { ({ workspace } = await encryptedFixture(await mkdtemp(path.join(os.tmpdir(), 'observanda-lab-')), createNotebook('Public research'))); root = workspace.root; lab = new Laboratory(workspace); }
   let current = await lab.read();
   const change = async data => (current = await lab.change({ ...data, etag: current.etag }));
   await change({ action: 'create-sample', sample: { code: 'S-001', material: 'Synthetic liquid', source: 'PRIVATE_SUBJECT_SENTINEL', collectedOn: '2026-09-25', receivedOn: '2026-09-26' } });
   const sampleId = current.lab.samples[0].id;
   await change({ action: 'create-analysis', analysis: { code: 'A-001', sampleId, result: result() } });
-  return { root, lab, change, sampleId, id: current.lab.analyses[0].id, current: () => current };
+  return { root, workspace, lab, change, sampleId, id: current.lab.analyses[0].id, current: () => current };
 }
 
 test('sample to reviewed sheet, amendment, renewed review and archive preserves prior revisions', async () => {
@@ -42,9 +46,9 @@ test('sample to reviewed sheet, amendment, renewed review and archive preserves 
   await s.change({ action: 'archive', id });
   assert.match(await s.lab.report(id, s.current().etag), /Above interval/);
   await assert.rejects(s.change({ action: 'amend', id, reason: 'Attempt archive edit' }), { code: 'LAB_TRANSITION' });
-  const histories = await readdir(path.join(s.root, '.observanda', 'laboratory-history'));
-  const old = JSON.parse(await readFile(path.join(s.root, '.observanda', 'laboratory-history', approved.etag + '.json')));
-  assert.deepEqual(old.analyses[0].result.value, sampleDecimal('0.3')); assert.ok(histories.length >= 8);
+  // Prior revisions stay retained in the workspace catalogue.
+  const old = (await s.lab.snapshot(approved.etag)).lab;
+  assert.deepEqual(old.analyses[0].result.value, sampleDecimal('0.3'));
 });
 
 test('laboratory rejects duplicate identity, invalid units/intervals and incomplete review without mutation', async () => {
@@ -59,9 +63,9 @@ test('laboratory rejects duplicate identity, invalid units/intervals and incompl
 });
 
 test('reviewed result tampering is rejected and private laboratory data never enters a website copy', async () => {
-  const s = await setup(); await s.change({ action: 'submit', id: s.id });
+  const s = await setup(true); await s.change({ action: 'submit', id: s.id });
   await s.change({ action: 'review', id: s.id, reviewer: 'R', comment: '', decision: 'approve', checked: true });
-  const workspace = new Workspace(s.root);
+  const workspace = s.workspace;
   assert.ok(!copiesText(await recordCopies((await workspace.read()).book, workspace)).includes('PRIVATE_SUBJECT_SENTINEL'));
   const file = path.join(s.root, '.observanda', 'laboratory.json'), data = JSON.parse(await readFile(file));
   data.analyses[0].result.value = 77; await writeFile(file, JSON.stringify(data));

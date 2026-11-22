@@ -1,12 +1,14 @@
 import {test,before} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile,readdir} from 'node:fs/promises';
+import {mkdtemp,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {mediaFixtures,PRIVATE_MARKER} from './media-fixtures.js';
 import {MediaStore} from '../src/media.js';
 import {mediaToolsAvailable} from './media-tools.js';
-import {Workspace,digest} from '../src/storage.js';
+import {digest} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {contentBuffer} from '../src/file-content.js';
@@ -20,10 +22,9 @@ before(async () => {
 
 for (const kind of ['image', 'audio', 'video']) test(`${kind} originals survive unchanged while prepared copies are playable website copy assets`, async t => {
   if (!available) return t.skip('FFmpeg and ffprobe are required for this test.');
-  const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-media-'));
-  const book = sampleNotebook(), workspace = new Workspace(root); await workspace.create(book);
-  const store = new MediaStore(root), asset = await store.import(fixtures[kind].bytes, kind);
-  assert.equal(digest(await readFile(path.join(root, '.observanda', 'media', asset.id, 'original'))), digest(fixtures[kind].bytes));
+  const book = sampleNotebook(), { workspace, vault } = await encryptedFixture(await mkdtemp(path.join(os.tmpdir(), 'observanda-media-')), book), root = workspace.root; t.after(() => clearVault(vault));
+  const store = new MediaStore(workspace), asset = await store.import(fixtures[kind].bytes, kind);
+  assert.equal(digest(await contentBuffer(await store.originalContent(asset.id))), digest(fixtures[kind].bytes));
   const prepared = await store.get(asset.id);
   assert.ok(!prepared.bytes.includes(Buffer.from(PRIVATE_MARKER)));
   if (kind === 'image') assert.ok(!prepared.bytes.includes(Buffer.from('zTXt')));
@@ -37,14 +38,14 @@ for (const kind of ['image', 'audio', 'video']) test(`${kind} originals survive 
   book.entries[0].attachments[book.entries[0].attachments.length - 1].share = false;
   const privateCopy = await convertPublicationRecord(workspace, book, book.entries[0]);
   assert.ok(!(await Promise.all(privateCopy.assets.map(bytesOf))).some(value => value.equals(prepared.bytes)));
-  await writeFile(path.join(root, '.observanda', 'media', asset.id, `public.${prepared.extension}`), Buffer.from('changed'));
+  await workspace.writeFile(path.join(root, '.observanda', 'media', asset.id, `public.${prepared.extension}`), Buffer.from('changed'));
   await assert.rejects(store.get(asset.id), error => error.code === 'MEDIA_INVALID');
 });
 
 test('bad media and external-reference playlists fail without emitting source paths', async t => {
   if (!available) return t.skip('FFmpeg and ffprobe are required for this test.');
-  const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-bad-media-')); await new Workspace(root).create(sampleNotebook());
-  const store = new MediaStore(root);
+  const { workspace, vault } = await encryptedFixture(await mkdtemp(path.join(os.tmpdir(), 'observanda-bad-media-')), sampleNotebook()), root = workspace.root; t.after(() => clearVault(vault));
+  const store = new MediaStore(workspace);
   for (const bytes of [Buffer.from('<script>invalid</script>'), Buffer.from('ffconcat version 1.0\nfile file:///private/file.wav\n')]) {
     await assert.rejects(store.import(bytes, 'audio'), error => error.code === 'MEDIA_INVALID' && !error.message.includes(root));
   }
@@ -53,8 +54,8 @@ test('bad media and external-reference playlists fail without emitting source pa
 
 test('media endpoints require authentication, support byte ranges, and expose no original route', async t => {
   if (!available) return t.skip('FFmpeg and ffprobe are required for this test.');
-  const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-media-http-')); await new Workspace(root).create(sampleNotebook());
-  const app = await startServer({ root, port: 0 }); t.after(app.close);
+  const { workspace, vault, deviceStore } = await encryptedFixture(await mkdtemp(path.join(os.tmpdir(), 'observanda-media-http-')), sampleNotebook());
+  const app = await startServer({ root: workspace.root, port: 0, deviceStore }); t.after(async () => { await app.close(); await clearVault(vault); });
   const auth = await fetch(app.origin + '/api/session', { method: 'POST', headers: { Origin: app.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: app.launchToken }) });
   const cookie = auth.headers.get('x-observanda-session').split(';')[0];
   const response = await fetch(app.origin + '/api/media/audio', { method: 'POST', headers: { 'X-Observanda-Session': cookie, Origin: app.origin, 'Content-Type': 'application/octet-stream' }, body: fixtures.audio.bytes });
@@ -67,7 +68,7 @@ test('media endpoints require authentication, support byte ranges, and expose no
 });
 
 test('a website copy refuses modified prepared media',async t=>{
- if(!available)return t.skip('FFmpeg required');const root=await mkdtemp(path.join(os.tmpdir(),'observanda-stream-site-')),book=sampleNotebook(),workspace=new Workspace(root);await workspace.create(book);const store=new MediaStore(root),asset=await store.import(fixtures.audio.bytes,'audio');book.entries[0].attachments.push({...asset,caption:'Audio',alt:'Audio',transcript:'',share:true});
+ if(!available)return t.skip('FFmpeg required');const book=sampleNotebook(),{workspace,vault}=await encryptedFixture(await mkdtemp(path.join(os.tmpdir(),'observanda-stream-site-')),book),root=workspace.root;t.after(()=>clearVault(vault));const store=new MediaStore(workspace),asset=await store.import(fixtures.audio.bytes,'audio');book.entries[0].attachments.push({...asset,caption:'Audio',alt:'Audio',transcript:'',share:true});
  assert.ok((await convertPublicationRecord(workspace,book,book.entries[0])).assets.some(value=>value.contentType==='audio/wav'));
- await writeFile(path.join(root,'.observanda','media',asset.id,'public.wav'),Buffer.alloc(100));await assert.rejects(convertPublicationRecord(workspace,book,book.entries[0]),e=>e.code==='MEDIA_INVALID');
+ await workspace.writeFile(path.join(root,'.observanda','media',asset.id,'public.wav'),Buffer.alloc(100));await assert.rejects(convertPublicationRecord(workspace,book,book.entries[0]),e=>e.code==='MEDIA_INVALID');
 });

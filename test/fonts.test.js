@@ -15,6 +15,7 @@ import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {woffFixture} from './font-fixture.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {assertPublicFiles} from '../src/privacy.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 const bytes=()=>readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url));
@@ -59,7 +60,7 @@ test('custom variable fonts survive encrypted backup; only publicly used font by
  assert.ok(!(await convertPublicationRecord(ws,book,shared)).assets.some(asset=>Buffer.from(asset.bytes??[]).equals(original)));
 });
 test('invalid and cancelled uploads cannot create library entries; CSS identities cannot inject URLs',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-font-errors-'));t.after(()=>rm(directory,{recursive:true,force:true}));const ws=new Workspace(directory);await ws.create(sampleNotebook());const fonts=new WorkspaceFonts(ws);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-font-errors-')),{workspace:ws,vault}=await encryptedFixture(directory,sampleNotebook());t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});const fonts=new WorkspaceFonts(ws);
  await assert.rejects(fonts.import(Buffer.from('<script>not a font</script>')),{code:'FONT_INVALID'});
  const invalid=Buffer.from(await bytes());invalid.writeUInt32BE(0xffffffff,20);await assert.rejects(fonts.import(invalid),{code:'FONT_INVALID'});
  const controller=new AbortController();controller.abort();await assert.rejects(fonts.import(await bytes(),{signal:controller.signal}),{name:'AbortError'});assert.deepEqual(await fonts.list(),[]);

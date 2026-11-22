@@ -4,22 +4,21 @@ import os from 'node:os';
 import path from 'node:path';
 import {startServer} from '../../src/server.js';
 import {sampleNotebook} from '../../src/sample.js';
-import {Workspace} from '../../src/storage.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 // Seed the canonical folder title so startup's existing identity migration is
 // already satisfied; these tests check interrupted loading, not that migration.
 const startupBook=()=>({...sampleNotebook(),title:'workspace'});
 test('a failed application module shows keyboard-accessible reload and preserves the launch link',async({page})=>{
- const root=path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-startup-')),'workspace');await new Workspace(root).create(sampleNotebook());
- const app=await startServer({root,port:0,headless:true,preferencesFile:path.join(path.dirname(root),'preferences.json')}),launch=app.url;
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-startup-')),f=await encryptedFixture(directory,sampleNotebook()),root=f.workspace.root;
+ const app=await startServer({root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),launch=app.url;
  try{
   await page.context().route('**/record-history-ui.js',route=>route.abort('internetdisconnected'));
   await page.goto(launch);const heading=page.getByRole('heading',{name:'Observanda could not load'});await expect(heading).toBeVisible();await expect(heading).toBeFocused();
   expect(page.url()).toBe(launch);await expect(page.getByText('Opening Observanda',{exact:false})).toHaveCount(0);
   await page.context().unroute('**/record-history-ui.js');await page.keyboard.press('Tab');await expect(page.getByRole('button',{name:'Reload Observanda'})).toBeFocused();await page.keyboard.press('Enter');
   await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible({timeout:15000});await expect(heading).toHaveCount(0);
- }finally{await app.close();await rm(path.dirname(root),{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 for(const failure of ['session-request','session-response','preferences','workspace-status'])test('startup recovers from interrupted '+failure+' without replacing the workspace',async({page})=>{
