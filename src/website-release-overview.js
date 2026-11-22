@@ -26,7 +26,6 @@ async function outstanding(candidate,delivered){
  for(const list of Object.values(samples))list.sort();
  return {counts,samples};
 }
-async function* legacyRows(rows){yield* rows;}
 
 // One summary of what is saved, what was last delivered to the selected
 // destination, what an update would change there and which earlier editions
@@ -47,7 +46,7 @@ export async function websiteReleaseOverview({store,siteId,expectedRevision,targ
   if(owner?.releaseId){
    const entry=ledger.find(row=>row.releaseId===owner.releaseId&&row.destination.kind==='folder'&&row.destination.directory===selected.directory);
    delivered={releaseId:owner.releaseId,completedAt:entry?.completedAt??null,status:'verified'};
-   rows=owner.files?new LocalExportManifest(metadata).entries(owner.files):legacyRows(owner.legacyFiles);
+   rows=new LocalExportManifest(metadata).entries(owner.files);
   }
   pending=owner?.pending??null;
  }else if(selected.kind==='remote'){
