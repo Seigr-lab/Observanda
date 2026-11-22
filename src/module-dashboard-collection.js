@@ -14,7 +14,7 @@ const identity=(key,workspaceId)=>{const value=dashboardSourceIdentity(key);retu
 // through each owner's domain readers; stock is never merged across owners.
 export async function moduleDashboardCollection(pages,client,command,{scope=null,visit,signal}){
  const {source,selection,selected}=moduleDashboardContract(command),{workspaceId,area,type,options,mode,limit,cursor,offset,keys}=command;
- const signature=digest(JSON.stringify({kind:'module-dashboard',scope,...command,cursor:undefined})),session=pages.begin(client,signature,cursor),snapshots={},scopeByOwner=new Map(),seenBooks=new Set(),found=new Set();
+ const signature=digest(JSON.stringify({kind:'module-dashboard',scope,...command,cursor:undefined})),session=pages.begin(client,signature,cursor),snapshots={},scopeByOwner=new Map(),seenBooks=new Set(),found=new Set(),present=new Set();
  const wanted=keys??selected,identities=wanted&&new Set(wanted.map(key=>identity(key,workspaceId))),pinned=source.key&&identity(command.key,workspaceId);
  const namespaces=pinned?new Set([pinned.split('/')[0]]):identities?new Set([...identities].map(key=>key.split('/')[0])):null;
  const page=summaryPage({offset:session.offset,after:session.after,limit,order:compare,point}),discovered=[];let total=0,scopeProjects={};
@@ -44,11 +44,16 @@ export async function moduleDashboardCollection(pages,client,command,{scope=null
     if(cached){if(discovery){total+=cached.total;discovered.push(...cached.records.map(row=>({...row,owner})));}else page.addIndexed({...cached,records:cached.records.map(row=>({...row,owner}))});}
     else for await(const view of matching())collect(view);
    }});
+   // A chosen item outside the card's chosen scope still exists: it only does not match.
+   // Indexed identity reads tell it apart from an item that was removed.
+   if(selected)for(const id of localKeys??[]){const key=address.workspaceId+'/'+id;if(found.has(key))continue;signal?.throwIfAborted();const member=await c.member(id);if(member&&(await c.view(member)).type===type)present.add(key);}
   }
  },{signal}),{workspaceId,scope,selection,namespaces,includeOwner:owner=>selection.notebookMode!=='selected'||Boolean(owner.labBookId),signal});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id)))throw new AppError('RECORD_QUERY_CURSOR');
  if(!namespaces&&selection.notebookMode==='selected'&&selection.notebookIds.some(id=>!seenBooks.has(id)))throw new AppError('RECORD_VIEW_SCOPE');
- if(selected&&mode!=='labels'&&[...identities].some(key=>!found.has(key)))throw new AppError('NOT_FOUND');
+ // A chosen item is missing only when its owner was read and no longer holds it; an owner the
+ // card's scope leaves out (for example no project chosen) was not read, so its items only do not match.
+ if(selected&&mode!=='labels'&&[...identities].some(key=>!found.has(key)&&!present.has(key)&&Object.hasOwn(snapshots,key.split('/')[0])))throw new AppError('NOT_FOUND');
  if(mode==='discovery')return {workspaceId,items:discovered.map(row=>({key:row.key,title:row.title,subtitle:[row.owner.projectTitle,row.owner.notebookTitle].filter(Boolean).join(' / ')})),offset,total};
  const result=page.finish(),items=new Map();
  if(mode==='page'&&result.records.length){
