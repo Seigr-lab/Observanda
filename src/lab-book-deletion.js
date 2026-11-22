@@ -21,6 +21,7 @@ import {databaseProvider} from './workspace-database-context.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
+import {assertNoImportHold} from './import-source-hold.js';
 export class LabBookDeletions extends OwnedStorageDeletions{
  constructor(project,labBookId){
   if(!researchId(labBookId))throw new AppError('INVALID');
@@ -55,7 +56,7 @@ export class LabBookDeletions extends OwnedStorageDeletions{
   if(!researchId(id)||typeof expectedName!=='string')throw new AppError('INVALID');
   const directory=await privateDirectory(this.project.root,'.observanda/lab-book-creation');
   return trackProjectTransfer(this.file(id),()=>withWriterLease(path.join(directory,'book-'+this.labBookId+'.lock'),async()=>{
-   await check();await assertBookPlacementAvailable(this.project,this.labBookId);await assertBookTransfersComplete(this.project,this.labBookId);let value=await this.receipt();
+   await check();await assertBookPlacementAvailable(this.project,this.labBookId);await assertNoImportHold(this.project.root,path.parse(this.project.root).root);await assertBookTransfersComplete(this.project,this.labBookId);let value=await this.receipt();
    if(value?.id===id){
     if(value.directory!==expectedName)throw new AppError('CONFLICT');
     if(value.phase==='complete')return {id,labBookId:this.labBookId,complete:true};

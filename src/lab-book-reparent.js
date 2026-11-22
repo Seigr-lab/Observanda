@@ -34,6 +34,7 @@ import {PublicationConversion} from './publication-conversion.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {commitStructureDocuments} from './record-structure-documents.js';
 import {folderIdentity as identity} from './folder-identity.js';
+import {assertNoImportHold} from './import-source-hold.js';
 const sameIdentity=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
 const sameBook=(a,b)=>['labBookId','namespaceId','vaultId'].every(key=>a?.[key]===b?.[key]);
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
@@ -81,7 +82,7 @@ export class LabBookReparents{
    await check();await this.parents(source,target);let value=await this.read();
    if(value?.id===id){await this.parents(source,target,value);return this.finish(source,target,vault,value,{check,checkpoint});}
    if(!terminal(value))throw new AppError('LAB_BOOK_MOVE_PENDING');
-   await assertBookPlacementAvailable(source,this.labBookId,directory);await assertBookPlacementAvailable(target,this.labBookId,directory);await assertBookTransfersComplete(source,this.labBookId);
+   await assertBookPlacementAvailable(source,this.labBookId,directory);await assertNoImportHold(source.root,path.parse(source.root).root);await assertBookPlacementAvailable(target,this.labBookId,directory);await assertBookTransfersComplete(source,this.labBookId);
    if(await new LabBookRenames(source).pending(this.labBookId))throw new AppError('STORAGE_RENAMING');const deletion=await new LabBookDeletions(source,this.labBookId).receipt();if(deletion&&deletion.phase!=='complete')throw new AppError('STORAGE_DELETE_BUSY');
    const entry=await from.locate(this.labBookId),destination=storageCreationPath(target.root,directory),targetBooks=(await to.read()).value;
    if(entry.directory!==directory||entry.vaultId!==vault.id)throw new AppError('CONFLICT');

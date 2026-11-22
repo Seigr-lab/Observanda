@@ -27,6 +27,7 @@ const validSettings=value=>value===null||value&&['configuration,etag','configura
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
 import {folderIdentity as identity} from './folder-identity.js';
+import {assertNoImportHold} from './import-source-hold.js';
 const same=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
 export class LabBookRenames{
  constructor(project){this.project=project;this.registry=new LabBookRegistry(project);}
@@ -58,7 +59,7 @@ export class LabBookRenames{
  async run(storage,{id,name,expectedName,settings=null,check=async()=>{},checkpoint=async()=>{}}){
   if(!researchId(id)||!researchId(storage?.labBookId)||!validSettings(settings))throw new AppError('INVALID');validateStorageName(name);validateStorageName(expectedName);if(name.toLowerCase()==='.observanda')throw new AppError('FOLDER_NAME');
   return this.locked(storage.labBookId,name,async()=>{
-   await check();await assertBookPlacementAvailable(this.project,storage.labBookId,name);await assertBookTransfersComplete(this.project,storage.labBookId);let value=await this.read(id);
+   await check();await assertBookPlacementAvailable(this.project,storage.labBookId,name);await assertNoImportHold(this.project.root,path.parse(this.project.root).root);await assertBookTransfersComplete(this.project,storage.labBookId);let value=await this.read(id);
    if(value){if(value.labBookId!==storage.labBookId||value.source!==expectedName||value.destination!==name||value.vaultId!==storage.vault?.id||serialize(value.settings)!==serialize(settings))throw new AppError('CONFLICT');return this.finish(value,storage.vault,{check,checkpoint});}
    const entry=await this.registry.locate(storage.labBookId),pending=await this.pending(storage.labBookId);
    if(pending&&pending.phase!=='complete')throw new AppError('STORAGE_RENAMING');

@@ -38,6 +38,7 @@ import {researchId} from './web/research-reference.js';
 import {trackProjectTransfer,projectTransferRunning} from './project-transfer-tasks.js';
 import {withOperationProgress,operationStage,operationSequence,operationItem,operationAdvance} from './operation-progress.js';
 import {AppError} from './errors.js';
+import {releaseImportSource} from './import-source-hold.js';
 const within=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 const identity=folderIdentity;
 const ownerRoot=(root,entry)=>path.join(root,...entry.relative.split('/'));
@@ -159,6 +160,7 @@ export class ProjectImports{
      }
      await check();value.phase='cancelling';await saveProjectImport(this.registry,value);await discard.run(value,value.version===2?{get:async relative=>{inventory.close();const entry=await projectImportOwners(this.registry,value).get(relative);return (await inventory.unlock(ownerRoot(value.source,entry),relative,{vaultId:entry.vaultId})).vault;}}:inventory.keys,{check,checkpoint,onProgress});
     }
+    if(value.source!==value.destination)await releaseImportSource(value.source,value.id);
     await check();value.phase='cancelled';await saveProjectImport(this.registry,value);await checkpoint('cancelled',value);return this.cancelled(value);
    },{wait:false});
   },{wait:false}));}finally{inventory.close();}

@@ -30,6 +30,7 @@ import {trackProjectTransfer} from './project-transfer-tasks.js';
 import {withScratch} from './scratch-work.js';
 import {withOperationProgress,operationStage,operationSequence,operationItem,operationAdvance} from './operation-progress.js';
 import {AppError} from './errors.js';
+import {holdImportSource,releaseImportSource} from './import-source-hold.js';
 const inside=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 const identity=folderIdentity;
 const ownerRoot=(root,entry)=>path.join(root,...entry.relative.split('/'));
@@ -51,11 +52,17 @@ export class NativeProjectImport{
    const owners=projectImportOwners(this.registry,value);
    // Authenticate the complete command before admitting any destination writes;
    // decrypted owner keys do not accumulate across this traversal.
-   for await(const entry of owners.entries())await this.use(inventory,entry.copied?value.destination:value.source,entry,async()=>{}, {complete:value.phase==='complete'});
+   // An owner still read from the source needs the same source folder the import started from: a project moved or
+   // replaced since then refuses the import instead of reading whatever folder now has that path.
+   let sourceChecked=false;const sameSource=async()=>{if(sourceChecked)return;const stat=await assertRegular(value.source,{directory:true,missing:true});if(!stat||serialize(await identity(value.source))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');sourceChecked=true;};
+   for await(const entry of owners.entries()){if(!entry.copied)await sameSource();await this.use(inventory,entry.copied?value.destination:value.source,entry,async()=>{}, {complete:value.phase==='complete'});}
+   if(sourceChecked&&value.phase!=='complete')await holdImportSource(value.source,value.id,projectImportFile(this.registry,value.id));
    const locks=async function*(workspace){for(const kind of ['lab-book','project']){const directory=await privateDirectory(workspace.root,kind==='lab-book'?'.observanda/lab-book-directory':'.observanda/project-import-addresses');for await(const entry of owners.entries({index:'namespace'}))if(entry.kind===kind)yield path.join(directory,entry.namespaceId+'.lock');}};
    const iterator=locks(this.workspace)[Symbol.asyncIterator](),take=async()=>{const item=await iterator.next();return item.done?perform():withWriterLease(item.value,take,{wait:false});};
    const perform=async()=>{
     if(fresh)await withProjectMembership(this.registry,[value.parentId],async()=>{await check();await owner.admit(value,{fresh:true});if(value.destination!==value.source&&await assertRegular(value.destination,{directory:true,missing:true}))throw new AppError('EXISTS');await saveProjectImport(this.registry,value);});
+    // The source tree stays where it is until this import completes or is cancelled.
+    if(fresh&&value.destination!==value.source)await holdImportSource(value.source,value.id,projectImportFile(this.registry,value.id));
     await owner.admit(value);await check();if(value.phase==='complete')return owner.complete(value,inventory,opened);await reserveProjectImport(this.registry,value);await owner.prepareDestination(value);
     return withOperationProgress(onProgress,()=>operationSequence('import-project-tree',['copy-files','import-project-owners','import-project-register'],async()=>{
      await checkpoint('prepared',value);
@@ -110,6 +117,8 @@ export class NativeProjectImport{
   value.phase='registered';await saveProjectImport(this.registry,value);await checkpoint('registered',value);
   for await(const item of owners.entries())if(item.kind==='lab-book')await new LabBookDirectory(this.registry).register(item.projectId,item);await checkpoint('addressed',value);
   for await(const item of owners.entries())await unlink(path.join(ownerRoot(value.destination,item),'.observanda/copy-in-progress')).catch(error=>{if(error.code!=='ENOENT')throw error;});
+  // Release the source before the record completes: an interruption between them only repeats the release.
+  if(value.source!==value.destination)await releaseImportSource(value.source,value.id);
   value.phase='complete';await saveProjectImport(this.registry,value);await checkpoint('complete',value);
  }
 }
