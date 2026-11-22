@@ -149,7 +149,6 @@ export class RecordDocument{
 }
 export async function withRecordDocument(store,id,revision,consume,{mutable=false}={}){
  return withStoredRecord(store,id,revision,async({store:owner=store,value,blocks,row,key})=>{
-  if(mutable&&owner!==store)throw new AppError('PROJECT_RELOCATED',[{projectId:owner.workspace.projectId}]);
   blocks??=new RecordBlockStore(owner,row.scope_id,row.generation,key);
   if(!mutable){
    // Decomposing an old envelope or an inline leaf during a read must not

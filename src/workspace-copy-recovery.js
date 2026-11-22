@@ -2,7 +2,6 @@ import {nativeMutationSupported} from './mutation-files.js';
 import {validWorkspaceCopyDirectory,workspaceCopyTransferId} from './workspace-copy-directory.js';
 import {withNativeWorkspaceCopy} from './native-workspace-copy.js';
 import {validateKeyring} from './security/keyring.js';
-import {validProjectSourceAuthority} from './project-source-authority.js';
 import {WORKSPACE_COPY_RECEIPT,WORKSPACE_COPY_LEASE} from './workspace-transfer-controls.js';
 export {WORKSPACE_COPY_RECEIPT,WORKSPACE_COPY_LEASE} from './workspace-transfer-controls.js';
 // A bundle checkpoint owns only the destination and transfer identities. Project
@@ -44,9 +43,9 @@ export class WorkspaceCopyRecovery {
    if(value.version===1||value.plan.portable===true)throw new AppError('STORAGE_COPY');
    try{validateKeyring(value.encryptionAccess);}catch{throw new AppError('STORAGE_COPY');}
   }else if(value.version===2||value.plan.encrypted!==undefined||value.encryptionAccess!==undefined)throw new AppError('STORAGE_COPY');
-  if(value.adoptions!==undefined&&(!Array.isArray(value.adoptions)||value.adoptions.some(item=>!validProjectSourceAuthority(item))))throw new AppError('STORAGE_COPY');
+  if(value.adoptions!==undefined)throw new AppError('STORAGE_COPY');
   if(value.version!==4)for(const entry of value.directory.value.projects)if(!researchId(value.transfers[entry.projectId]))throw new AppError('STORAGE_COPY');
-  if(value.version===4&&(value.plan.projectRoots!==undefined||value.adoptions!==undefined||value.plan.projectRegistryRevision!==value.directory.revision))throw new AppError('STORAGE_COPY');
+  if(value.version===4&&(value.plan.projectRoots!==undefined||value.plan.projectRegistryRevision!==value.directory.revision))throw new AppError('STORAGE_COPY');
   if([value.destinationIdentity,value.internalIdentity].some(value=>value!==undefined&&!/^\d+:\d+$/.test(value)))throw new AppError('STORAGE_COPY');
   if(value.completedAt!==undefined&&(value.phase!=='published'||typeof value.completedAt!=='string'||!Number.isFinite(Date.parse(value.completedAt))||new Date(value.completedAt).toISOString()!==value.completedAt))throw new AppError('STORAGE_COPY');
   if(value.inventory!==undefined&&(!validPortableInventory(value.inventory)||!value.plan.portable||value.phase!=='published'))throw new AppError('STORAGE_COPY');

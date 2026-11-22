@@ -1,4 +1,3 @@
-import {retiredSearchNodes} from './project-retired-search.js';
 // Private substring search over immutable, authenticated bitmap postings.
 // Reuses ObjectIndex: keys, grams and 256-record bitmaps are encrypted together.
 // A snapshot pins the root; a new record revision changes only affected paths.
@@ -22,10 +21,7 @@ function searchGrams(text){
 }
 export class RecordSearchIndex extends ObjectIndex{
  constructor(store,{cacheSize=128}={}){super(store,{namespace:'record-search-index:',immutable:true,cacheSize});}
- async readMissingNode(ref){
-  const retained=await retiredSearchNodes(this.store,ref);for(const item of retained)this.cacheNode(item.ref,item.node);
-  return retained[0]?.node??null;
- }
+ async readMissingNode(){return null;}
  static valid(value){return value?.version===2&&Object.keys(value).sort().join()==='root,version'&&validIndexRef(value.root);}
  async positionRevision(value,position){
   if(!RecordSearchIndex.valid(value)||!Number.isSafeInteger(position)||position<0)fail();

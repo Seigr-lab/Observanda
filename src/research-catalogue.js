@@ -6,8 +6,6 @@ import {withoutRecordOwnerResourceAdoption,adoptRecordOwnerResource,journalRecor
 import {catalogueRequiresConfigurationDocuments,restoreConfigurationCatalogueFormat,catalogueRequiresRecordOwnerTransfers,restoreRecordOwnerTransferCatalogueFormat,catalogueRequiresPublicationDocuments,restorePublicationCatalogueFormat} from './catalogue-format.js';
 import {workspaceSettingsRegistry,verifyWorkspaceSettings} from './workspace-settings.js';
 import {readProjectDomainRegistry} from './project-domain-registry.js';
-import {retiredMetadataSourceLocation,resolveMetadataValue} from './project-retired-metadata.js';
-import {withRetiredRecordCopy} from './project-retired-records.js';
 import {assertProjectHierarchyChange} from './project-hierarchy-authority.js';
 import {rekeyProjectDomains} from './project-domain-rekey.js';
 // Transactional research storage. PostgreSQL sees encrypted payloads and opaque IDs,
@@ -484,13 +482,12 @@ export class ResearchCatalogue{
   if(!!entry!==!!row)fail();return entry?{id:entry.id,revision:entry.revision}:null;
  }
  async objectIds(prefix){const ids=[];for await(const id of this.objectIdEntries(prefix))ids.push(id);return ids;}
- async objectPage(prefix,{after=null,limit=20,localOnly=false}={}){
+ async objectPage(prefix,{after=null,limit=20}={}){
   if(typeof prefix!=='string'||!prefix||after!==null&&(typeof after!=='string'||!after.startsWith(prefix))||!Number.isSafeInteger(limit)||limit<1||limit>100)throw new AppError('INVALID');
   const index=this.objectIndex(),head=await index.head(),items=[];let next=null;
   // Range proofs are the same authenticated branches used for point reads.
   // Extra unindexed SQL rows never become visible; backup verifies all row counts.
   for await(const entry of index.entries(head,prefix,after)){
-   if(localOnly&&await retiredMetadataSourceLocation(this,entry.id))continue;
    if(items.length===limit){next=items.at(-1).id;break;}
    items.push({id:entry.id,value:await this.objectValue(entry.id,entry)});
   }
@@ -500,7 +497,7 @@ export class ResearchCatalogue{
   const batch=metadataBatchIndex(this),load=()=>this.db.get('SELECT payload FROM objects WHERE id=$1',id),row=preloaded!==undefined?preloaded:batch?await batch.objectRow(id):this.readCache?await this.readCache.row('object:'+id,load):await load();
   if(!!expected!==!!row)fail();if(!row)return null;
   const cached=cachedMaterialText(this,id,expected.revision);if(cached)return cached;
-  const decoded=this.decode('object',id,row.payload),value=await resolveMetadataValue(this,id,expected.revision,decoded);
+  const decoded=this.decode('object',id,row.payload),value=decoded;
   if(hash(value)!==expected.revision)fail();
   rememberMaterialText(this,id,expected.revision,decoded);return value;
  }
@@ -732,7 +729,7 @@ export async function rekeyCatalogue(source,target,descriptor,options={}){
   await rekeyProjectDomains(from,to);
   // Standalone archives retain their pre-export validation contract. Connected
   // activation instead verifies the actual exported archive before publication.
-  if(!activate)await targetDb.scope(()=>withRetiredRecordCopy(source,target,()=>to.verify(descriptor)));
+  if(!activate)await targetDb.scope(()=>to.verify(descriptor));
   await targetDb.run('COMMIT');if(!borrowed)await sourceDb.run('COMMIT');
   await backupCatalogue(target.root,target.root,{connection:targetDb});
  }finally{if(!borrowed)await sourceDb.close();await targetDb?.close();}
@@ -740,9 +737,7 @@ export async function rekeyCatalogue(source,target,descriptor,options={}){
    // Checkpoint only the durable archive. A retry can then resume its journalled
    // import; no binding is published before the imported content passes verify.
    await afterArchive?.();
-   await withRetiredRecordCopy(source,target,async()=>{
-    const checked=await target.openCatalogue({onVerified:value=>{if(serialize(value)!==serialize(descriptor))fail();}});await checked.close();
-   });
+   const checked=await target.openCatalogue({onVerified:value=>{if(serialize(value)!==serialize(descriptor))fail();}});await checked.close();
   }
  });
 }

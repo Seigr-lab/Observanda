@@ -34,7 +34,6 @@ import {calculatorResultMetadata} from './web/calculator-result-model.js';
 import {catalogueRequiresCalculatorDatasetResults} from './catalogue-format.js';
 import {catalogueFormat,catalogueRequiresCalculationPolicies} from './catalogue-format.js';
 import {checkpointHasCalculationPolicy} from './web/tools/calculation-policy.js';
-import {resolveMetadataValue} from './project-retired-metadata.js';
 // Authenticate all retained metadata independently of any optional module.
 // Small payloads travel in bounded batches; larger originals travel alone.
 import {ObjectIndex} from './object-index.js';
@@ -50,7 +49,7 @@ export async function* verifiedCatalogueObjects(store){
   const rows=new Map((await store.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[]) AND octet_length(payload)<=16384',batch.map(entry=>entry.id))).map(row=>[row.id,row.payload]));
   for(const entry of batch){
    let value;
-   if(rows.has(entry.id)){value=await resolveMetadataValue(store,entry.id,entry.revision,store.decode('object',entry.id,rows.get(entry.id)));if(digest(serialize(value))!==entry.revision)fail();}
+   if(rows.has(entry.id)){value=store.decode('object',entry.id,rows.get(entry.id));if(digest(serialize(value))!==entry.revision)fail();}
    else value=await store.objectValue(entry.id,entry);
    if(entry.id.startsWith('metadata:')&&publicationOperationMetadataPath(entry.id.slice(9))){let metadata;try{metadata=JSON.parse(value.text);}catch{fail();}if(publicationOperationMetadata(entry.id.slice(9),metadata)){publicationOperationAdmission??=assertPublicationOperationFormat(store.workspace);await publicationOperationAdmission;}}
    if(/^metadata:\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(entry.id)){

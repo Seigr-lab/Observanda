@@ -20,13 +20,13 @@ function fixture(options){
  const store=new ResearchCatalogue(workspace,db,{readCache:cache}),decode=store.decode;
  store.decode=function(...args){decodes++;return decode.apply(this,args);};
  function add(value,id=sequenceId(JSON.parse(value.text))){rows.set(id,store.encode('object',id,value));return {id,revision:hash(value)};}
- // Exercise the objectValue admission order with an injected ownership resolver:
- // reject absence, try reuse, decode/resolve/hash, then retain the LOCAL envelope.
- async function read({id,revision},resolve=async value=>value){
+ // Exercise the objectValue admission order: reject absence, try reuse,
+ // decode and hash, then retain the envelope.
+ async function read({id,revision}){
   const batch=metadataBatchIndex(store),load=()=>db.get('SELECT payload FROM objects WHERE id=$1',id),row=batch?await batch.objectRow(id):await store.readCache.row('object:'+id,load);
   if(!row)throw new AppError('CATALOGUE_DAMAGED');
   const cached=cachedMaterialText(store,id,revision);if(cached)return cached;
-  const decoded=store.decode('object',id,row.payload),value=await resolve(decoded);
+  const decoded=store.decode('object',id,row.payload),value=decoded;
   if(hash(value)!==revision)throw new AppError('CATALOGUE_DAMAGED');
   rememberMaterialText(store,id,revision,decoded);return value;
  }
@@ -104,17 +104,6 @@ test('writer and metadata-batch scopes neither reuse nor admit reader text',asyn
  await catalogueContext.run({db:f.store.db},async()=>{await f.read(entry);assert.equal(f.cache.nodes.size,0);});
 });
 
-test('retired and retained locations are resolved each time and never cached as local envelopes',async()=>{
- for(const format of ['observanda-retired-metadata','observanda-owned-metadata']){
-  const f=fixture(),value=f.local(),id=sequenceId(JSON.parse(value.text)),revision=hash(value),location={format,version:1,revision};
-  f.add(location,id);let resolutions=0;
-  const resolve=async decoded=>{assert.deepEqual(decoded,location);resolutions++;return value;};
-  assert.deepEqual(await f.read({id,revision},resolve),value);assert.deepEqual(await f.read({id,revision},resolve),value);
-  assert.equal(resolutions,2);assert.equal(f.decodes,2);assert.equal(f.cache.nodes.size,0);
-  await assert.rejects(f.read({id,revision},async()=>{throw new AppError('ACCESS_LOCKED');}),{code:'ACCESS_LOCKED'});
- }
-});
-
 test('only exact local sequence text envelopes are eligible; other material and record paths stay uncached',async()=>{
  const f=fixture(),value=f.local(),validId=sequenceId(JSON.parse(value.text));
  for(const id of [validId.replace('/chunks/','/nodes/'),validId]){const entry=f.add(value,id);await f.read(entry);await f.read(entry);assert.ok(f.cache.node('object:'+id));}
@@ -165,6 +154,4 @@ test('request cancellation rejects both cache hits and misses without admitting 
  const f=fixture(),entry=f.add(f.local());await f.read(entry);const before=f.decodes,controller=new AbortController(),reason=new Error('cancelled text read');controller.abort(reason);
  await withDatabaseRequest(controller.signal,()=>assert.rejects(f.read(entry),error=>error===reason));assert.equal(f.decodes,before);
  f.cache.clear();await withDatabaseRequest(controller.signal,()=>assert.rejects(f.read(entry),error=>error===reason));assert.equal(f.decodes,before);assert.equal(f.cache.nodes.size,0);
- const other=fixture(),next=other.add(other.local()),late=new AbortController();
- await withDatabaseRequest(late.signal,()=>assert.rejects(other.read(next,async value=>{late.abort(reason);return value;}),error=>error===reason));assert.equal(other.cache.nodes.size,0);
 });

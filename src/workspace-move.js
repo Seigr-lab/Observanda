@@ -2,7 +2,6 @@ import {nativeMutationSupported} from './mutation-files.js';
 import {ownedStorageLeaseFile,ownerNativeControl} from './owned-storage-control.js';
 import {websiteUpgradeControlFile} from './website-upgrade-lease.js';
 import {workspaceTransferControl} from './workspace-transfer-controls.js';
-import {withRetiredRecordCopy} from './project-retired-records.js';
 // A verified transfer followed by activation and separately retryable cleanup.
 // Only a dedicated workspace folder can be retired. The original is first
 // renamed to a receipt-owned sibling, so retries never delete a reused path.
@@ -175,14 +174,14 @@ export async function moveWorkspace(plan,{vault,onProgress,activate}={}){
  if(typeof activate!=='function')throw new AppError('INVALID');
  return withOperationProgress(onProgress,async()=>{
   if(plan.ownedDatabase||(await catalogueBinding(plan.source))?.placement==='workspace'){
-   const retainedVault=cloneVault(vault);try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveOwnedWorkspace(plan,{vault:retainedVault,activate}));}finally{await clearVault(retainedVault);}
+   const retainedVault=cloneVault(vault);try{return await moveOwnedWorkspace(plan,{vault:retainedVault,activate});}finally{await clearVault(retainedVault);}
   }
   // Activation clears the caller's session key. Cleanup still needs it to prove
   // the folder-bound query cache and staging namespace the copy left out.
   // Requests read retired record copies through the caller's own source key;
   // hand that authority to the retained key, as the owned path does.
   const retainedVault=cloneVault(vault);
-  try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveInstalledWorkspace(plan,{vault:retainedVault,activate}));}finally{await clearVault(retainedVault);}
+  try{return await moveInstalledWorkspace(plan,{vault:retainedVault,activate});}finally{await clearVault(retainedVault);}
  });
 }
 async function moveInstalledWorkspace(plan,{vault,activate}){

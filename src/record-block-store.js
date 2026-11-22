@@ -10,12 +10,13 @@ import {operationStage,operationAdvance} from './operation-progress.js';
 import {validAttemptIndex} from './record-attempt-index.js';
 import {validMethodIndex} from './record-method-index.js';
 import {validResultIndex} from './record-result-index.js';
+import {researchId} from './web/research-reference.js';
 
 // Ownership services reach the catalogue; resolve them only during asynchronous operations.
-async function withProjectRecordBlockOwner(...args){const owner=await import('./project-retired-records.js');return owner.withProjectRecordBlockOwner(...args);}
 async function retainRecordOwnerResource(...args){const owner=await import('./record-owner-resources.js');return owner.retainRecordOwnerResource(...args);}
 
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
+const validScope=(scopeId,generation)=>{if(!researchId(scopeId)||!Number.isSafeInteger(generation)||generation<1)throw new AppError('INVALID');};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 export const RECORD_BLOCK_PREFIX='record-block:';
@@ -60,7 +61,6 @@ export class RecordBlockStore{
   this.cache.set(slot,{node:structuredClone(node),bytes});this.cacheBytes+=bytes;
  }
  async put(kind,node){
-  if(this.retiredSource)throw new AppError('PROJECT_RELOCATED',[{projectId:this.store.workspace.projectId}]);
   const encoded=serialize(node),bytes=Buffer.byteLength(encoded);if(bytes>65536)throw new AppError('INVALID');
   const version=digest(encoded),slot=this.slot(kind,version);
   if(this.pending.has(slot))return version;
@@ -69,7 +69,7 @@ export class RecordBlockStore{
   if(this.pending.size>=32||this.pendingBytes>=256*1024)await this.flush();return version;
  }
  async flush(){
-  if(!this.pending.size)return;await withProjectRecordBlockOwner(this.store,this.scopeId,this.generation,async()=>{},{mutable:true});const batch=[...this.pending],found=new Map((await this.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',batch.map(([slot])=>slot))).map(row=>[row.slot,row.payload])),rows=[];
+  if(!this.pending.size)return;validScope(this.scopeId,this.generation);const batch=[...this.pending],found=new Map((await this.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',batch.map(([slot])=>slot))).map(row=>[row.slot,row.payload])),rows=[];
   for(const [slot,{node,version}] of batch){
    if(found.has(slot))this.decode(slot,this.store.decode('state',slot,found.get(slot)),version);
    await retainRecordOwnerResource(this.store,{kind:'block',scopeId:this.scopeId,generation:this.generation,nodeKind:slot.split(':').at(-2),revision:version},{present:found.has(slot),dependencies:recordBlockDependencies(this.scopeId,this.generation,slot.split(':').at(-2),node)});
@@ -116,8 +116,7 @@ export async function rekeyRecordBlock(from,to,slot,value){
 }
 
 export async function withRecordBlockStore(store,scopeId,generation,consume){
- return withProjectRecordBlockOwner(store,scopeId,generation,async owner=>{
-  const key=await owner.scopeKey(scopeId,generation);
-  try{const blocks=new RecordBlockStore(owner,scopeId,generation,key);blocks.retiredSource=owner!==store;return await consume(blocks,owner);}finally{key.fill(0);}
- });
+ validScope(scopeId,generation);if(typeof consume!=='function')throw new AppError('INVALID');
+ const key=await store.scopeKey(scopeId,generation);
+ try{return await consume(new RecordBlockStore(store,scopeId,generation,key),store);}finally{key.fill(0);}
 }

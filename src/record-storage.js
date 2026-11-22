@@ -10,7 +10,6 @@ import {hasRetainedFigures,retainedFigureDocument} from './record-retained-figur
 import {requireRetainedFigures,catalogueRequiresRetainedFigures} from './catalogue-format.js';
 import {hasRecordProjection,projectedFigureDocument} from './record-numerical-models.js';
 import {requireNativeNumericalModels,catalogueRequiresNativeNumericalModels} from './catalogue-format.js';
-import {retiredProjectRecord,withRetiredProjectRecord} from './project-retired-records.js';
 // One owner for legacy originals and immutable record-block manifests. Public
 // record IDs, storage digests and logical revision identities do not change.
 import {createHash} from 'node:crypto';
@@ -45,7 +44,6 @@ export async function withRecordEnvelope(store,id,revision,consume){
 }
 export async function withStoredRecord(store,id,revision,consume){
  return withRecordEnvelope(store,id,revision,async({row,key,value})=>{
-  if(retiredProjectRecord(value)){if(await catalogueFormat(store.db)<23)fail();return withRetiredProjectRecord(store,value,id,revision,row.scope_id,consume);}
   let blocks=null;
   if(blockedRecord(value)){
    if(!validBlockedRecord(value)||await catalogueFormat(store.db)<(value.version===4?26:value.version===3?14:value.version===2?11:4))fail();blocks=new RecordBlockStore(store,row.scope_id,row.generation,key);

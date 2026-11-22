@@ -1,4 +1,3 @@
-import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,downloadInfo} from './web/website-file.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -83,7 +82,7 @@ export class MediaImports {
   const session=await this.read(id);if(!session.source)throw new AppError('MATERIAL_INCOMPLETE');
   let directory=this.workspace.root;
   for(const part of ['.observanda','media',id]){directory=path.join(directory,part);await assertRegular(directory,{directory:true,missing:true});}
-  const file=path.join(directory,session.source.storageId+'.original'),relative=path.relative(this.workspace.root,file).split(path.sep).join('/'),retired=await retiredMediaContent(this.workspace,relative,session.source.size,session.source.sha256);if(retired)return {session,content:retired};await assertRegular(file);
+  const file=path.join(directory,session.source.storageId+'.original');await assertRegular(file);
   return {session,content:new FileContent(this.workspace,file,session.source.size,session.source.sha256)};
  }
  async page(options){

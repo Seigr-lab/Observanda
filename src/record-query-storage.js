@@ -1,4 +1,3 @@
-import {withProjectRecordBlockOwner} from './project-retired-records.js';
 // Large derived documents share the record's authenticated value-block owner.
 // Browse requests read their chosen fields, not every label, reference or byte
 // of searchable prose belonging to the selected record.
@@ -7,6 +6,7 @@ import {catalogueFormat,requireRecordQueryBlocks} from './catalogue-format.js';
 import {digest,serialize} from './storage-format.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {revisionId} from './web/revision-model.js';
+import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 import {validSearchVocabulary} from './record-search-vocabulary.js';
 import {validReferenceIndex} from './record-reference-index.js';
@@ -32,16 +32,15 @@ export async function withQueryValue(store,value,source,row,consume){
  const keys=['format','generation','id','notebookId','root','version',...(value.version===6?['referenceIndex','vocabulary']:[])].sort().join();
  if(![1,6].includes(value.version)||Object.keys(value).sort().join()!==keys||!Number.isSafeInteger(value.generation)||value.generation<1||!revisionId(value.root))fail();
  if(value.version===6&&(!validSearchVocabulary(value.vocabulary)||!validReferenceIndex(value.referenceIndex)||await catalogueFormat(store.db)<20))fail();
- return withProjectRecordBlockOwner(store,value.notebookId,value.generation,async owner=>{
- const key=await owner.scopeKey(value.notebookId,value.generation);
+ if(!researchId(value.notebookId))throw new AppError('INVALID');
+ const key=await store.scopeKey(value.notebookId,value.generation);
  try{
-  const tree=new RecordBlockStore(owner,value.notebookId,value.generation,key).tree();
+  const tree=new RecordBlockStore(store,value.notebookId,value.generation,key).tree();
   for(const field of ['id','notebookId'])if((await tree.selected(value.root,[field])).value!==row[field])fail();
   if(value.version===6){const text=await tree.select(value.root,['searchText']);if(!text||text.inline||text.revision!==value.vocabulary.text)fail();
    const references=await tree.select(value.root,['referenceTargets']);if(!references||references.inline||references.revision!==value.referenceIndex.root)fail();}
   return await consume({value,tree});
  }finally{key.fill(0);}
- });
 }
 export async function queryTextMatches(chunks,needle,{signal}={}){
  let tail='',matched=!needle;

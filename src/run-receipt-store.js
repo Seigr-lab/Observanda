@@ -50,7 +50,7 @@ export class RunReceiptStore{
  async getLocked(id){await this.ensureLocked();return this.stored(id);}
  // Record history includes receipts resolved through authenticated project locations.
  async page({cursor=null,limit=20,signal}={}){
-  signal?.throwIfAborted();await this.ensure();const metadata=await this.metadata(),page=await this.feed.page({cursor,limit,localOnly:false}),items=[];
+  signal?.throwIfAborted();await this.ensure();const metadata=await this.metadata(),page=await this.feed.page({cursor,limit}),items=[];
   for(const item of page.items){signal?.throwIfAborted();const receipt=await this.stored(item.id);if(!receipt||receipt.recordedAt!==item.createdAt)damaged();items.push(receipt);}
   return {items,next:page.next,total:metadata.count};
  }

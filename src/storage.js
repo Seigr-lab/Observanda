@@ -188,11 +188,11 @@ export class Workspace {
     for await(const entry of await opendir(directory)){signal?.throwIfAborted();yield entry.name;}
   }
   async listMetadata(relative){const names=[];for await(const name of this.metadataNames(relative))names.push(name);return names;}
-  async metadataPage(relative,{after=null,limit=20,localOnly=false}={}){
+  async metadataPage(relative,{after=null,limit=20}={}){
     this.metadataPath(relative);await this.requireCatalogueKey();
     if(!activeCatalogue(this)&&!await hasCatalogue(this.root))throw new AppError('FORMAT');
     return this.catalogue(async store=>{
-      const prefix='metadata:'+relative+'/',page=await store.objectPage(prefix,{after:after===null?null:prefix+after,limit,localOnly});
+      const prefix='metadata:'+relative+'/',page=await store.objectPage(prefix,{after:after===null?null:prefix+after,limit});
       return {items:page.items.map(item=>({name:item.id.slice(prefix.length),text:item.value.text})),next:page.next?.slice(prefix.length)??null};
     });
   }

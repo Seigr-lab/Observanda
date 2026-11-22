@@ -50,7 +50,6 @@ import {projectPublicationRequest} from './project-publication-requests.js';
 import {ProjectArchives} from './project-archives.js';
 import {ProjectAccessSettings} from './project-access-settings.js';
 import {ProjectSessionOwner} from './project-session-owner.js';
-import {withProjectHistoryAccess} from './project-history-access.js';
 import {projectMaterialReferenceRequest,addressedMaterialCommand,ownedMaterialCommand} from './project-material-reference.js';
 import {intakeRequest,intakeCommand} from './intake/commands.js';
 import {WebsiteFileStore} from './website-file-store.js';
@@ -176,7 +175,6 @@ export class ProjectApplication{
   },projectId);
  }
  async lock(client,projectId){if(!researchId(projectId))throw new AppError('INVALID');const session=this.session(client);const stopped=this.jobs.forget(session,projectId),caches=this.forget(session,projectId);session.set(projectId,{locked:true});await stopped;await caches;await Promise.all([...this.active].filter(([,owner])=>owner.projectId===projectId).map(([pending])=>pending));return {projectId,locked:true};}
- withSourceHistory(client,operation,options){return withProjectHistoryAccess(this,client,operation,options);}
  async run(client,selected,data,options={}){
   try{return await withDatabaseRequest(options.signal,()=>{
    const execute=()=>this.execute(client,selected,data,options);

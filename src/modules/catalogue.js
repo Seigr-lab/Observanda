@@ -2,7 +2,6 @@ import {hasStructuredCalculator} from '../structured-calculator-format.js';
 import {usesResourceQuality,assertResourceQualityFormat,requireResourceQualityFormat} from '../resource-quality-domain.js';
 import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies,catalogueRequiresStructuredCalculator,requireStructuredCalculator} from '../catalogue-format.js';
 import {hasCalculationPolicy} from '../web/tools/calculation-policy.js';
-import {resolveModuleEvent,resolveModuleEntity} from '../project-retired-modules.js';
 // Current module entities and retained command receipts have separate read
 // paths. A normal view or command never materializes the full event history.
 import {AppError} from '../errors.js';
@@ -84,7 +83,7 @@ export class ModuleCatalogue{
   const row=stored??await this.store.db.get('SELECT id,revision,payload FROM module_entities WHERE id=$1',id);if(row&&row.id!==id)damaged();
   if(!member){if(row)damaged();return null;}
   if(!row||row.revision!==member.revision)damaged();
-  const entity=await resolveModuleEntity(this.store,row,this.store.decode('module-entity',id+'/'+row.revision,row.payload));this.store.assertModuleType?.(entity.type);await this.checkPolicy(entity);
+  const entity=this.store.decode('module-entity',id+'/'+row.revision,row.payload);this.store.assertModuleType?.(entity.type);await this.checkPolicy(entity);
   if(entity.id!==id||entity.revision!==member.revision||hash(entity)!==member.hash)damaged();
   if(head.currentVersion===1&&(moduleEntityBytes(entity)!==member.bytes||hash(moduleConstraint(entity))!==member.constraintHash))damaged();
   if(head.viewVersion===1&&(entity.type!==member.type||hash(moduleView(entity))!==member.viewHash||hash(moduleSearch(entity))!==member.searchHash))damaged();
@@ -141,7 +140,7 @@ export class ModuleCatalogue{
   const admit=value=>{responseBytes+=moduleEntityBytes(value)+4;if(responseBytes>MODULE_BYTES)throw new AppError('LIMIT');};
   const entities=[];
   for await(const row of s.db.rows('SELECT id,revision,payload FROM module_entities ORDER BY id',[],{batchSize:16})){
-   const entity=await resolveModuleEntity(s,row,s.decode('module-entity',row.id+'/'+row.revision,row.payload)),member=await this.member(head,row.id);
+   const entity=s.decode('module-entity',row.id+'/'+row.revision,row.payload),member=await this.member(head,row.id);
    await this.checkPolicy(entity);if(!member||entity.id!==row.id||entity.revision!==row.revision||member.revision!==row.revision||member.hash!==hash(entity))damaged();
    if(head.currentVersion===1&&(moduleEntityBytes(entity)!==member.bytes||hash(moduleConstraint(entity))!==member.constraintHash))damaged();
    if(head.viewVersion===1&&(entity.type!==member.type||hash(moduleView(entity))!==member.viewHash||hash(moduleSearch(entity))!==member.searchHash))damaged();
@@ -159,7 +158,7 @@ export class ModuleCatalogue{
   }
   return data;
  }
- async event(row){const event=await resolveModuleEvent(this.store,row,this.store.decode('module-event',row.command_id+'/'+row.ordinal,row.payload));if(event.commandId!==row.command_id)damaged();if(Array.isArray(event.changes))for(const entity of event.changes)await this.checkPolicy(entity);return event;}
+ async event(row){const event=this.store.decode('module-event',row.command_id+'/'+row.ordinal,row.payload);if(event.commandId!==row.command_id)damaged();if(Array.isArray(event.changes))for(const entity of event.changes)await this.checkPolicy(entity);return event;}
  async receipt(commandId,revision){
   const row=await this.store.db.get('SELECT command_id,ordinal,payload FROM module_events WHERE command_id=$1',commandId);
   if(!row)return null;if(row.ordinal>revision)damaged();return this.event(row);

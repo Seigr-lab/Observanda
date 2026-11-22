@@ -5,7 +5,6 @@ import {assertRecordOwnerReclamationSettled} from './record-owner-transfer-state
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {initializeWorkspaceSettings} from './workspace-settings.js';
 import {withProjectModuleInitialization} from './project-module-initialization.js';
-import {withRetiredRecordCopy} from './project-retired-records.js';
 import {workspaceCreationPath,requireWorkspaceName,validateWorkspaceName} from './workspace-names.js';
 import {workspaceFiles,workspaceInventory,hashWorkspaceFile as fileHash} from './workspace-inventory.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,rekeyCatalogue,isCatalogue,verifyCatalogueArchive,openCatalogue} from './research-catalogue.js';
@@ -215,13 +214,13 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     const access=await readAccess(destination);if(!isEncryptedAccess(access.value))validateNotebook(JSON.parse(await readFile(await workspaceFile(destination),'utf8')));
     if(vault?.key){
       const target=new Workspace(destination,vault),descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
-      if(catalogue||isCatalogue(descriptor))await withRetiredRecordCopy(new Workspace(plan.source,vault),target,async()=>{
+      if(catalogue||isCatalogue(descriptor)){
         if(activateCatalogue){
           // Restore and fully verify the independent database exactly once.
           // Opening the verified destination can then reuse its committed binding.
           const checked=await target.openCatalogue();await checked.close();
         }else await verifyCatalogueArchive(target,descriptor);
-      });
+      }
     }else if(catalogue){
       if(activateCatalogue||reuseCatalogue)throw new AppError('ACCESS_LOCKED');
       const checked=await openCatalogue(destination,{detached:true});await checked.close();
@@ -286,7 +285,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
         // Rekey checkpoints the durable archive, then imports and fully verifies
         // it before activation. A resumed copy uses that same retained archive.
         if(!recovery?.databaseReady)await rekeyCatalogue(source,target,copied,{activate:true,...(recovery?{afterArchive:()=>recovery.database()}: {})});
-        else await withRetiredRecordCopy(source,target,async()=>{const checked=await target.openCatalogue();await checked.close();});
+        else{const checked=await target.openCatalogue();await checked.close();}
       }else if(isCatalogue(copied))await verifyCatalogueArchive(target,copied);
       else validateNotebook(copied);
       if(afterSnapshotVerified)await afterSnapshotVerified(plan.destination);

@@ -268,11 +268,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    if(!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown||changing||client.filesOnly&&!resume||!client.access)return;
    const check=async()=>{if(context!==ctx||ctx.manualLock||shuttingDown||client.expires<=Date.now()||![...sessions.values()].includes(client)||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
    const projects=projectApplication(ctx),sourceReader=publicationSourceFactory(projects,client,ctx.workspace,{check});
-   websitePreparation(ctx).start(client,{check,retry,discover:({signal})=>projects.withSourceHistory(client,async()=>{
+   websitePreparation(ctx).start(client,{check,retry,discover:async({signal})=>{
     const reader=await sourceReader({signal});
     try{return await discoverEligibleWebsiteSources(ctx.publicationConversion.files,reader,{signal});}
     finally{await reader.close();}
-   },{check})});
+   }});
   };
   const stopWebsitePreparation=async ctx=>{await ctx.websitePreparation?.stop();delete ctx.websitePreparation;};
   const stopWorkspaceJobs=async ctx=>{await ctx.publicationConversion?.settled();await stopWebsitePreparation(ctx);await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
@@ -582,7 +582,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(client.filesOnly){await ensureWorkspaceIdentity(selectedContext);client.filesOnly=false;startJobs(selectedContext);}
       const historyProjects=projectApplication(selectedContext);
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
-      return await historyProjects.withSourceHistory(client,async()=>{
+      {
       // Checks the analyses behind an editor website's placed research before it is published.
       // Lab book records placed on an editor website that changed after the
       // website took its copy, and the author's choice to update those copies.
@@ -1412,7 +1412,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         return await serveContent(req, res, asset.bytes, asset.mime);
       }
       throw new AppError('NOT_FOUND');
-      },{check:()=>req.checkWriter()});
+      }
     } catch (error) {
       diagnosticError=error;
       req.activity?.finish(error);

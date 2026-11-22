@@ -1,5 +1,4 @@
 import {adoptRecordOwnerMedia} from './record-owner-resources.js';
-import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-file.js';
 import {FileContent,writeContent,serveContent,contentBuffer,describeContent} from './file-content.js';
 import {MediaPolicy,defaultMediaPolicy,effectiveMediaPolicy} from './media-policy.js';
@@ -208,8 +207,7 @@ export class MediaStore {
   async originalContent(id,known=null) {
     const {directory,metadata}=known??await this.metadata(id);
     if(metadata.storageId){const {MediaImports}=await import('./media-imports.js'),original=await new MediaImports(this.workspace).original(id);if(original.session.source.size!==metadata.originalBytes||original.session.source.sha256!==metadata.originalSha256)throw new AppError('MEDIA_INVALID');return original.content;}
-    const file=path.join(directory,'original'),relative=path.relative(this.root,file).split(path.sep).join('/');
-    const retired=await retiredMediaContent(this.workspace,relative,metadata.originalBytes,metadata.originalSha256);if(retired)return retired;
+    const file=path.join(directory,'original');
     await assertRegular(file);return new FileContent(this.workspace,file,metadata.originalBytes,metadata.originalSha256);
   }
 
@@ -218,8 +216,7 @@ export class MediaStore {
     if(!Number.isInteger(headerBytes)||headerBytes<1||headerBytes>256)throw new AppError('INVALID');
     const {directory,metadata}=await this.metadata(id),profile=profiles[metadata.kind];
     const file = path.join(directory,metadata.kind==='file'?metadata.storageId?metadata.storageId+'.original':'original':`${metadata.storageId?metadata.storageId+'.':''}public.${profile.extension}`);
-    const relative=path.relative(this.root,file).split(path.sep).join('/');let content=await retiredMediaContent(this.workspace,relative,metadata.bytes,metadata.sha256);
-    if(!content){await assertRegular(file);content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);}
+    await assertRegular(file);let content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);
     let bytes;
     // An image's header also carries its PNG size (24 bytes) for the published markup.
     const headerLength=metadata.kind==='image'?Math.min(Math.max(headerBytes,24),metadata.bytes):headerBytes;

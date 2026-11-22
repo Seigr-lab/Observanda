@@ -55,7 +55,7 @@ import {assertPlotProjectionUnits,withPlotProvenance,verifyPlotProjection} from 
 import {assertDatasetScalars} from './dataset-selected-columns.js';
 import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
-import {artifactRelative,retiredArtifactContent} from './project-artifact-content.js';
+import {artifactRelative} from './project-artifact-content.js';
 import {materialKinds,validMaterialReference,materialReference,materialReferenceKey} from './web/material-reference.js';
 import {workspaceReferenceNamespaceMatches} from './research-reference-namespace.js';
 import {recordOwnerExternalReference} from './record-owner-provenance.js';
@@ -320,8 +320,7 @@ export class ResearchMaterials {
   });
  }
  async withUploadChunks(session,consume,options={}){
-  const {withRetiredUploadChunks,retainedUploadChunks}=await import('./project-upload-content.js');
-  const retired=await withRetiredUploadChunks(this.workspace,session,consume,options);if(retired)return retired.value;
+  const {retainedUploadChunks}=await import('./project-upload-content.js');
   return consume(retainedUploadChunks({workspace:this.workspace},session,options));
  }
  async prepareImport(id,{signal,progress=async()=>{},storageId=randomUUID()}={}){
@@ -384,7 +383,6 @@ export class ResearchMaterials {
   return path.join(await this.directory(parts.slice(2,-1).join('/'),{create:false}),parts.at(-1));
  }
  async originalContent(doc){
-  const retired=await retiredArtifactContent(this.workspace,doc);if(retired)return retired;
   const file=await this.artifactPath(doc);await assertRegular(file);return new FileContent(this.workspace,file,doc.content.size,doc.content.sha256);
  }
  async artifact(ref,{signal,verification='complete'}={}){
