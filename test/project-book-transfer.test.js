@@ -58,12 +58,12 @@ test('nested project copies and portable exports publish every independently own
  assert.ok(Date.now()-refusalStarted<10000,'copy must release the directory barrier promptly');
  await assert.rejects(new ProjectStorage(destination,projectId,vault).outline(),{code:'STORAGE_INCOMPLETE'});
  const pendingTarget=new ProjectStorage(destination,projectId,vault),pending=await projectTransferReceipt(pendingTarget);assert.equal(pending.phase,'database');assert.equal(pending.bookTransfersVersion,2);assert.equal(pending.bookCount,2);assert.equal(pending.bookTransfers,undefined);assert.ok(Buffer.byteLength(serialize(pending))<4096);
- // An existing array receipt keeps its original IDs, including IDs which are
- // not derived by the new writer. Its already copied first book stays valid.
- pending.bookTransfers=ordered.map((book,index)=>({labBookId:book.storage.labBookId,id:index?randomUUID():workspaceCopyTransferId(id,book.storage.labBookId)}));delete pending.bookTransfersVersion;delete pending.bookCount;
- await pendingTarget.writeFile(path.join(destination,'.observanda/project-transfer.observanda'),serialize(pending));
+ // A receipt listing per-book transfers came only from releases before alpha.29 and is refused;
+ // the current receipt resumes, and its already copied first book stays valid.
+ const receiptFile=path.join(destination,'.observanda/project-transfer.observanda'),listed={...pending,bookTransfers:ordered.map(book=>({labBookId:book.storage.labBookId,id:workspaceCopyTransferId(id,book.storage.labBookId)}))};delete listed.bookTransfersVersion;delete listed.bookCount;
+ await pendingTarget.writeFile(receiptFile,serialize(listed));await assert.rejects(copyProjectLocation(source,destination,{id,withBook}),{code:'STORAGE_COPY'});await pendingTarget.writeFile(receiptFile,serialize(pending));
  const received=[],borrowed=[],copied=await copyProjectLocation(source,destination,{id,withBook,onCopiedBook:storage=>{received.push(storage.labBookId);borrowed.push(storage.vault);}}),finished=await projectTransferReceipt(copied);
- assert.deepEqual(finished.bookTransfers,pending.bookTransfers);assert.equal(finished.phase,'verified');assert.equal(received.length,2);assert.ok(borrowed.every(key=>key.key===null),'copied-book callbacks must not retain usable borrowed keys');
+ assert.equal(finished.bookTransfers,undefined);assert.equal(finished.bookTransfersVersion,2);assert.equal(finished.phase,'verified');assert.equal(received.length,2);assert.ok(borrowed.every(key=>key.key===null),'copied-book callbacks must not retain usable borrowed keys');
  assert.deepEqual((await new LabBookRegistry(copied).read()).value,(await new LabBookRegistry(source).read()).value);
  for(const book of books){
   const copy=new LabBookStorage(path.join(copied.root,book.entry.directory),book.storage.labBookId,book.key);assert.deepEqual(await copy.read(),book.before);assert.notEqual((await catalogueBinding(copy.root)).id,(await catalogueBinding(book.storage.root)).id);await provider.closeLabBook(copy.root);
