@@ -52,8 +52,11 @@ test('a killed intake worker and an exhausted checkpoint resume 161 MiB without 
   assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-intake-crash-'));
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });
- // One large capture and 65 different small files cross two durable receipt
+ // One large capture and 65 different small files cross several durable receipt
  // groups. Generate one chunk at a time rather than retaining a 96 MiB buffer.
+ // The large capture's receipt is committed on its own, then small files in groups of
+ // 32; the worker is killed inside the third group, so 33 receipts are durable.
+ const durable=33;
  const chunksFor=index=>index===0?96:1;
  const chunkFor=(index,chunk)=>{const bytes=Buffer.alloc(EVIDENCE_CHUNK,0x63);bytes.writeUInt32LE(index,0);bytes.writeUInt32LE(chunk,4);return bytes;};
  const files=[],hashes=[];
@@ -81,7 +84,7 @@ test('a killed intake worker and an exhausted checkpoint resume 161 MiB without 
   const saved=[];
   for(let index=0;index<items.length;index++){
    const value=await receipt(items[index].id);
-   if(index<32){assert.ok(value);saved.push(value);}else assert.equal(value,null,'uncommitted receipt group must roll back');
+   if(index<durable){assert.ok(value);saved.push(value);}else assert.equal(value,null,'uncommitted receipt group must roll back');
    assert.equal((await materials.importState(items[index].id)).completed,null);
   }
   return saved;
@@ -114,7 +117,7 @@ test('a killed intake worker and an exhausted checkpoint resume 161 MiB without 
   finally{ResearchMaterials.prototype.prepareImport=prepare;await worker.stop();}
   const resumedMs=Date.now()-resumedStarted,completed=await queue.read(batch.id);
   assert.equal(completed.state,'completed',JSON.stringify(completed));assert.equal(completed.attempt,3);
-  assert.deepEqual(preparedIds,items.slice(32).map(item=>item.id),'checkpointed originals must not be reconstructed');
+  assert.deepEqual(preparedIds,items.slice(durable).map(item=>item.id),'checkpointed originals must not be reconstructed');
   assert.equal(worker.active,null);assert.equal(worker.controller,null);assert.equal(worker.running,null);assert.equal(worker.enabled,false);
   const manifest=await materials.read(completed.result),refs=[];
   for await(const ref of materials.references(manifest.content))refs.push(ref);
@@ -124,7 +127,7 @@ test('a killed intake worker and an exhausted checkpoint resume 161 MiB without 
    for(let index=0;index<items.length;index++){
     const item=items[index],retained=await receipt(item.id),session=await materials.importState(item.id);
     assert.equal(refs[index].id,item.id);assert.deepEqual(refs[index],session.completed);
-    if(index<32)assert.deepEqual(retained,saved[index]);else assert.notEqual(retained.storageId,interrupted.lease.token);
+    if(index<durable)assert.deepEqual(retained,saved[index]);else assert.notEqual(retained.storageId,interrupted.lease.token);
     assert.deepEqual(await readdir(await materials.directory('originals/'+item.id)),[retained.storageId+'.original']);
     const {doc,content}=await materials.artifact(refs[index]);assert.equal(doc.content.name,files[index].name);assert.equal(content.size,files[index].size);assert.equal(content.sha256,hashes[index]);await content.verify();
    }
@@ -133,6 +136,6 @@ test('a killed intake worker and an exhausted checkpoint resume 161 MiB without 
   assert.deepEqual((await materials.intakes.enqueue(batch.id,queue)).result,completed.result,'retrying completed intake must keep its exact edition');
   assert.equal(await queue.claim(),null);assert.equal((await materials.intakes.list(recordId)).items.length,0);
   assert.ok(connections.every(entry=>entry.closed),'successful recovery must close all operation connections');
-  t.diagnostic(JSON.stringify({files:files.length,largeCaptureMiB:96,totalMiB:161,durableReceipts:32,reconstructedAfterRetry:preparedIds.length,uploadMs,killedAttemptMs,exhaustedAttemptMs,resumedMs,verifyMs,connectionsOpened:connections.length,connectionsClosed:connections.filter(entry=>entry.closed).length,faults:['killed worker process','injected ENOSPC at checkpoint']}));
+  t.diagnostic(JSON.stringify({files:files.length,largeCaptureMiB:96,totalMiB:161,durableReceipts:durable,reconstructedAfterRetry:preparedIds.length,uploadMs,killedAttemptMs,exhaustedAttemptMs,resumedMs,verifyMs,connectionsOpened:connections.length,connectionsClosed:connections.filter(entry=>entry.closed).length,faults:['killed worker process','injected ENOSPC at checkpoint']}));
  }finally{ResearchMaterials.prototype.appendImport=append;}
 });
