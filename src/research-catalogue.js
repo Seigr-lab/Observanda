@@ -9,7 +9,6 @@ import {readProjectDomainRegistry} from './project-domain-registry.js';
 import {retiredMetadataSourceLocation,resolveMetadataValue} from './project-retired-metadata.js';
 import {withRetiredRecordCopy} from './project-retired-records.js';
 import {assertProjectHierarchyChange} from './project-hierarchy-authority.js';
-import {ProjectSourceAuthority} from './project-source-authority.js';
 import {rekeyProjectDomains} from './project-domain-rekey.js';
 // Transactional research storage. PostgreSQL sees encrypted payloads and opaque IDs,
 // never titles, prose or file paths. Workspace owns locking and key custody.
@@ -239,7 +238,6 @@ export class ResearchCatalogue{
    membership=await index.replace(current.membership,before,after);
   }
   await assertProjectHierarchyChange(this,current?.metadata??null,metadata);
-  const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current?.metadata??null,metadata);await authority.fullBookRecords(current,metadata,before,after,rows);}
   const snapshot={indexVersion:1,metadata,membership,count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length},search=new RecordSearchIndex(this);
   snapshot.searchIndex=current?await search.replace(current.searchIndex,before,after,metadata,{beforeMetadata:current.metadata}):await search.build(snapshot);
   const types=new RecordTypeIndex(this);
@@ -370,7 +368,6 @@ export class ResearchCatalogue{
  async finishRecordChanges(currentId,current,metadata,before,after,{removed=[],changedIds=new Set(after.map(row=>row.id)),bulk=false,index=new SnapshotIndex(this),etag,ordinal,count=current.count-before.length+after.length,bytes=current.bytes-before.reduce((n,row)=>n+row.bytes,0)+after.reduce((n,row)=>n+row.bytes,0),nextPosition=current.nextPosition}={}){
    await assertRecordOwnerRowsWritable(this,before,after);
    await assertProjectHierarchyChange(this,current.metadata,metadata);
-   const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current.metadata,metadata);await authority.recordRows(current.metadata,before);await authority.recordRows(metadata,after);}
    return operationStage('index-records',{total:6,unit:'indexes'},async()=>{
    if(!Number.isSafeInteger(count)||count<0||!Number.isSafeInteger(bytes)||bytes<0||!Number.isSafeInteger(nextPosition))throw new AppError('LIMIT');
    admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));

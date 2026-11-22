@@ -13,7 +13,6 @@ import {browseDatasetTable} from '../src/dataset-table-browser.js';
 import {searchDatasetSchema} from '../src/dataset-table-schema.js';
 import {tableViewRequest} from '../src/dataset-table-views.js';
 import {randomUUID} from 'node:crypto';
-import {projectSourceEvidenceOwner} from '../src/project-source-evidence-owner.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';
 import {nativeResources} from '../src/native-resource-budget.js';
 
@@ -44,11 +43,6 @@ test('table filters and sorts preserve exact source identities, including duplic
 
  const id=randomUUID(),settings={query:criteria,pinned:[1],hidden:[],columnOffset:1},name='Qualified observations';
  const view=await tableViewRequest(m,'table-view-save',{ref,id,previous:null,name,settings},options);
- await m.workspace.catalogue(async store=>{
-  const owner=projectSourceEvidenceOwner(store,ownerId=>({recordId:ownerId}));
-  const key='metadata:.observanda/materials/table-views/'+recordId+'/'+ref.id+'/'+ref.revision+'/'+id+'.json';
-  assert.deepEqual(await owner(key),{recordId});
- });
  const listed=await tableViewRequest(m,'table-view-list',{ref,after:null},options);
  assert.deepEqual(listed.items,[{id,name,settings,revision:view.revision}]);
  await assert.rejects(tableViewRequest(m,'table-view-save',{ref,id,previous:null,name,settings},options),{code:'CONFLICT'});

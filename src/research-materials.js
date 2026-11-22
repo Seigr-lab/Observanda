@@ -156,14 +156,13 @@ export class ResearchMaterials {
   await this.workspace.catalogue(async store=>{
    const head=await store.head(),check=async()=>{
     const snapshot=await store.snapshot(head),row=await store.member(snapshot,recordId);if(!row)fail();
-    return JSON.stringify([row.notebookId,snapshot.metadata.notebooks.find(item=>item.id===row.notebookId)?.projectId??null]);
+    return row.notebookId;
    };
    const cache=metadataBatchIndex(store)?.objectReads??store.readCache;
-   const [notebookId,projectId]=JSON.parse(cache?await cache.proof('material-owner:'+head+':'+recordId,check):await check());
+   if(cache)await cache.proof('material-owner:'+head+':'+recordId,check);else await check();
    // Membership belongs to the pinned research head. Write authority can change
    // independently, so read its live handover receipts on every write check.
    if(write){const {assertRecordOwnerWritable}=await import('./record-owner-transfer-state.js');await assertRecordOwnerWritable(store,recordId);}
-   if(write&&!this.workspace.projectId&&notebookId){const {ProjectSourceAuthority}=await import('./project-source-authority.js');await new ProjectSourceAuthority(store).notebook(notebookId,{notebooks:projectId!==null?[{id:notebookId,projectId}]:[]});}
   });
  }
  async owner(recordId){

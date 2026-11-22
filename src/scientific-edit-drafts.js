@@ -224,7 +224,7 @@ export class ScientificEditDrafts{
   return this.workspace.catalogue(async()=>{
    await this.check();await this.resolveOwner(workspaceId);const page=await this.ownerIndex.page(workspaceId,{limit,cursor},{signal:this.signal}),items=[];
    for(const summary of page.drafts){
-    try{await this.materials.assertOwner(summary.recordId,{write:true});}catch(error){if(['MATERIAL_INVALID','RECORD_TRANSFER_BUSY','RECORD_RELOCATED','PROJECT_RELOCATED'].includes(error.code))continue;throw error;}
+    try{await this.materials.assertOwner(summary.recordId,{write:true});}catch(error){if(['MATERIAL_INVALID','RECORD_TRANSFER_BUSY','RECORD_RELOCATED'].includes(error.code))continue;throw error;}
     items.push(this.public({...summary,workspaceId}));
    }
    await this.check();return {items,next:page.nextCursor};

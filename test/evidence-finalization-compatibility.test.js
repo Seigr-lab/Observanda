@@ -13,7 +13,6 @@ import {workspaceJobs} from '../src/workspace-jobs.js';
 import {Workspace,digest} from '../src/storage.js';
 import {fileFingerprint} from '../src/web/evidence-fingerprint.js';
 import {contentBuffer} from '../src/file-content.js';
-import {projectSourceEvidenceOwner} from '../src/project-source-evidence-owner.js';
 import {ResearchTransfer} from '../src/collaboration/research-transfer.js';
 import {ExchangeParts} from '../src/collaboration/exchange-parts.js';
 import {LiveResearch} from '../src/collaboration/live-research.js';
@@ -73,7 +72,6 @@ test('archive version ten preserves every staged capability combination and reje
 
 const reference=head=>({kind:head.kind,id:head.id,revision:head.revision});
 async function ownerState(workspace){return {format:await workspace.catalogue(s=>catalogueFormat(s.db)),domains:await workspace.catalogue(readProjectDomainRegistry),settings:await workspace.catalogue(workspaceSettingsRegistry),dashboard:await readWorkspaceDashboard(workspace)};}
-async function classify(workspace,files,expected){await workspace.catalogue(async store=>{const owner=projectSourceEvidenceOwner(store,id=>({kind:'record',recordId:id}));for(const file of files)assert.deepEqual(await owner('metadata:.observanda/materials/'+file),expected,file);});}
 
 test('completed staged originals retain ownership through packet transfer, archive activation and fresh-key recovery',{timeout:240000},async t=>{
  const f=await collaborationFixture(t),workspace=f.author.workspace,m=new ResearchMaterials(workspace),jobs=workspaceJobs(workspace),recordId=f.book.entries[0].id,bytes=Buffer.from('Exact synthetic acquisition bytes\n'),beforeOwners=await ownerState(workspace);
@@ -88,15 +86,8 @@ test('completed staged originals retain ownership through packet transfer, archi
  assert.deepEqual(await live.dispatch(identity,scope,'evidence',{recordId}),{items:[],next:null});
  for(const ref of refs){assert.equal(await m.current(ref.id),null);await assert.rejects(m.read(ref),{code:'MATERIAL_INCOMPLETE'});await assert.rejects(m.index.inputSet(ref),{code:'MATERIAL_INCOMPLETE'});}
  await assert.rejects(new ResearchTransfer(workspace,new Set([recordId]),[f.book.notebooks[0].id],async()=>{}).copy([],heads),{code:'COLLABORATION_DEPENDENCY'});
- const expected={kind:'record',recordId},paths=heads.flatMap(head=>['objects/'+head.id+'/head.json','objects/'+head.id+'/'+head.revision+'.json','index/items/'+head.id+'.json','index/dependencies/'+head.id+'/'+head.revision+'.json','imports/'+head.id+'/session.json','intakes/'+batch.id+'/attached/'+head.id+'.json']);
- await classify(workspace,paths,expected);
- const receiptPath='.observanda/materials/intakes/'+batch.id+'/attached/'+heads[0].id+'.json',receipt=await workspace.readMetadata(receiptPath);
- await workspace.withLock(()=>workspace.writeMetadata(receiptPath,JSON.stringify({...JSON.parse(receipt),sessionHash:'0'.repeat(64)})));
- try{await assert.rejects(classify(workspace,[receiptPath.slice('.observanda/materials/'.length)],expected),{code:'CATALOGUE_DAMAGED'});}finally{await workspace.withLock(()=>workspace.writeMetadata(receiptPath,receipt));}
  await jobs.queue.pulse(job.id,job.lease.token);const completed=await jobs.queue.complete(job.id,job.lease.token,prepared);assert.equal(completed.state,'completed');
- const segment=await m.index.segments.read(batch.id),segmentPaths=['index/batches/'+batch.id+'.json'];
- for(const owner of [null,recordId])for(const kind of [null,'artifact']){const feed=m.index.segments.feed(owner,kind);segmentPaths.push((feed.order+'/'+feed.key(segment)).slice('.observanda/materials/'.length));await classify(workspace,[feed.marker.slice('.observanda/materials/'.length)],owner?expected:{kind:'derived'});}
- await classify(workspace,segmentPaths,expected);await classify(workspace,paths,expected);
+ await m.index.segments.read(batch.id);
  const liveItems=(await live.dispatch(identity,scope,'evidence',{recordId})).items;assert.deepEqual(new Set(liveItems.map(item=>item.id)),new Set([batch.id,...refs.map(ref=>ref.id)]));
  const sourceDocs=await Promise.all(refs.map(ref=>m.read(ref)));for(let i=0;i<refs.length;i++){assert.equal(sourceDocs[i].content.intakeId,batch.id);assert.equal((await m.current(refs[i].id)).stagedBatch,batch.id);assert.deepEqual(await contentBuffer((await m.artifact(refs[i])).content),bytes);}
  const afterOwners=await ownerState(workspace);assert.equal(catalogueRequiresStagedEvidence(afterOwners.format),true);assert.deepEqual(capabilities(afterOwners.format),capabilities(beforeOwners.format));assert.deepEqual({...afterOwners,format:beforeOwners.format},beforeOwners);
@@ -109,12 +100,11 @@ test('completed staged originals retain ownership through packet transfer, archi
  for(let i=0;i<refs.length;i++){assert.deepEqual(await shared.read(refs[i]),sourceDocs[i]);assert.equal(Object.hasOwn(await shared.current(refs[i].id),'stagedBatch'),false);assert.deepEqual(await contentBuffer((await shared.artifact(refs[i])).content),bytes);}
  assert.equal(await shared.workspace.readMetadata('.observanda/materials/intakes/'+batch.id+'/batch.json'),null);assert.deepEqual(new Set((await shared.index.page({recordId})).items.map(item=>item.id)),new Set([batch.id,...refs.map(ref=>ref.id)]));await shared.verify();
  const corrections=new EvidenceCorrections(m),retire={recordId,ref:refs[0],action:'retire',reason:'Synthetic classification qualification',metadata:null,replacementRecordId:null},review=await corrections.preview(retire);await corrections.apply({command:retire,review:review.review});
- await classify(workspace,['index/retired/'+refs[0].id+'.json'],expected);const restore={...retire,action:'restore'},restoreReview=await corrections.preview(restore);await corrections.apply({command:restore,review:restoreReview.review});await m.verify();
+ const restore={...retire,action:'restore'},restoreReview=await corrections.preview(restore);await corrections.apply({command:restore,review:restoreReview.review});await m.verify();
  const archived=await copyWorkspace(await copyPlan(workspace.root,path.join(f.directory,'staged-archive'),{vault:f.author.vault}),{vault:f.author.vault}),header=JSON.parse((await readFile(path.join(archived,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.equal(header.version,10);assert.equal(header.catalogueVersion,afterOwners.format);
  const access=await createWorkspaceAccess('','Synthetic evidence recovery',f.member.deviceStore),vault=takeCreatedVault(access);f.vaults.push(vault);const rekeyed=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'staged-rekey'),{vault:f.author.vault}),access,vault,f.author.vault);
  for(const [root,key] of [[archived,f.author.vault],[rekeyed,vault]]){
   const restoredWorkspace=new Workspace(root,key),restored=new ResearchMaterials(restoredWorkspace);assert.deepEqual(await ownerState(restoredWorkspace),afterOwners);await restored.verify();
   for(let i=0;i<refs.length;i++){assert.deepEqual(await restored.read(refs[i]),sourceDocs[i]);assert.equal((await restored.current(refs[i].id)).stagedBatch,batch.id);assert.deepEqual(await contentBuffer((await restored.artifact(refs[i])).content),bytes);}
-  await classify(restoredWorkspace,segmentPaths,expected);
  }
 });

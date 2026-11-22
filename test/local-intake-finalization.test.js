@@ -14,8 +14,6 @@ import {RunReadiness} from '../src/run-readiness.js';
 import {runEvidenceRevision} from '../src/run-receipts.js';
 import {MaterialIndex} from '../src/material-index.js';
 import {catalogueContext} from '../src/research-catalogue.js';
-import {projectSourceIntakeOwner} from '../src/project-source-intake-owner.js';
-import {projectSourceEvidenceOwner} from '../src/project-source-evidence-owner.js';
 const options=()=>({signal:new AbortController().signal,progress:async()=>{}});
 async function staged(f){
  const preview=await f.service.preview(f.command),command={...f.command,expectedPin:preview.pin};await f.service.stage(command);await f.worker.runOnce();assert.equal((await f.service.status(command)).state,'prepared');await f.service.apply(command);return command;
@@ -31,7 +29,6 @@ test('local intake checkpoints 65 files privately, resumes once, and publishes a
  await f.queue.release(job.id,job.lease.token,{error:new Error('interrupted')});const owner=new LocalIntakeFinalization(f.service),proposal=await f.service.read(f.manifest.id),batch=await owner.read(proposal);assert.equal(batch.finalization.count,32);
  const first=await materials.sequences.item(batch.finalization.inputsIndex,0);await hidden(f,first);
  await f.ws.catalogue(()=>verifyLocalIntakeFinalizations(f.ws,ref=>materials.checkReference(ref)));
- await f.ws.catalogue(async store=>{const record=id=>({id});assert.deepEqual(await projectSourceIntakeOwner(store,{namespaceId:f.book.id},record)('metadata:'+owner.file(proposal.id)),{id:f.record.id});assert.deepEqual(await projectSourceEvidenceOwner(store,record)('metadata:.observanda/materials/objects/'+first.id+'/head.json'),{id:f.record.id});});
  const other=f.book.entries.find(entry=>entry.id!==f.record.id),values=new RecordValues(f.ws),target={workspaceId:f.book.id,recordId:other.id,field:'title'},base=await values.read(target);await values.save({...target,expectedRevision:base.revision,value:{value:'Foreground work while intake is interrupted'}});
  await rename(f.source,f.source+' unavailable');await f.service.control(command,'retry');
  let artifacts=0,finalizing=false;const commit=ResearchMaterials.prototype.commit,finish=LocalIntakeFinalization.prototype.commit,projected=MaterialIndex.prototype.projectedHeads;

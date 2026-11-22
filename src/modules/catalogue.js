@@ -3,7 +3,6 @@ import {usesResourceQuality,assertResourceQualityFormat,requireResourceQualityFo
 import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies,catalogueRequiresStructuredCalculator,requireStructuredCalculator} from '../catalogue-format.js';
 import {hasCalculationPolicy} from '../web/tools/calculation-policy.js';
 import {resolveModuleEvent,resolveModuleEntity} from '../project-retired-modules.js';
-import {assertProjectSourceModuleWrite} from '../project-source-module-authority.js';
 // Current module entities and retained command receipts have separate read
 // paths. A normal view or command never materializes the full event history.
 import {AppError} from '../errors.js';
@@ -206,7 +205,6 @@ export class ModuleCatalogue{
  async writeChanges(previous,entities,event){
   if(entities.some(usesResourceQuality))await requireResourceQualityFormat(this.store);
   await this.store.assertModuleWrite?.(entities,event);
-  await assertProjectSourceModuleWrite(this,previous,entities);
   const db=this.store.catalogueDb??this.store.db;
   if(this.store.beforeCommit&&!await moduleCatalogueFeaturesPresent(db,entities))this.store.beforeCommit(()=>requireModuleCatalogueFeatures(db,entities));
   else await requireModuleCatalogueFeatures(db,entities);

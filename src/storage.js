@@ -3,8 +3,6 @@ import {withQueryCacheHandoff} from './query-cache-lifecycle.js';
 import {assertStagingHandoff,withStagingHandoff} from './staging-reservations.js';
 import {persistDirectoryCreation,createPersistentDirectory} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
-import {withProjectSourceMetadataAuthority} from './project-source-metadata-authority.js';
-import {inspectRecordedCatalogue,assertCatalogueWritable} from './catalogue-inspection.js';
 import {assertNotRenaming} from './workspace-rename-state.js';
 import {digest,serialize} from './storage-format.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -45,7 +43,8 @@ function inspectOwnedCatalogue(workspace,store,operation){
   try{return await store.db.scope(()=>catalogueReads.run({root:workspace.root,projectId:workspace.projectId,labBookId:workspace.labBookId,vault:workspace.vault,db:store.db,cache},operation));}
   finally{if(!store.readCache)cache.clear();}
  };
- if(held?.root===workspace.root&&held.db!==store.db)return inspectRecordedCatalogue(workspace,store,inspect);
+ // A second connection may not read this workspace while its writer holds a transaction.
+ if(held?.root===workspace.root&&held.db!==store.db)throw new AppError('LOCKED');
  return inspect();
 }
 
@@ -349,7 +348,6 @@ export class Workspace {
   }
   withStorageHandoff(operation,options){return withStagingHandoff(this,()=>withQueryCacheHandoff(this.root,()=>this.withLock(async internal=>{await assertStagingHandoff(this);const held=catalogueContext.getStore();if(held?.root===this.root)await projectDomainHandoff(held.db);return operation(internal);},options)));}
   async withLock(operation,{detached=false,moveId,existing=false}={}) {
-    assertCatalogueWritable(this);
     await assertWorkspaceAvailable(this.root,{moveId});
     if(existing)await assertRegular(this.root,{directory:true});else await createPersistentDirectory(this.root, { recursive: true, mode: 0o700 });
     // Canonicalize the selected workspace before using its protected internal paths.
@@ -363,7 +361,7 @@ export class Workspace {
         await db.run('BEGIN');await waitForWriter(()=>db.lock());
         await assertWorkspaceAvailable(this.root,{moveId});
         const afterCommit=[];
-        const result=await db.scope(()=>catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>withProjectSourceMetadataAuthority(this,db,()=>operation(internal))));
+        const result=await db.scope(()=>catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>operation(internal)));
         await db.run('COMMIT');for(const cleanup of afterCommit)await cleanup();return result;
       }));
     }

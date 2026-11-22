@@ -1,17 +1,7 @@
 import {bomResourceReference,localBOMResource} from './web/modules/bom-model.js';
 import {localTaskDependency} from './web/task-prerequisite-model.js';
-// Domain facts establish ownership. Links, stock locations and lab scopes do
-// not turn a shared item into project-owned content.
+// The modules, records, projects and external items a module entity depends on.
 import {moduleReferences} from './modules/references.js';
-export function moduleOwnerFact(entity){
- const d=entity.data;
- if(['movement','reservation','stock-transfer','asset-transfer'].includes(entity.type))return {kind:'parent',type:'resource',id:d.resourceId};
- if(entity.type==='event')return {kind:'parent',type:'calendar',id:d.calendarId};
- if(entity.type==='lab-entry')return {kind:'parent',type:'lab-space',id:d.labId};
- if(Object.hasOwn(d,'projectId'))return d.projectId===null?{kind:'workspace'}:{kind:'project',projectId:d.projectId};
- if(entity.type==='booking')return {kind:'parent',type:'resource',id:d.resourceId};
- return {kind:'undeclared'};
-}
 export function* moduleMigrationDependencies(entity,namespaceId){
  const d=entity.data;
  const module=(type,id)=>({kind:'module',type,id});
