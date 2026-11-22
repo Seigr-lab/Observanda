@@ -5,8 +5,8 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
-import {testServer} from './device-fixture.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {testServer,TestDeviceStore} from './device-fixture.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -19,9 +19,9 @@ import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
 
 async function until(check){const deadline=Date.now()+10000;while(!check()){if(Date.now()>deadline)assert.fail('Request admission checkpoint not reached');await delay(10);}}
 test('slow HTTP bodies cannot exhaust controls, queued clients cancel, and rejected bodies never save',async t=>{
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-http-capacity-')),root=path.join(parent,'workspace'),password='disposable request admission password',access=await createAccess('',password),vault=takeCreatedVault(access);
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-http-capacity-')),root=path.join(parent,'workspace'),password='disposable request admission password',deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);
  await initializeLocation(root,sampleNotebook(),access,vault);
- const admission=new RequestAdmission({active:1,queued:1,controlActive:1,waitMs:200}),app=await testServer({root,port:0,requestAdmission:admission}),ws=new Workspace(root,vault);
+ const admission=new RequestAdmission({active:1,queued:1,controlActive:1,waitMs:200}),app=await testServer({root,port:0,requestAdmission:admission,deviceStore}),ws=new Workspace(root,vault);
  t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
  const headers={Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json'},send=(route,data,signal)=>fetch(app.origin+route,{headers,signal,...(data?{method:'POST',body:JSON.stringify(data)}:{})});

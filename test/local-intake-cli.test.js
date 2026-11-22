@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
 import {intakeFixture} from './fixtures/local-intake.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation} from '../src/locations.js';
 import {clearVault} from '../src/encryption.js';
 import {startServer} from '../src/server.js';
@@ -12,9 +13,11 @@ const cli=(args,password)=>new Promise((resolve,reject)=>{
  processChild.stdout.on('data',b=>stdout+=b);processChild.stderr.on('data',b=>stderr+=b);processChild.once('error',reject);processChild.once('close',code=>{clearTimeout(timer);resolve({code,stdout,stderr});});processChild.stdin.end(password+'\n');
 });
 test('real local CLI emits parseable versioned receipts and replay never duplicates material',async t=>{
- const f=await intakeFixture(t),password='Synthetic CLI intake password',access=await createAccess('',password),vault=takeCreatedVault(access),root=path.join(f.directory,'cli-workspace');
+ const f=await intakeFixture(t),password='Synthetic CLI intake password',preferences=path.join(f.directory,'cli-preferences.json');
+ // The CLI keeps its device store next to the preferences it is given.
+ const access=await createWorkspaceAccess('',password,new TestDeviceStore({file:preferences+'.device-key'})),vault=takeCreatedVault(access),root=path.join(f.directory,'cli-workspace');
  t.after(()=>clearVault(vault));await initializeLocation(root,(await f.ws.read()).book,access,vault);
- const base=['--workspace',root,'--workspace-id',f.book.id,'--record-id',f.record.id,'--password-stdin','--preferences',path.join(f.directory,'cli-preferences.json')];
+ const base=['--workspace',root,'--workspace-id',f.book.id,'--record-id',f.record.id,'--password-stdin','--preferences',preferences];
  const preview=await cli([...base,'--action','preview','--source',f.source],password);assert.equal(preview.code,0,preview.stdout+preview.stderr);const pin=JSON.parse(preview.stdout).result.pin;
  const parameters=[...base,'--id',f.manifest.id,'--pin',pin];
  const stage=await cli([...parameters,'--action','stage','--source',f.source,'--wait'],password);assert.equal(stage.code,0,stage.stdout+stage.stderr);assert.equal(JSON.parse(stage.stdout).result.state,'prepared');

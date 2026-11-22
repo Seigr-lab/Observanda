@@ -10,14 +10,14 @@ import {validStarter,starterRecord} from '../src/web/record-starter-model.js';
 import {plainRichText} from '../src/web/rich-text-model.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
-import {createAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
-import {testServer} from './device-fixture.js';
+import {testServer,TestDeviceStore} from './device-fixture.js';
 import {sealStarter} from '../src/record-starter-package.js';
 const blueprint=()=>({name:'Private controlled protocol',type:'experiment',title:'Next precision trial',body:plainRichText('Follow these private instructions.'),sections:[{title:'Method',body:'Measure the declared interval.'},{title:'Results',body:''}],tags:['trial']});
-async function fixture(t){const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-starters-')),root=path.join(dir,'workspace'),book=upgradeNotebook(sampleNotebook()),access=await createAccess('','synthetic starter password'),vault=takeCreatedVault(access);await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),store=new RecordStarters(ws,{});t.after(async()=>{await clearVault(vault);await rm(dir,{recursive:true,force:true});});return {dir,root,book,ws,store,vault,workspaceId:book.id};}
+async function fixture(t){const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-starters-')),root=path.join(dir,'workspace'),book=upgradeNotebook(sampleNotebook()),deviceStore=new TestDeviceStore({file:path.join(dir,'device.key')}),access=await createWorkspaceAccess('','synthetic starter password',deviceStore),vault=takeCreatedVault(access);await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),store=new RecordStarters(ws,{});t.after(async()=>{await clearVault(vault);await rm(dir,{recursive:true,force:true});});return {dir,root,book,ws,store,vault,deviceStore,workspaceId:book.id};}
 async function released(f,draft=blueprint()){const c={workspaceId:f.workspaceId,id:randomUUID(),expectedRevision:null,draft},saved=await f.store.save(c),published=await f.store.publish({workspaceId:f.workspaceId,id:c.id,expectedRevision:saved.header.revision,note:'Reviewed instructions for the first trial.'});return {...published,id:c.id,saved,c};}
 
 test('portable templates retain rich instructions, reject dependencies, and create fresh empty execution identities',()=>{
@@ -67,7 +67,7 @@ test('encrypted package review, independent import, metadata backup and public p
  const imported=await dest.store.import(command);assert.equal(imported.header.latest,null);assert.equal(imported.header.origin.release,r.release.revision);assert.deepEqual((await dest.store.import(command)).header,imported.header);
  await f.store.create({...query,recordId:randomUUID(),notebookId:f.book.notebooks[0].id});
  const destination=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.dir,'backup'),{vault:f.vault}),{vault:f.vault});
- const vault=await verifyAccess(await readAccess(destination),'','synthetic starter password');
+ const vault=await verifyAccess(await readAccess(destination),'','synthetic starter password',{deviceStore:f.deviceStore});
  try{const restored=new RecordStarters(new Workspace(destination,vault),{});assert.deepEqual(await restored.release(query),await f.store.release(query));assert.deepEqual(await restored.read({workspaceId,id:r.id}),await f.store.read({workspaceId,id:r.id}));}finally{clearVault(vault);}
  const text=copiesText(await recordCopies((await f.ws.read()).book,f.ws));assert.ok(!text.includes('private instructions'));assert.ok(!text.includes('Private controlled protocol'));assert.ok(!text.includes('record-starters'));
 });
@@ -85,7 +85,7 @@ test('template library and history use bounded pages without loading record bodi
 });
 
 test('template endpoints require authentication, workspace binding and unlocked access',async t=>{
- const f=await fixture(t),app=await testServer({root:f.root,port:0,headless:true});t.after(()=>app.close());
+ const f=await fixture(t),app=await testServer({root:f.root,port:0,headless:true,deviceStore:f.deviceStore});t.after(()=>app.close());
  const command={workspaceId:f.workspaceId,cursor:null},route='/api/research/starters/list';
  const target={workspaceId:f.workspaceId,recordId:f.book.entries[0].id,snapshotId:(await f.ws.outline()).etag},sourceCommands=[['source',{...target,offset:0}],['capture',{...target,body:false,sections:[]}]];
  const selectedOperations=['view','field','change','capture-begin','capture-append','capture-finish','publish-selected','upload','uploadPart','review','packageView','packageField','accept','discard','download'];

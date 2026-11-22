@@ -10,13 +10,14 @@ import {RecordHistory} from '../src/record-history.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {recordRevision} from '../src/research.js';
 import {encrypted,clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {recordRevisionView,recordRevisionComparison} from '../src/web/record-revision-view.js';
 const media={get:async()=>{throw Error('Unexpected attachment');}};
 const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 
 test('record history reuses encrypted snapshots, omits other saves and restores only the reviewed record',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-')),vault=takeCreatedVault(await createAccess('','synthetic record history password')),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-')),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-device-')),'device.key')}),vault=takeCreatedVault(await createWorkspaceAccess('','synthetic record history password',deviceStore)),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
  let saved=await ws.create(sampleNotebook());const original=structuredClone(saved.book.entries[0]),otherId=saved.book.entries[1].id,command={workspaceId:saved.book.id,recordId:original.id};
  const pin=await new ResearchMaterials(ws).pinRecord(original.id,recordRevision(original));
  const secondBook={id:randomUUID(),projectId:saved.book.projects[0].id,title:'Moved lab book'};saved.book.notebooks.push(secondBook);

@@ -3,10 +3,11 @@ import {test,expect} from '@playwright/test';
 import {mkdtemp,readFile,readdir,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {testServer as startServer} from '../device-fixture.js';
+import {testServer as startServer,TestDeviceStore} from '../device-fixture.js';
 import {initializeLocation,workspaceManifest} from '../../src/locations.js';
 import {createNotebook} from '../../src/model.js';
-import {createAccess} from '../../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
+import {clearVault} from '../../src/encryption.js';
 import {defaultPreferences,readPreferences,rememberLocation,rememberInterface} from '../../src/preferences.js';
 let app,parent,root,file;
 test.beforeEach(async()=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-reset-browser-'));root=path.join(parent,'old-workspace');file=path.join(parent,'preferences.json');await rememberLocation(file,root);await rememberInterface(file,{fontSize:24,lineHeight:1.9});});
@@ -27,7 +28,9 @@ test('reset from a missing location cancels safely, then restarts the complete w
 });
 
 test('reset from an open workspace preserves files and asks before abandoning unsaved access edits',async({page})=>{
- await initializeLocation(root,createNotebook('Protected research'),await createAccess('Owner','synthetic reset password'));const before=await workspaceManifest(root);
+ // The test server keeps its device store next to the preferences file.
+ const access=await createWorkspaceAccess('Owner','synthetic reset password',new TestDeviceStore({file:file+'.device-key'})),vault=takeCreatedVault(access);
+ try{await initializeLocation(root,createNotebook('Protected research'),access,vault);}finally{clearVault(vault);}const before=await workspaceManifest(root);
  app=await startServer({root,port:0,preferencesFile:file,expectedExisting:true});await page.goto(app.url);await page.getByLabel('Username',{exact:true}).fill('Owner');await page.getByLabel('Password',{exact:true}).fill('synthetic reset password');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await preferences(page,'Storage & access');
  await page.getByLabel('Username (optional)',{exact:true}).fill('Unwanted edit');await page.getByRole('button',{name:'Reset app preferences',exact:true}).click();const guard=page.getByRole('dialog',{name:'Unsaved changes',exact:true});await expect(guard).toBeVisible();await guard.getByRole('button',{name:'Stay here',exact:true}).click();await expect(page.getByLabel('Username (optional)',{exact:true})).toHaveValue('Unwanted edit');
  await page.getByRole('button',{name:'Reset app preferences',exact:true}).click();await guard.getByRole('button',{name:'Discard changes',exact:true}).click();await page.getByRole('button',{name:'Reset and restart setup',exact:true}).click();await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible();expect(await workspaceManifest(root)).toEqual(before);

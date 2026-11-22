@@ -2,9 +2,10 @@ import {test,expect} from '@playwright/test';
 import {mkdtemp,mkdir,readdir,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {testServer as startServer} from '../device-fixture.js';
+import {testServer as startServer,TestDeviceStore} from '../device-fixture.js';
 import {createNotebook} from '../../src/model.js';
-import {createAccess} from '../../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
+import {clearVault} from '../../src/encryption.js';
 import {initializeLocation} from '../../src/locations.js';
 let app,parent,root,selected,calls,result,finish;
 test.beforeEach(async()=>{
@@ -22,7 +23,9 @@ test('desktop setup uses the OS picker, keeps form values and does not create a 
 });
 
 test('open-workspace dialogs retain credentials and their modal context when the native picker returns',async({page})=>{
- await initializeLocation(selected,createNotebook('Existing research'),await createAccess());await page.goto(app.url);await page.getByRole('button',{name:'Open existing workspace',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Open an existing workspace',exact:true});await dialog.getByLabel('Workspace username (if protected)',{exact:true}).fill('Retained username');
+ // Opened with this device: the test server keeps its device store next to the preferences file.
+ const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(parent,'preferences.json')+'.device-key'})),vault=takeCreatedVault(access);
+ try{await initializeLocation(selected,createNotebook('Existing research'),access,vault);}finally{clearVault(vault);}await page.goto(app.url);await page.getByRole('button',{name:'Open existing workspace',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Open an existing workspace',exact:true});await dialog.getByLabel('Workspace username (if protected)',{exact:true}).fill('Retained username');
  await dialog.getByRole('button',{name:'Choose folder',exact:true}).click();await expect(dialog).toBeVisible();await expect(dialog.getByLabel('Workspace folder',{exact:true})).toHaveValue(selected);await expect(dialog.getByLabel('Workspace username (if protected)',{exact:true})).toHaveValue('Retained username');await expect(page.locator('.folder-browser')).toHaveCount(0);
  await dialog.getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Existing research');
 });

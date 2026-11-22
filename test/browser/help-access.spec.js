@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {testServer,TestDeviceStore} from '../device-fixture.js';
-import {createWorkspaceAccess,takeCreatedVault,createAccess} from '../../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {recoveryKey} from '../../src/security/keyring.js';
 import {clearVault} from '../../src/encryption.js';
 import {initializeLocation} from '../../src/locations.js';
@@ -14,8 +14,9 @@ async function fixture(mode='setup'){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-help-access-')),root=path.join(directory,'Private workspace canary');
  const deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),password='Synthetic access password',book=createNotebook('Private workspace canary');
  let vault,recovery;
- if(mode==='locked'||mode==='legacy'){
-  let access=mode==='legacy'?await createAccess('',password):await createWorkspaceAccess('',password,deviceStore);vault=takeCreatedVault(access);
+ // 'locked' also has a recovery key; 'password' can only be unlocked with its password.
+ if(mode==='locked'||mode==='password'){
+  let access=await createWorkspaceAccess('',password,deviceStore);vault=takeCreatedVault(access);
   if(mode==='locked'){const kit=recoveryKey(access,vault);access=kit.value;recovery=kit.recovery;}
   await initializeLocation(root,book,access,vault);
  }
@@ -85,8 +86,8 @@ test('locked Help retries failed documentation without opening research and retu
  }finally{await f.close();}
 });
 
-test('stable Help URLs work with legacy locked access and leave password entry available after closing',async({page})=>{
- const f=await fixture('legacy'),observed=watch(page);
+test('stable Help URLs work with password-locked access and leave password entry available after closing',async({page})=>{
+ const f=await fixture('password'),observed=watch(page);
  try{
   await page.goto(f.app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();observed.requests.length=0;
   await page.evaluate(()=>location.hash='#/preferences/help/storage/unlock');await expect(help(page).locator('#help-storage-unlock')).toBeVisible();

@@ -5,7 +5,8 @@ import {spawn} from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../src/sample.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
@@ -31,12 +32,13 @@ async function files(root,relative=''){
 }
 
 test('build exports a chosen website made in the website editor into a new folder',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-cli-build-')),root=path.join(directory,'Field notes'),password='synthetic CLI build passphrase';
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-cli-build-')),root=path.join(directory,'Field notes'),password='synthetic CLI build passphrase',preferences=path.join(directory,'preferences.json');
  const book=sampleNotebook(),[,hidden,shared]=book.entries;hidden.share=false;shared.share=false;book.entries=[hidden,shared];
- const access=await createAccess('',password),vault=takeCreatedVault(access);
+ // The CLI keeps its device store next to the preferences it is given.
+ const access=await createWorkspaceAccess('',password,new TestDeviceStore({file:preferences+'.device-key'})),vault=takeCreatedVault(access);
  t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await initializeLocation(root,book,access,vault);
- const options=['--workspace',root,'--preferences',path.join(directory,'preferences.json'),'--password-stdin'];
+ const options=['--workspace',root,'--preferences',preferences,'--password-stdin'];
 
  // Without a website there is nothing to export.
  const empty=await cli(['build',...options,'--out',path.join(directory,'none')],password);

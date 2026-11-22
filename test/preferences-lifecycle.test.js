@@ -9,10 +9,15 @@ import {defaultPreferences,preferencesSnapshot,readPreferences,rememberInterface
 import {testServer as startServer,TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,workspaceManifest} from '../src/locations.js';
 import {createNotebook} from '../src/model.js';
-import {createAccess,createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 
 async function fixture(){const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-reset-'));return {parent,root:path.join(parent,'research'),file:path.join(parent,'preferences.json')};}
+// The server and the CLI keep their device store next to the preferences file.
+async function create(root,book,file,{username='',password=''}={}){
+ const access=await createWorkspaceAccess(username,password,new TestDeviceStore({file:file+'.device-key'})),vault=takeCreatedVault(access);
+ try{await initializeLocation(root,book,access,vault);}finally{clearVault(vault);}
+}
 async function client(app){
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const cookie=auth.headers.get('x-observanda-session').split(';')[0];
@@ -33,7 +38,7 @@ test('reset backs up exact preferences bytes and refuses concurrent or malformed
 });
 
 test('a detached session never implicitly selects a folder and requires a chosen location to create',async t=>{
- const {root,file}=await fixture();await initializeLocation(root,createNotebook('Existing work'),await createAccess());await rememberLocation(file,root);
+ const {root,file}=await fixture();await create(root,createNotebook('Existing work'),file);await rememberLocation(file,root);
  const before=await workspaceManifest(root),prefs=await readFile(file);
  const app=await startServer({root:null,port:0,preferencesFile:file});t.after(()=>app.close());const c=await client(app);
  const storage=await (await c.request('/api/storage')).json();assert.equal(storage.root,null);assert.equal(storage.expectedExisting,false);assert.ok(path.isAbsolute(storage.suggestedLocation));
@@ -67,7 +72,7 @@ test('reset preserves all research files, invalidates stale writes, and supports
 });
 
 test('locked workspaces reject preference reset without modifying protection or stored settings',async t=>{
- const {root,file}=await fixture();await initializeLocation(root,createNotebook('Protected'),await createAccess('Owner','synthetic protected password'));await rememberLocation(file,root);
+ const {root,file}=await fixture();await create(root,createNotebook('Protected'),file,{username:'Owner',password:'synthetic protected password'});await rememberLocation(file,root);
  const before=await workspaceManifest(root),prefs=await preferencesSnapshot(file);const app=await startServer({root,port:0,preferencesFile:file});t.after(()=>app.close());const c=await client(app);
  assert.equal((await c.request('/api/preferences/reset',{etag:prefs.etag,confirmed:true})).status,401);assert.deepEqual(await readFile(file),prefs.raw);assert.deepEqual(await workspaceManifest(root),before);
 });
@@ -85,7 +90,7 @@ async function launchCLI(t,file,args=[]){
 }
 
 test('CLI --setup bypasses remembered work without rewriting preferences; reset remains fresh across a normal launch',async t=>{
- const {root,file}=await fixture();await initializeLocation(root,createNotebook('Retained'),await createAccess());await rememberLocation(file,root);const before=await preferencesSnapshot(file),manifest=await workspaceManifest(root);
+ const {root,file}=await fixture();await create(root,createNotebook('Retained'),file);await rememberLocation(file,root);const before=await preferencesSnapshot(file),manifest=await workspaceManifest(root);
  const forced=await launchCLI(t,file,['--setup']),c=await client(forced);assert.deepEqual(await (await c.request('/api/notebook')).json(),{book:null});assert.deepEqual(await readFile(file),before.raw);
  await resetPreferences(file,before.etag);const resetBytes=await readFile(file);const normal=await launchCLI(t,file),fresh=await client(normal);
  assert.deepEqual(await (await fresh.request('/api/notebook')).json(),{book:null});assert.equal((await (await fresh.request('/api/storage')).json()).root,null);
@@ -94,7 +99,7 @@ test('CLI --setup bypasses remembered work without rewriting preferences; reset 
 
 test('language changes are authenticated, origin checked and independent of locked research',async t=>{
  const {root,file}=await fixture();
- await initializeLocation(root,createNotebook('Locked research'),await createAccess('Owner','synthetic language password'));await rememberLocation(file,root);
+ await create(root,createNotebook('Locked research'),file,{username:'Owner',password:'synthetic language password'});await rememberLocation(file,root);
  const before=await workspaceManifest(root),app=await startServer({root,port:0,preferencesFile:file});t.after(()=>app.close());
  const c=await client(app);
  assert.equal((await fetch(app.origin+'/api/language')).status,401);

@@ -10,18 +10,19 @@ import {RecordViews} from '../src/record-views.js';
 import {viewQuery,validViewQuery,viewScopeIssue,viewScopeLabel} from '../src/web/record-view-model.js';
 import {queryRecords} from '../src/web/record-query.js';
 import {queryFixture} from './record-query-fixture.js';
-import {createAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {clearVault} from '../src/encryption.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
-import {testServer} from './device-fixture.js';
+import {testServer,TestDeviceStore} from './device-fixture.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
 
 const baseQuery=()=>viewQuery({filter:'all',recordBrowse:{tags:'sound,summer',sort:'date-asc',from:'2026-06-01',to:'2026-06-30'}});
 const view=(name='Summer takes',query=baseQuery())=>({id:randomUUID(),name,query});
 const command=(book,value,expectedRevision=null)=>({workspaceId:book.id,view:value,expectedRevision});
 async function fixture(t){
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-views-')),book=queryFixture(),ws=new Workspace(root);await ws.create(book);
- t.after(()=>rm(root,{recursive:true,force:true}));return {root,book,ws,store:new RecordViews(ws)};
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-views-')),book=queryFixture(),{workspace:ws,vault}=await encryptedFixture(parent,book);
+ t.after(async()=>{await clearVault(vault);await rm(parent,{recursive:true,force:true});});return {root:ws.root,book,ws,store:new RecordViews(ws)};
 }
 
 test('saved queries retain declared filters, reject malformed scopes and ranges, and query current records',()=>{
@@ -65,21 +66,22 @@ test('missing scope is retained without broadening; malformed catalogs are prese
  const listed=(await store.list({workspaceId:book.id})).views[0];assert.deepEqual(listed.query,query);
  assert.match(viewScopeIssue((await ws.read()).book,listed.query),/no longer/);
  await store.save(command(book,{...original,name:'Archived scope'},saved.revision));
- const file=store.file(),raw=JSON.stringify({formatVersion:999,workspaceId:book.id,views:[]});await ws.writeFile(file,raw);
+ // Saved views live in the workspace catalogue; plant the unreadable catalog there.
+ const file='.observanda/record-views.json',raw=JSON.stringify({formatVersion:999,workspaceId:book.id,views:[]});await ws.withLock(()=>ws.writeMetadata(file,raw));
  await assert.rejects(store.list({workspaceId:book.id}),{code:'RECORD_VIEW_FORMAT'});
  await assert.rejects(store.save(command(book,view())),{code:'RECORD_VIEW_FORMAT'});
- assert.equal(await ws.readFile(file,'utf8'),raw);
+ assert.equal(await ws.readMetadata(file,65536),raw);
 });
 
 test('encrypted saved views survive verified copies and never enter publication output',async()=>{
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-view-copy-')),root=path.join(parent,'source'),book=queryFixture(),access=await createAccess('','synthetic view password'),vault=takeCreatedVault(access);
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-view-copy-')),root=path.join(parent,'source'),book=queryFixture(),deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('','synthetic view password',deviceStore),vault=takeCreatedVault(access);
  let restoredVault;
  try{
   await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),store=new RecordViews(ws),value=view('PRIVATE VIEW SENTINEL',{...baseQuery(),search:'PRIVATE SEARCH SENTINEL'});
   const etag=(await ws.read()).etag,saved=(await store.save(command(book,value))).view;
   await assertPrivateCatalogue(root,value.name,value.query.search);
   const destination=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,destination,{vault}),{vault});
-  restoredVault=await verifyAccess(await readAccess(destination),'','synthetic view password');
+  restoredVault=await verifyAccess(await readAccess(destination),'','synthetic view password',{deviceStore});
   const restored=new Workspace(destination,restoredVault);
   assert.deepEqual((await new RecordViews(restored).list({workspaceId:book.id})).views,[saved]);
   assert.equal((await ws.read()).etag,etag);assert.equal((await restored.read()).etag,etag);
@@ -89,8 +91,8 @@ test('encrypted saved views survive verified copies and never enter publication 
 });
 
 test('saved-view endpoints use authenticated workspace context, reject conflicts, and stop while locked',async t=>{
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-view-service-')),root=path.join(parent,'source'),book=queryFixture(),password='synthetic service password',access=await createAccess('',password),vault=takeCreatedVault(access);
- await initializeLocation(root,book,access,vault);const app=await testServer({root,port:0,headless:true});t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-view-service-')),root=path.join(parent,'source'),book=queryFixture(),password='synthetic service password',deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);
+ await initializeLocation(root,book,access,vault);const app=await testServer({root,port:0,headless:true,deviceStore});t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  const post=(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data)});

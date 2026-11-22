@@ -4,15 +4,15 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {Client} from 'pg';
-import {testServer as startServer} from './device-fixture.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {testServer as startServer,TestDeviceStore} from './device-fixture.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
 import {Workspace} from '../src/storage.js';
 test('authenticated readiness is redacted and shutdown drains an in-flight database save before clearing keys',async t=>{
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-drain-')),root=path.join(parent,'workspace'),password='synthetic lifecycle password',a=await createAccess('',password),vault=takeCreatedVault(a);
- await initializeLocation(root,sampleNotebook(),a,vault);const ws=new Workspace(root,vault),app=await startServer({root,port:0});
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-drain-')),root=path.join(parent,'workspace'),password='synthetic lifecycle password',deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')}),a=await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(a);
+ await initializeLocation(root,sampleNotebook(),a,vault);const ws=new Workspace(root,vault),app=await startServer({root,port:0,deviceStore});
  t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  assert.equal(app.server.address().address,'127.0.0.1');assert.equal((await fetch(app.origin+'/api/health')).status,401);
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
@@ -30,5 +30,5 @@ test('authenticated readiness is redacted and shutdown drains an in-flight datab
   await new Promise(resolve=>setTimeout(resolve,80));assert.equal(closed,false);release();
   assert.equal((await saving).status,200);await closing;assert.equal((await ws.read()).book.description,'Saved during shutdown');
  }finally{release();Client.prototype.query=query;}
- const restarted=await startServer({root,port:0});await restarted.close();
+ const restarted=await startServer({root,port:0,deviceStore});await restarted.close();
 });

@@ -4,8 +4,8 @@ import {mkdtemp,mkdir,readdir,readFile,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createFolderPicker,detectFolderPicker,dialogInvocation,dialogResult,initialFolder,runDialogProcess} from '../src/native-folder-picker.js';
-import {startServer} from '../src/server.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {testServer,TestDeviceStore} from './device-fixture.js';
+import {createAccess,createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {createNotebook} from '../src/model.js';
 import {copyPlan,copyWorkspace,encryptedCopy,initializeLocation,workspaceManifest} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -69,12 +69,20 @@ test('native child lifetime is bounded and aborted requests stop it',async()=>{
  assert.equal((await runDialogProcess(process.execPath,['-e','process.stdout.write("selected path")'])).stdout,'selected path');
 });
 
+async function create(root,book,deviceStore,{username='',password=''}={}){
+ const access=await createWorkspaceAccess(username,password,deviceStore),vault=takeCreatedVault(access);
+ try{await initializeLocation(root,book,access,vault);}finally{clearVault(vault);}
+}
 async function service(t,{protected:secure=false,picker}={}){
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-picker-service-')),root=path.join(parent,'workspace');await initializeLocation(root,createNotebook('Picker test'),await createAccess(secure?'Owner':'',secure?'synthetic picker password':''));
- const app=await startServer({root,port:0,folderPicker:picker,preferencesFile:path.join(parent,'preferences.json')});t.after(()=>app.close());
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-picker-service-')),root=path.join(parent,'workspace'),deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')});
+ // An unprotected workspace opens with this device; a protected one needs its password.
+ await create(root,createNotebook('Picker test'),deviceStore,secure?{username:'Owner',password:'synthetic picker password'}:{});
+ const app=await testServer({root,port:0,folderPicker:picker,preferencesFile:path.join(parent,'preferences.json'),deviceStore});t.after(()=>app.close());
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
- return {...app,parent,root,headers,post:(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data)})};
+ const post=(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data)});
+ if(!secure)assert.equal((await post('/api/access/unlock',{})).status,200);
+ return {...app,parent,root,headers,deviceStore,post};
 }
 
 test('native selection is authenticated and same-origin, returns only a path, and never creates or changes workspace files',async t=>{
@@ -95,7 +103,7 @@ test('disconnecting a browser closes its pending native dialog',async t=>{
 test('switching workspace closes a native selection that belongs to the previous workspace',async t=>{
  let started,stopped;const ready=new Promise(resolve=>started=resolve),aborted=new Promise(resolve=>stopped=resolve);
  const picker={capabilities:async()=>({mode:'native',backend:'windows'}),choose:({signal})=>new Promise((resolve,reject)=>{started();signal.addEventListener('abort',()=>{stopped();reject(new Error('aborted'));},{once:true});})};
- const app=await service(t,{picker}),other=path.join(app.parent,'other');await initializeLocation(other,createNotebook('Other work'),await createAccess());
+ const app=await service(t,{picker}),other=path.join(app.parent,'other');await create(other,createNotebook('Other work'),app.deviceStore);
  const picking=app.post('/api/storage/pick',{});await ready;
  const opened=await app.post('/api/storage/open',{path:other});assert.equal(opened.status,200);await aborted;assert.notEqual((await picking).status,200);
  assert.equal((await opened.json()).root,other);

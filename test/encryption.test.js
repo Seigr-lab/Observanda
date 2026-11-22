@@ -5,10 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {Workspace,atomicWrite,serialize,workspaceFile} from '../src/storage.js';
-import {createAccess,takeCreatedVault,readAccess,verifyAccess,changeAccess} from '../src/access.js';
+import {createAccess,createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess,changeAccess} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {seal,unseal,clearVault,encrypted} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,openCatalogue} from '../src/research-catalogue.js';
+// A device store outside the workspace, so it never appears among workspace files.
+const testDevice=async name=>new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-device-'+name+'-')),'device.key')});
 async function revisions(ws){const ids=[];for await(const {id} of ws.revisionSnapshots())ids.push({id});return ids;}
 async function assertEncryptedFile(root,relative){
  if(![CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(relative)){assert.ok(encrypted(await readFile(path.join(root,relative))),relative);return;}
@@ -70,7 +73,7 @@ test('encrypted conversion preserves source bytes and encrypts every copied rese
 test('original and prepared image/audio/video files are encrypted, recoverable, and publishable only after unlock',async()=>{
  const {mediaFixtures}=await import('./media-fixtures.js'),{MediaStore}=await import('../src/media.js');
  const fixtures=await mediaFixtures(await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-media-fixtures-')));
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-media-')),access=await createAccess('','media synthetic password'),vault=takeCreatedVault(access),ws=new Workspace(root,vault);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-media-')),access=await createWorkspaceAccess('','media synthetic password',await testDevice('media')),vault=takeCreatedVault(access),ws=new Workspace(root,vault);
  await ws.create(sampleNotebook());const media=new MediaStore(root,vault);
  for(const kind of ['image','audio','video']){
   const asset=await media.import(fixtures[kind].bytes,kind),dir=path.join(root,'.observanda','media',asset.id);
@@ -83,7 +86,7 @@ test('original and prepared image/audio/video files are encrypted, recoverable, 
 
 test('laboratory history and publishing configuration use the same encrypted boundary',async()=>{
  const {Laboratory}=await import('../src/laboratory.js'),{Publisher,defaultPublishing}=await import('../src/publishing.js');
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-lab-')),access=await createAccess('','laboratory synthetic password'),vault=takeCreatedVault(access),ws=new Workspace(root,vault);await ws.create(sampleNotebook());
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-lab-')),access=await createWorkspaceAccess('','laboratory synthetic password',await testDevice('lab')),vault=takeCreatedVault(access),ws=new Workspace(root,vault);await ws.create(sampleNotebook());
  const lab=new Laboratory(root,vault);let current=await lab.read();
  current=await lab.change({etag:current.etag,action:'create-sample',sample:{code:'Private sample sentinel',material:'Synthetic',source:'Private source sentinel',collectedOn:'2026-09-25',receivedOn:'2026-09-26'}});
  await lab.change({etag:current.etag,action:'create-sample',sample:{code:'Second sample',material:'Synthetic',source:'',collectedOn:'2026-09-25',receivedOn:'2026-09-26'}});

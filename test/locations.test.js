@@ -5,15 +5,25 @@ import os from 'node:os';
 import {mkdtemp,mkdir,readFile,readdir,writeFile,symlink} from 'node:fs/promises';
 import {Workspace,serialize} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {createAccess,readAccess,verifyAccess} from '../src/access.js';
+import {createAccess,createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {clearVault} from '../src/encryption.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {browseFolders,createFolder,initializeLocation,inspectLocation,probeLocation,copyPlan,copyWorkspace,workspaceManifest,readPreference,rememberLocation} from '../src/locations.js';
+// Current access with a device store in its own temporary folder, outside the folders a test inspects.
+async function currentAccess(){
+  const deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-location-device-')),'device.key')}),access=await createWorkspaceAccess('','',deviceStore);
+  return {access,vault:takeCreatedVault(access)};
+}
 
 test('storage checks leave no probes, reject occupied destinations and never invent missing network parents',async()=>{
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-location-')),root=path.join(parent,'new');
   assert.equal((await probeLocation(root)).kind,'new');assert.deepEqual(await readdir(parent),[]);
-  await assert.rejects(initializeLocation(path.join(parent,'missing','workspace'),sampleNotebook(),await createAccess()),{code:'STORAGE_PATH'});
-  await writeFile(path.join(parent,'unrelated.txt'),'keep');
-  await assert.rejects(initializeLocation(parent,sampleNotebook(),await createAccess()),{code:'EXISTS'});
+  const missing=await currentAccess(),occupied=await currentAccess();
+  try{
+   await assert.rejects(initializeLocation(path.join(parent,'missing','workspace'),sampleNotebook(),missing.access,missing.vault),{code:'STORAGE_PATH'});
+   await writeFile(path.join(parent,'unrelated.txt'),'keep');
+   await assert.rejects(initializeLocation(parent,sampleNotebook(),occupied.access,occupied.vault),{code:'EXISTS'});
+  }finally{clearVault(missing.vault);clearVault(occupied.vault);}
   assert.equal(await readFile(path.join(parent,'unrelated.txt'),'utf8'),'keep');
 });
 
@@ -37,14 +47,17 @@ test('verified workspace copies include private originals and history byte for b
 
 test('copy review rejects changed sources, occupied destinations and linked private files',async()=>{
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-copy-stale-')),source=path.join(parent,'source'),destination=path.join(parent,'copy');
-  await initializeLocation(source,sampleNotebook(),await createAccess());
-  const plan=await copyPlan(source,destination);await writeFile(path.join(source,'.observanda','extra'),'changed');
-  await assert.rejects(copyWorkspace(plan),{code:'CONFLICT'});assert.deepEqual(await readdir(parent),['source']);
-  const next=await copyPlan(source,destination);await mkdir(destination);await writeFile(path.join(destination,'unrelated'),'keep');
-  await assert.rejects(copyWorkspace(next),{code:'EXISTS'});assert.equal(await readFile(path.join(destination,'unrelated'),'utf8'),'keep');
+  const {access,vault}=await currentAccess();
+  try{
+  await initializeLocation(source,sampleNotebook(),access,vault);
+  const plan=await copyPlan(source,destination,{vault});await writeFile(path.join(source,'.observanda','extra'),'changed');
+  await assert.rejects(copyWorkspace(plan,{vault}),{code:'CONFLICT'});assert.deepEqual(await readdir(parent),['source']);
+  const next=await copyPlan(source,destination,{vault});await mkdir(destination);await writeFile(path.join(destination,'unrelated'),'keep');
+  await assert.rejects(copyWorkspace(next,{vault}),{code:'EXISTS'});assert.equal(await readFile(path.join(destination,'unrelated'),'utf8'),'keep');
   const external=path.join(parent,'external');await mkdir(external);await writeFile(path.join(external,'secret'),'private');
   await symlink(external,path.join(source,'.observanda','linked'),process.platform==='win32'?'junction':'dir');
-  await assert.rejects(copyPlan(source,path.join(parent,'linked-copy')),{code:'UNSAFE'});
+  await assert.rejects(copyPlan(source,path.join(parent,'linked-copy'),{vault}),{code:'UNSAFE'});
+  }finally{clearVault(vault);}
 });
 
 test('password settings use salted verifiers and corrupted access settings fail closed',async()=>{
