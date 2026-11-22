@@ -48,7 +48,7 @@ export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,a
   // A placement from the project's settings refreshes only the directory, not
   // this page. Read the details again when the shown project's folder changed.
   directoryChanged(){const id=state.projectOwner?.projectId;if(!id)return;const entry=current(id);if(!host(entry)||!followRoot(entry))return;if(entry.loading)return;void load(entry);},
-  choiceAction:node=>placement.choiceAction(node),input:element=>placement.input(element),
+  input:element=>placement.input(element),
   async action(node){
    if(await maintenance.action(node))return true;
    if(await placement.action(node))return true;

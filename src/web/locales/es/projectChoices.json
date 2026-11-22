@@ -1,5 +1,4 @@
 {
-  "parents": "Buscar proyectos",
   "templates": "Buscar plantillas guardadas",
   "loading": "Cargando opciones…",
   "count": "{count} de {total}",

@@ -70,8 +70,8 @@ export function projectSettings(services){
  }
  function paintChoices(kind){
   const target=form();if(!target||!draft)return;capture();
-  const select=target.querySelector(kind==='parents'?'[name="parentId"]':'[data-project-template-source]');
-  if(select)select.innerHTML=kind==='parents'?parentOptions(select.value):sourceOptions();
+  if(kind!=='templates')return;const select=target.querySelector('[data-project-template-source]');
+  if(select)select.innerHTML=sourceOptions();
   directoryChoices.paint(target,kind);
  }
  function summary(){
@@ -122,7 +122,7 @@ export function projectSettings(services){
   showDialog('<form id="'+(template?'project-template-form':'structure-project-form')+'" data-no-draft class="project-config-form '+(template?'project-template-form':'')+'" '+(busy?'data-busy="true" aria-busy="true"':'')+'><h2 id="dialog-title">'+(template?msg('labBookTemplate'):current?msg('editProject'):msg('newProject'))+'</h2>'+
    '<div class="project-config-scroll"><fieldset class="project-config-fields" '+(busy?'disabled':'')+'>'+(template?templateFields():projectFields())+'</fieldset></div>'+
    (busy&&creation?'<p role="status">'+esc(projectText('creating'))+'</p>':'')+'<p class="module-error" role="alert" tabindex="-1" data-project-error '+(error?'':'hidden')+'>'+esc(error)+'</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog" '+(busy?'disabled':'')+'>'+text('cancel')+'</button><button class="button primary" '+(busy||native()&&template&&configuration.busy()?'disabled':'')+'>'+ (template?msg('saveTemplate'):creation?projectText('create'):msg('saveProject'))+'</button></div></form>');
-  if(optionalOpen&&form().querySelector('[data-project-optional]'))form().querySelector('[data-project-optional]').open=true;form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'parents');directoryChoices.paint(form(),'templates');
+  if(optionalOpen&&form().querySelector('[data-project-optional]'))form().querySelector('[data-project-optional]').open=true;form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'templates');
   if(focus)form().querySelector(focus)?.focus({preventScroll:true});
  }
  async function open(id,parentId,editingTemplate=false,details=null){
@@ -137,7 +137,7 @@ export function projectSettings(services){
   draft.tools??=[];draft.kind??='Project';
   if(editingTemplate&&!draft.labBookTemplate)draft.labBookTemplate=native()?{name:''}:{name:'',configuration:emptyConfiguration()};
   base=structuredClone(draft);etag=state.etag;type=projectTypeChoice(draft.kind,state.dashboardSettings);
-  source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;selected=null;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id,{parents:false});
+  source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;selected=null;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id);
   if(native()&&!editingTemplate&&current?.labBookTemplate)void loadSavedTypes(current.id);
   if(native()&&editingTemplate){
    const selection=draft,initialName=draft.labBookTemplate.name;

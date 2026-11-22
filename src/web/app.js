@@ -1022,7 +1022,6 @@ async function rawAction(button) {
   if(name?.startsWith('project-creation-'))return structureUI.projectCreation.action(button);
   if(await recordDestination.action(button))return;
   if(await recordCreation.action(button)||await configurationRecord?.action(button))return;
-  if(await structureUI.projectStorage.choiceAction(button))return;
   if(await bookStorage.choiceAction(button))return;
   if(name?.startsWith('lab-book-storage-'))return bookStorage.action(button);
   if(name==='lab-book-access-lock')return bookAccessSettings.action(button);

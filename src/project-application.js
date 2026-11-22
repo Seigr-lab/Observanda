@@ -82,7 +82,7 @@ import {AppError} from './errors.js';
 
 export function projectRequest(route,method){
  const rootTransfer=recordOwnerTransferRequest(route,method);if(rootTransfer)return rootTransfer;
- if(['/api/projects/move/targets','/api/projects/move/target/open','/api/projects/move/target/choices','/api/projects/move/target/unlock','/api/projects/move/target/release','/api/projects/move/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
+ if(['/api/projects/move/targets','/api/projects/move/target/open','/api/projects/move/target/unlock','/api/projects/move/target/release','/api/projects/move/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  if(['/api/projects/workspace-owners','/api/projects/workspace-owner-records'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  if(['/api/projects/timeline-collection/query','/api/projects/timeline-collection/choices'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:131072};
  if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules','/api/projects/dashboard-collection/calendar','/api/projects/dashboard-collection/samples'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};

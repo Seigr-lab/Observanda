@@ -1,5 +1,4 @@
 {
-  "parents": "Search projects",
   "templates": "Search saved templates",
   "loading": "Loading choices…",
   "count": "{count} of {total}",

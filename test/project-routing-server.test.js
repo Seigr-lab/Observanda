@@ -283,7 +283,7 @@ test('project choice search stays read-only while the workspace writer is held a
  let release,entered;const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),holding=f.workspace.withLock(async()=>{entered();await gate;});await ready;
  ProjectStorage.prototype.openCatalogue=async()=>{throw Error('Choice search opened a database');};
  try{
-  const data={kind:'parents',exclude:null,query:'',offset:0,limit:1,revision:null},first=await result(await f.call('/api/projects/choices',data));assert.equal(first.total,4);assert.equal(first.projects.length,1);
+  const data={kind:'record-parents',exclude:null,query:'',offset:0,limit:1,revision:null},first=await result(await f.call('/api/projects/choices',data));assert.equal(first.total,4);assert.equal(first.projects.length,1);
   const next=await result(await f.call('/api/projects/choices',{...data,offset:1,revision:first.revision}));assert.notEqual(next.projects[0].projectId,first.projects[0].projectId);
   const all=await result(await f.call('/api/projects/choices',{...data,limit:50}));assert.deepEqual(new Set(all.projects.map(p=>p.projectId)),new Set([f.a.id,f.b.id,f.locked.id,(await f.workspace.outline()).metadata.projects[0].id]));
   await result(await f.call('/api/projects/choices',{...data,revision:'outdated'}),409);await result(await f.call('/api/projects/choices',{...data,limit:51}),422);

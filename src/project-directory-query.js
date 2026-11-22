@@ -29,13 +29,13 @@ async function* pathOrdered(view,legacy,{locale,query,normalize,signal,check=()=
   for(const entry of legacy)if((entry.parentId??null)===parentId)found.push(entry);
   return found.sort((a,b)=>compare.compare(title(a),title(b))||(a.projectId<b.projectId?-1:a.projectId>b.projectId?1:0));
  };
- const root={prefix:'',matched:false,excluded:false,present:false};
+ const root={prefix:'',matched:false,present:false};
  const stack=[{items:await children(null),position:0,inherited:root}];
  while(stack.length){
   const frame=stack.at(-1);if(frame.position===frame.items.length){stack.pop();continue;}
   const entry=frame.items[frame.position++],inherited=frame.inherited,label=normalize(title(entry));
   yield {entry,inherited};
-  const summary={prefix:(label+(label.length<width&&inherited.present?' '+inherited.prefix:'')).slice(0,width),matched:!!query&&label.includes(query)||inherited.matched||!!query&&inherited.present&&((width?label.slice(-width):'')+' '+inherited.prefix).includes(query),excluded:false,present:true};
+  const summary={prefix:(label+(label.length<width&&inherited.present?' '+inherited.prefix:'')).slice(0,width),matched:!!query&&label.includes(query)||inherited.matched||!!query&&inherited.present&&((width?label.slice(-width):'')+' '+inherited.prefix).includes(query),present:true};
   stack.push({items:await children(entry.projectId),position:0,inherited:summary});
  }
 }
@@ -46,14 +46,14 @@ async function* ordered(view,index,legacy){
  }while(position<legacy.length)yield legacy[position++];
 }
 export async function projectDirectoryChoices(registry,input,{signal,withWork=withProjectChoiceWork}={}){
- if(!input||!['exclude,kind,limit,offset,query,revision','exclude,kind,limit,locale,offset,query,revision'].includes(Object.keys(input).sort().join())||input.locale!==undefined&&!validLanguage(input.locale)||!['parents','templates','book-parents','record-parents'].includes(input.kind)||input.exclude!==null&&!researchId(input.exclude)||typeof input.query!=='string'||input.query.length>160||!Number.isSafeInteger(input.offset)||input.offset<0||!Number.isSafeInteger(input.limit)||input.limit<1||input.limit>50||input.revision!==null&&typeof input.revision!=='string')throw new AppError('INVALID');
+ if(!input||!['exclude,kind,limit,offset,query,revision','exclude,kind,limit,locale,offset,query,revision'].includes(Object.keys(input).sort().join())||input.locale!==undefined&&!validLanguage(input.locale)||!['templates','book-parents','record-parents'].includes(input.kind)||input.exclude!==null&&!researchId(input.exclude)||typeof input.query!=='string'||input.query.length>160||!Number.isSafeInteger(input.offset)||input.offset<0||!Number.isSafeInteger(input.limit)||input.limit<1||input.limit>50||input.revision!==null&&typeof input.revision!=='string')throw new AppError('INVALID');
  return registry.inspect(async view=>{
   signal?.throwIfAborted();const revision=input.kind==='book-parents'?view.revision:signature(view);if(input.revision!==null&&input.revision!==revision)throw new AppError('CONFLICT');
   const index=input.kind==='templates'?'template':'label',query=normalize(input.query.trim()),legacy=(view.legacy??[]).filter(entry=>index!=='template'||entry.summary?.templateName).sort((a,b)=>key(a,index)<key(b,index)?-1:1),projects=[];
   const present=async entry=>({projectId:entry.projectId,parentId:entry.parentId,summary:entry.summary??null,...(input.kind==='record-parents'?{legacy:entry.legacy===true,ancestors:(await view.ancestors(entry.projectId)).slice(1).reverse().map(parent=>parent.summary?.title??parent.projectId)}:{})});
   const byPath=input.kind==='record-parents',locale=input.locale??'en';
   if(!byPath&&!query&&!input.exclude&&!legacy.length){const page=await view.page({index,offset:input.offset,limit:input.limit,signal});for(const row of page.items)projects.push(await present(row.entry));return {revision,total:page.total,projects};}
-  const needsAncestry=input.kind==='parents'&&input.exclude||input.kind==='record-parents'&&query;
+  const needsAncestry=input.kind==='record-parents'&&!!query;
   const source=(check=()=>{})=>queryCallbackSource((emit,sourceSignal)=>{
    if(byPath)return (async()=>{
     let position=0;
@@ -65,12 +65,12 @@ export async function projectDirectoryChoices(registry,input,{signal,withWork=wi
     }
    })();
    const produce=async work=>{
-   const ancestors=projectChoiceAncestry(view,work,{query:input.kind==='record-parents'?query:'',exclude:input.kind==='parents'?input.exclude:null,normalize,signal:sourceSignal,check});
+   const ancestors=projectChoiceAncestry(view,work,{query,normalize,signal:sourceSignal,check});
    for await(const entry of ordered(view,index,legacy)){
-    check();sourceSignal.throwIfAborted();if(entry.projectId===input.exclude)continue;let excluded=false;
+    check();sourceSignal.throwIfAborted();if(entry.projectId===input.exclude)continue;
     const text=normalize([entry.summary?.title,label(entry,index),entry.projectId].join(' '));let matched=!query||text.includes(query);
-    if(needsAncestry){const inherited=await ancestors(entry.parentId);excluded=inherited.excluded;if(input.kind==='record-parents')matched||=inherited.matched||inherited.present&&(text.slice(-Math.max(0,query.length-1))+' '+inherited.prefix).includes(query);}
-    if(!excluded&&matched)await emit({id:entry.projectId,title:key(entry,index),entry});
+    if(needsAncestry){const inherited=await ancestors(entry.parentId);matched||=inherited.matched||inherited.present&&(text.slice(-Math.max(0,query.length-1))+' '+inherited.prefix).includes(query);}
+    if(matched)await emit({id:entry.projectId,title:key(entry,index),entry});
    }
    };return needsAncestry?withWork(registry.workspace,produce,{signal:sourceSignal}):produce(null);
   },{signal,check});

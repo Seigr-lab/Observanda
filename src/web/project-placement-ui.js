@@ -1,47 +1,39 @@
 import {projectWorkspaceTargetUI} from './project-workspace-target-ui.js';
-import {projectDirectoryChoices} from './project-directory-choices.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectStorage');
 // Placement selects an owning parent. The server relocates the whole tree.
 export function projectPlacementUI({state,api,esc,field,accessProject,projectDirectory,rootBook,finished,changed=()=>{}}){
- const entries=new Map();let active=null;
+ const entries=new Map();
  const key=id=>JSON.stringify([state.storage?.contextId,id]);
  const current=id=>entries.get(key(id));
  const host=entry=>entry?.context===state.storage?.contextId?document.querySelector('[data-project-placement="'+entry.id+'"]'):null;
- const choices=projectDirectoryChoices({state,api:(url,data,options)=>active?.target?api('/api/projects/move/target/choices',{...data,target:active.target.id,exclude:null},options):api(url,data,options),esc,changed:()=>paintChoices()});
- const targets=projectWorkspaceTargetUI({state,api,esc,field,current:entry=>current(entry.id)===entry,changed:paint,ready:entry=>{if(!entry.started){entry.parentId=entry.targetPath?'':'choose';entry.requestId=crypto.randomUUID();}choices.reset();choices.start(entry.id,{parents:false,templates:false});}});
+ const targets=projectWorkspaceTargetUI({state,api,esc,field,current:entry=>current(entry.id)===entry,changed:paint,ready:entry=>{if(!entry.started){entry.parentId=entry.targetPath?'':'choose';entry.requestId=crypto.randomUUID();}}});
  // Workspace > Project > Lab book: a project moves to a workspace's top level, never inside another project.
  function options(entry){
   return '<option value="choose" disabled>'+esc(text('chooseParent'))+'</option>'+(entry.targetPath||entry.expectedParentId!==null?'<option value="">'+esc(entry.target?.title??rootBook().title)+'</option>':'');
  }
- function paintChoices(){
-  const entry=active,node=host(entry);if(!node||!entry.open)return;
-  const select=node.querySelector('[name=parentId]');if(!select)return;
-  select.innerHTML=options(entry);select.value=entry.parentId;choices.paint(node,'parents');
- }
  function paint(entry){
   const node=host(entry);if(!node)return;
   node.innerHTML=entry.open?'<form id="project-placement-form" data-no-draft><h3>'+esc(text('move'))+'</h3><p>'+esc(text('moveTree'))+'</p>'+targets.view(entry)+'<fieldset '+(entry.busy||entry.targetBusy||entry.targetPath&&!entry.target?'disabled':'')+'>'+field(text('inside'),'<select name="parentId" '+(entry.started?'disabled':'')+'>'+options(entry)+'</select>')+'<button type="submit" class="button primary" '+(entry.parentId==='choose'?'disabled':'')+'>'+esc(text(entry.started?'resume':'move'))+'</button></fieldset><button type="button" class="button" data-action="project-storage-placement-cancel" '+(entry.busy?'disabled':'')+'>'+esc(text('cancel'))+'</button>'+(entry.busy?'<p role="status">'+esc(text('movingTree'))+'</p>':'')+(entry.error?'<p role="alert">'+esc(entry.error)+'</p>':'')+'</form>':entry.complete?'<p role="status">'+esc(text('movedTree'))+'</p>':'';
-  node.hidden=!entry.open&&!entry.complete;if(entry.open){node.querySelector('[name=parentId]').value=entry.parentId;choices.paint(node,'parents');}
+  node.hidden=!entry.open&&!entry.complete;if(entry.open)node.querySelector('[name=parentId]').value=entry.parentId;
  }
  return {
   busy:id=>!!current(id)?.busy,
   view:id=>'<section class="panel" data-project-placement="'+id+'" hidden></section>',
-  bind(id){const entry=current(id);if(entry){active=entry;paint(entry);}},
+  bind(id){const entry=current(id);if(entry)paint(entry);},
   open(id,parentId){
    let entry=current(id);if(entry?.busy)return;
-   entry={id,context:state.storage?.contextId,expectedParentId:parentId,parentId:'choose',open:true,busy:false,error:'',complete:false,requestId:crypto.randomUUID(),targetPath:'',target:null,workspaces:[]};entries.set(key(id),entry);active=entry;choices.reset();paint(entry);void targets.load(entry);choices.start(id,{parents:false,templates:false});host(entry)?.querySelector('[name=parentId]')?.focus();
+   entry={id,context:state.storage?.contextId,expectedParentId:parentId,parentId:'choose',open:true,busy:false,error:'',complete:false,requestId:crypto.randomUUID(),targetPath:'',target:null,workspaces:[]};entries.set(key(id),entry);paint(entry);void targets.load(entry);host(entry)?.querySelector('[name=parentId]')?.focus();
   },
   input(element){
    const node=element.closest('[data-project-placement]'),entry=node&&current(node.dataset.projectPlacement);if(!entry||entry.busy||entry.started)return false;
-   active=entry;if(element.name==='targetWorkspace'){entry.parentId='choose';choices.reset();void targets.select(entry,element.value);return true;}if(choices.input(element))return true;
+   if(element.name==='targetWorkspace'){entry.parentId='choose';void targets.select(entry,element.value);return true;}
    if(element.name!=='parentId')return false;entry.parentId=element.value;entry.requestId=crypto.randomUUID();entry.error='';node.querySelector('[type=submit]').disabled=entry.parentId==='choose';return true;
   },
-  async choiceAction(node){if(!node.closest?.('[data-project-placement]'))return false;return choices.action(node);},
   async action(node){
    if(node.dataset.action==='project-storage-target-unlock'){const entry=current(state.projectOwner?.projectId);if(entry)await targets.unlock(entry,node.closest('form'));return true;}
    if(node.dataset.action!=='project-storage-placement-cancel')return false;
-   const entry=current(state.projectOwner?.projectId);if(entry&&!entry.busy){entry.open=false;choices.reset();void targets.release(entry);paint(entry);}return true;
+   const entry=current(state.projectOwner?.projectId);if(entry&&!entry.busy){entry.open=false;void targets.release(entry);paint(entry);}return true;
   },
   async submit(form){
    if(form.id!=='project-placement-form')return false;

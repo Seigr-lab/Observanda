@@ -7,7 +7,6 @@ import {ProjectSessionOwner} from './project-session-owner.js';
 import {ProjectStorage} from './project-storage.js';
 import {readProjectWorkspaceMove} from './project-workspace-move-state.js';
 import {locateWorkspaceProjectMove,pendingWorkspaceProjectMoves} from './project-workspace-move-location.js';
-import {projectDirectoryChoices} from './project-directory-query.js';
 import {readAccess} from './access.js';
 import {workspaceRename} from './workspace-rename-state.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -26,7 +25,6 @@ export class ProjectWorkspaceMoveApplication{
   if(operation==='move/target/release'){if(Object.keys(data??{}).join()!=='target')throw new AppError('INVALID');return targets.release(client,data.target);}
   const {target,...input}=data??{};
   return targets.use(client,target,async(entry,check)=>{
-   if(operation==='move/target/choices')return projectDirectoryChoices(entry.registry,input);
    if(operation!=='move/target/unlock'||!researchId(input.projectId)||Object.keys(input).some(key=>!['projectId','username','password','recovery'].includes(key)))throw new AppError('INVALID');
    const {projectId,...credentials}=input;return entry.application.unlock(client,projectId,credentials,{check});
   },options);

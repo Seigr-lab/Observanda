@@ -30,12 +30,11 @@ test('filtered project choice continuations seek cached results and hydrate only
   t.diagnostic(JSON.stringify({owners:10002,firstParentProofs:0,continuedCandidateReads:0,pageAncestryHydrations:25}));
  }finally{await clearVault(f.workspace.vault);}
 });
-test('streamed ancestor search preserves cross-label matches and excludes the entire selected branch',async t=>{
+test('streamed ancestor search preserves cross-label matches',async t=>{
  t.mock.method(pinnedQueryResults,'open',queryCacheMemoryFiles);const f=fixture(0),parent=row('Parent',f.first.projectId),child=row('Child',parent.projectId),entries=[f.first,parent,child],byId=new Map(entries.map(row=>[row.projectId,row]));
  f.view.entries=async function*({index='label',prefix=''}={}){for(const entry of entries){const key=(index==='parent'?(entry.parentId??'root')+':':'')+ownerDirectorySortKey(entry.summary.title,entry.projectId);if(key.startsWith(prefix))yield {entry,key};}};f.view.get=async id=>byId.has(id)?{state:'active',entry:byId.get(id)}:null;f.view.ancestors=async id=>{const rows=[];for(let entry=byId.get(id);entry;entry=byId.get(entry.parentId))rows.push(entry);return rows;};
  try{
   const matches=await projectDirectoryChoices(f.registry,request({query:'parent ecologie'}));assert.deepEqual(matches.projects.map(row=>row.projectId),[child.projectId]);
-  const parents=await projectDirectoryChoices(f.registry,request({kind:'parents',query:'',exclude:parent.projectId}));assert.deepEqual(parents.projects.map(row=>row.projectId),[f.first.projectId]);
  }finally{await clearVault(f.workspace.vault);}
 });
 test('bounded ancestry memoization detects deep cycles, missing parents and cancellation',async()=>{
