@@ -18,7 +18,7 @@ function fixture(count){
  const store={async head(){return snapshotId;},async snapshot(){return snapshot;},encode:(_kind,_id,value)=>Buffer.from(JSON.stringify(value)),decode:(_kind,_id,value)=>JSON.parse(value),db:{async get(_sql,key){calls.nodes++;return {payload:state.get(key)};}},async *queryDocuments(rows){for await(const row of rows){calls.summaries++;yield documents.get(row.id);}},members(){assert.fail('A date page must not scan membership');},searchMembers(){assert.fail('A date page must not scan candidates');}};
  const rows=[];for(let i=0;i<count;i++){
   const id=randomUUID(),notebookId=book.notebooks[0].id,occurredOn=i%9?'2026-'+String(1+i%12).padStart(2,'0')+'-01':{kind:'unknown'},type=i%3?'note':'experiment',template=i%7?null:{profileId:'arts-creative',id:randomUUID(),label:'Template'};
-  const row={id,revision:digest('record'+i),notebookId,type,occurredOn,template,position:i,sections:[],runOf:[],bytes:1};members.push(row);state.set('record-member:'+digest(serialize(row)),Buffer.from(serialize(row)));
+  const row={id,revision:digest('record'+i),notebookId,type,occurredOn,template,share:false,updatedAt:'2026-01-01T00:00:00.000Z',position:i,sections:[],runOf:[],bytes:1};members.push(row);state.set('record-member:'+digest(serialize(row)),Buffer.from(serialize(row)));
   const value={id,notebookId,type,title:'Record '+i,occurredOn,tags:[],status:'completed',share:false,...(template?{template}: {})};documents.set(id,value);rows.push(value);
  }
  const tree=(Index,entries)=>{
