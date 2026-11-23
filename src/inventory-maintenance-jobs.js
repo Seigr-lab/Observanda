@@ -8,7 +8,7 @@ const currentFile='.observanda/inventory-maintenance/current.json',type='invento
 export class InventoryMaintenanceJobs{
  constructor(workspace,queue){this.workspace=workspace;this.queue=queue;}
  async authorize(job){
-  await this.workspace.requireStorageKey();if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
+  await this.workspace.requireStorageKey();
   if(job.type!==type||job.scope!==(await this.workspace.outline()).metadata.id||!job.input||Object.keys(job.input).join()!=='version'||job.input.version!==1)throw new AppError('JOB_CHANGED');
  }
  async current(){

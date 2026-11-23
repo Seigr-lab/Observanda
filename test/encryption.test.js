@@ -54,22 +54,6 @@ test('password wrapping, encrypted saves and history survive restart; changing p
 });
 
 
-test('encrypted conversion preserves source bytes and encrypts every copied research file',async()=>{
- const {initializeLocation,encryptedCopy,copyPlan,workspaceManifest,inspectLocation}=await import('../src/locations.js');
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-convert-')),source=path.join(parent,'source'),destination=path.join(parent,'encrypted');
- await initializeLocation(source,sampleNotebook(),await createAccess());
- const ws=new Workspace(source),book=await ws.read();book.book.description='previous revision retained';await ws.save(book.book,book.etag);
- await atomicWrite(path.join(source,'.observanda','private-fixture'),'private original bytes');
- const before=await workspaceManifest(source),plan=await copyPlan(source,destination);
- const access=await createAccess('','another synthetic password'),vault=takeCreatedVault(access);
- await encryptedCopy(plan,access,vault);assert.deepEqual(await workspaceManifest(source),before);
- assert.equal((await inspectLocation(destination)).encrypted,true);
- for(const item of await workspaceManifest(destination))if(item.path!=='.observanda/access.json')assert.ok(encrypted(await readFile(path.join(destination,item.path))),item.path);
- assert.equal((await new Workspace(destination,vault).read()).book.description,'previous revision retained');
- assert.equal(await new Workspace(destination,vault).readFile(path.join(destination,'.observanda','private-fixture'),'utf8'),'private original bytes');clearVault(vault);
-});
-
-
 test('original and prepared image/audio/video files are encrypted, recoverable, and publishable only after unlock',async()=>{
  const {mediaFixtures}=await import('./media-fixtures.js'),{MediaStore}=await import('../src/media.js');
  const fixtures=await mediaFixtures(await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-media-fixtures-')));

@@ -1,21 +1,28 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtemp} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {createNotebook} from '../src/model.js';
 import {workspaceModules} from '../src/modules/index.js';
+import {ModuleReader} from '../src/modules/reader.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {createModuleHost,moduleForEntity} from '../src/web/feature-modules.js';
 import {laboratoryProfiles,enableProfile,availableSections} from '../src/web/laboratory/catalog.js';
 // Lab book profile text is a deferred catalogue; these checks read profiles directly.
+async function setup(t,prefix,title){
+ const directory=await mkdtemp(path.join(os.tmpdir(),prefix)),book=createNotebook(title),{workspace,vault}=await encryptedFixture(directory,book);
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ return {book,vault,ws:workspace,store:workspaceModules(workspace)};
+}
 import '../src/web/i18n/catalogues/labBookProfiles.js';
 
-test('combined lab submodules retain customized sections and saved evidence across configuration changes',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-labs-')),ws=new Workspace(root),book=createNotebook('Lab research');
- await ws.create(book);const store=workspaceModules(ws);
+test('combined lab submodules retain customized sections and saved evidence across configuration changes',async t=>{
+ const {book,vault,ws,store}=await setup(t,'observanda-labs-','Lab research');
  const save=(type,id,data,revision=null,commandId=randomUUID())=>store.execute({workspaceId:book.id,commandId,action:type+'.save',payload:{id,expectedRevision:revision,data}});
  const lab={name:'Computing and field station',description:'',archived:false,profiles:[],sections:[],links:[]};
  for(const profile of laboratoryProfiles)enableProfile(lab,profile.id,true);
@@ -31,14 +38,14 @@ test('combined lab submodules retain customized sections and saved evidence acro
  section.fields[0].label='Renamed current field';enableProfile(lab,'computer-it',false);
  await save('lab-space',labId,lab,1);
  assert.equal(availableSections(lab).length,totalSections-laboratoryProfiles.find(p=>p.id==='computer-it').sections.length);
- const reopened=await workspaceModules(new Workspace(root)).read();
- assert.deepEqual(reopened.entities.find(e=>e.id===entryId).data,entry);
+ // A reopened workspace reads the saved entry by itself, never as one module document.
+ assert.deepEqual((await new ModuleReader(new Workspace(ws.root,vault)).selected({workspaceId:book.id,id:entryId})).entity.data,entry);
  await save('lab-entry',entryId,{...entry,notes:'Retained work can still be amended.'},1);
- const before=await store.read();
+ const before=await store.current();
  await assert.rejects(save('lab-entry',entryId,entry,1),{code:'MODULE_CHANGED'});
  await assert.rejects(save('lab-entry',entryId,{...entry,sectionSchema:{...entry.sectionSchema,label:'Reinterpreted'}},2),{code:'MODULE_INVALID'});
  await assert.rejects(save('lab-entry',randomUUID(),entry),{code:'MODULE_REFERENCE'});
- assert.deepEqual(await store.read(),before);
+ assert.deepEqual(await store.current(),before);
  enableProfile(lab,'computer-it',true);
  assert.equal(lab.sections.length,totalSections);assert.equal(lab.sections.find(s=>s.id===section.id).label,'Build provenance');
  await save('lab-space',labId,lab,2);
@@ -49,9 +56,8 @@ test('combined lab submodules retain customized sections and saved evidence acro
 });
 
 
-test('legacy arts data remains readable without owning canonical notebook navigation',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-arts-')),ws=new Workspace(root),book=createNotebook('Creative collective');
- await ws.create(book);const store=workspaceModules(ws);
+test('legacy arts data remains readable without owning canonical notebook navigation',async t=>{
+ const {book,vault,ws,store}=await setup(t,'observanda-arts-','Creative collective');
  const save=(type,id,data,revision=null)=>store.execute({workspaceId:book.id,commandId:randomUUID(),action:type+'.save',payload:{id,expectedRevision:revision,data}});
  const makeLab=name=>{const lab={name,description:'',archived:false,profiles:[],sections:[],links:[]};enableProfile(lab,'arts-creative',true);return lab;};
  const studio=makeLab('Nightjar rehearsal room'),gallery=makeLab('Gallery study room');
@@ -64,7 +70,7 @@ test('legacy arts data remains readable without owning canonical notebook naviga
  const credits=[{id:randomUUID(),name:'Nightjar collective',role:'Performers'},{id:randomUUID(),name:'Mira',role:'Recording'}];
  await save('lab-entry',sessionId,entry('Installation rehearsal',studioId,session,{sessionDate:'2026-09-28',tempo:'92.5'},credits));
  await save('lab-entry',collectionId,entry('Sound installation documentation',galleryId,collection,{accession:'EX-26-07',provenance:'Commissioned from Nightjar collective'},[],[{workspaceId:book.id,type:'lab-entry',id:sessionId}]));
- let data=await workspaceModules(new Workspace(root)).read();
+ let data=await workspaceModules(new Workspace(ws.root,vault)).current();
  const savedSession=data.entities.find(e=>e.id===sessionId);
  assert.deepEqual(savedSession.data.contributors,credits);
  assert.equal(data.entities.find(e=>e.id===collectionId).data.links[0].id,sessionId);
@@ -74,5 +80,5 @@ test('legacy arts data remains readable without owning canonical notebook naviga
  const registry=createDataRegistry(),host=createModuleHost(registry);
  await host.configure(['research','laboratory-arts-creative']);
  assert.deepEqual(registry.get('laboratory-arts-creative-records').items({book},{data}),[]);
- assert.deepEqual(await store.read(),data);
+ assert.deepEqual(await store.current(),data);
 });

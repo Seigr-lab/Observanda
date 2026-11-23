@@ -9,16 +9,7 @@ import {ModuleCatalogue} from './catalogue.js';
 import {ModuleBrowseIndex} from './browse-index.js';
 import {moduleBrowsePage} from './browse-page.js';
 import {workspaceModules} from './index.js';
-import {moduleView,moduleSearch} from './view.js';
 import {uuid} from './validation.js';
-import {moduleReferences} from './references.js';
-import {projectUsesTool} from '../web/project-tools.js';
-import {inScope} from '../web/modules/scope.js';
-import {moduleConstraint} from './constraints.js';
-import {calendarFacts} from '../calendar/facts.js';
-import {inventoryScopeItems} from './inventory-query.js';
-import {inventoryScope} from '../web/modules/inventory-model.js';
-import {inventoryFacts} from './inventory-facts.js';
 const invalid=()=>{throw new AppError('MODULE_QUERY_CURSOR');};
 const order=(a,b)=>{const x=a.title.toLowerCase(),y=b.title.toLowerCase();return x<y?-1:x>y?1:a.id<b.id?-1:a.id>b.id?1:0;};
 export class ModuleReader{
@@ -26,16 +17,13 @@ export class ModuleReader{
  async context(workspaceId,operation){
   if(!uuid(workspaceId))throw new AppError('INVALID');
   if(this.readContext)return this.readContext(workspaceId,operation);
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const {metadata:book}=await store.snapshot();if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const owned=await moduleDomainContext(store,operation,{domains:this.readDomains});if(owned)return owned.value;
    const catalogue=new ModuleCatalogue(store),head=await catalogue.head(workspaceId);
    return operation({book,head,stockProjection:()=>catalogue.stockProjection(head),browse:async options=>{const plan=await new ModuleBrowseIndex(catalogue).plan(head,options);return plan?[plan]:null;},members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
     encode:value=>store.encode('module-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('module-page',workspaceId,Buffer.from(value,'base64url'))});
   });
-  const data=await this.modules.current();if(data.workspaceId!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  return operation({book:(await this.workspace.outline()).metadata,head:data,members:()=>data.entities,member:async id=>data.entities.find(e=>e.id===id)??null,view:async member=>moduleView(member),search:async member=>moduleSearch(member),references:async member=>moduleReferences(member),constraint:async member=>moduleConstraint(member),calendar:async member=>calendarFacts(member),inventory:async member=>inventoryFacts(member),selected:async id=>data.entities.find(e=>e.id===id)??null,
-   encode:value=>Buffer.from(JSON.stringify(value)).toString('base64url'),decode:value=>JSON.parse(Buffer.from(value,'base64url'))});
  }
  async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,consume,referenceNamespaces=null}={}){
   if(!validResourceTags(tags)||!['all','any'].includes(tagMode)||tags.length&&type!=='resource')throw new AppError('RESOURCE_TAGS');

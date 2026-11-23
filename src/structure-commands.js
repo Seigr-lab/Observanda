@@ -18,7 +18,6 @@ const extras=result=>({...(result.projectId?{projectId:result.projectId}:{}),mov
 // The subsequent save repeats the etag check before writing, so a concurrent
 // hierarchy change cannot turn this read admission into stale authority.
 export async function assertExistingNativeStructure(workspace,book,etag){
- if(await workspace.storageKind()!=='catalogue')return;
  const current=await workspace.outline();
  if(current.etag!==etag)throw new AppError('CONFLICT');
  if(book?.id!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
@@ -38,21 +37,8 @@ export class StructureCommands{
   if(kind==='reorganize'&&!preview&&data.reviewed!==true)throw new AppError('INVALID');
   const outline=await this.workspace.outline();
   if(outline.etag!==data.etag&&!data.commandId)throw new AppError('CONFLICT');
-  if(await this.workspace.storageKind()==='catalogue'){
-   const run=()=>this.workspace.catalogue(async store=>{const result=await this.indexed(store,kind,data,outline.metadata.id,preview,{signal,onProgress});signal?.throwIfAborted();return result;});
-   return preview?run():this.workspace.withLock(run);
-  }
-  // Document storage still uses its full validation.
-  if(preview){
-   const current=await this.workspace.read();if(current.etag!==data.etag)throw new AppError('CONFLICT');
-   return {summary:actions[kind](current.book,data.change).summary,etag:current.etag};
-  }
-  let result;
-  const saved=await this.workspace.update(async book=>{
-   if((await this.workspace.read()).etag!==data.etag)throw new AppError('CONFLICT');
-   result=actions[kind](book,data.change);return result.book;
-  });
-  return {...saved,...extras(result)};
+  const run=()=>this.workspace.catalogue(async store=>{const result=await this.indexed(store,kind,data,outline.metadata.id,preview,{signal,onProgress});signal?.throwIfAborted();return result;});
+  return preview?run():this.workspace.withLock(run);
  }
  async indexed(store,kind,data,workspaceId,preview,{signal,onProgress}={}){
   const receiptFile=data.commandId?'.observanda/structure-commands/'+data.commandId+'.json':null;

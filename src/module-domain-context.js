@@ -13,7 +13,6 @@ export async function moduleDomainContext(research,operation,{domains=null,scope
 const routes=new WeakMap();
 export async function moduleDomainRoute(storage){
  const known=routes.get(storage);if(known&&known.root===storage.root&&known.vaultId===storage.vault?.id)return known.namespaceId;
- if(await storage.storageKind()!=='catalogue')return null;
  const registry=await storage.catalogue(readProjectDomainRegistry);if(registry?.commandVersion!==1)return null;
  routes.set(storage,{root:storage.root,vaultId:storage.vault?.id,namespaceId:registry.namespaceId});return registry.namespaceId;
 }

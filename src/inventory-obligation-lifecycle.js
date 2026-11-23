@@ -7,7 +7,6 @@ import {hasInventoryObligations} from './inventory-operation-store.js';
 // Call again inside the exclusive storage handoff. A preview alone cannot
 // prevent a new reservation from racing with copying or permanent deletion.
 export async function assertInventoryObligationsSettled(storage){
- if(await storage.storageKind()!=='catalogue')return;
  return storage.catalogue(async research=>{
   const registry=await readProjectDomainRegistry(research);if(!registry)return;
   const session=databaseSchemaSession(research.db),stores=[];

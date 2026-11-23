@@ -18,9 +18,7 @@ export class SampleAnalysisReader{
   const workspace=this.laboratory.workspace;
   const read=async()=>{
    signal?.throwIfAborted();
-   const current=await workspace.storageKind()==='catalogue'
-    ?await workspace.catalogue(async store=>(await store.snapshot()).metadata.id)
-    :(await workspace.outline()).metadata.id;
+   const current=await workspace.catalogue(async store=>(await store.snapshot()).metadata.id);
    if(current!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    return resolveSampleSource(workspace,command.role,command.source,{signal});
   };
@@ -28,7 +26,6 @@ export class SampleAnalysisReader{
  }
  async indexed(workspaceId,etag,operation,{signal}={}){
   if(!researchId(workspaceId)||!etagValid(etag))invalid();signal?.throwIfAborted();
-  const workspace=this.laboratory.workspace;if(await workspace.storageKind()!=='catalogue')return null;
   return this.laboratory.catalogue(async store=>{
    if((store.namespaceId??(await store.snapshot()).metadata.id)!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const owner=new SampleAnalysisCatalogue(store),source=await owner.source(etag);signal?.throwIfAborted();

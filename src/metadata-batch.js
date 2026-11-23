@@ -4,18 +4,15 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {ObjectIndex} from './object-index.js';
 import {AppError} from './errors.js';
-import {hasCatalogue} from './postgres.js';
 import {writeCatalogueRows,GROUPED_METADATA_OBJECTS} from './catalogue-writes.js';
 export {GROUPED_METADATA_OBJECTS};
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 import {withCatalogueCacheBoundary,catalogueContext,catalogueCacheEpoch} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
 export const withoutMetadataBatch=operation=>batches.exit(operation);
-// Call inside the workspace's writer lock. Legacy file workspaces keep their
-// existing write path; only PostgreSQL has shared index branches to coalesce.
+// Call inside the workspace's writer lock.
 export async function withWorkspaceMetadataBatch(workspace,operation,{prefetchIds=[],signal}={}){
  if(workspace.withPublicationMetadataBatch)return workspace.withPublicationMetadataBatch(operation);
- if(!await hasCatalogue(workspace.root))return operation();
  return workspace.catalogue(store=>withMetadataBatch(store,operation,{prefetchIds,signal}));
 }
 // One write contract for retained data: up to 128 objects share a single

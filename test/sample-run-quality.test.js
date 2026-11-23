@@ -7,9 +7,7 @@ import path from 'node:path';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleDecimal} from './sample-analysis-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
-import {createNotebook} from '../src/model.js';
 import {clearVault} from '../src/encryption.js';
-import {Workspace} from '../src/storage.js';
 import {Laboratory} from '../src/laboratory.js';
 import {SampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
 import {SampleAnalysisReader} from '../src/sample-analysis-reader.js';
@@ -121,15 +119,6 @@ test('run snapshots are validated against their own assessments',async t=>{
  for(const change of cases){const value=clone();change(value);assert.equal(validRunQuality(value),false,change.toString());}
 });
 
-test('a laboratory without project domains refuses run inputs instead of dropping them',async t=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-run-quality-legacy-')),lab=new Laboratory(root);
- t.after(()=>rm(root,{recursive:true,force:true}));
- await new Workspace(root).create(createNotebook('Synthetic research'));
- let current=await lab.read();current=await lab.change({action:'create-sample',etag:current.etag,sample:{code:'S-01',material:'Synthetic',source:'Test',collectedOn:'2026-10-01',receivedOn:'2026-10-01'}});
- await assert.rejects(lab.change({action:'create-analysis',etag:current.etag,analysis:{code:'A-01',sampleId:current.lab.samples[0].id,result,runInputs:[{kind:'equipment',id:randomUUID(),revision:1}]}}),{code:'ACCESS_UPGRADE'});
- assert.equal((await lab.read()).lab.analyses.length,0);
-});
-
 test('a lot use already posted stays citable after the lot is put on hold, and the run records the hold',async t=>{
  const s=await fixture(t),material=await s.create('Held buffer','material',lot({policy:policy({use:'block'})})),use=await s.move(material,'-4','used');
  await s.update(material,d=>({...d,status:'hold',quality:{...d.quality,holdReason:'Supplier recall'}}));
@@ -162,13 +151,10 @@ test('printed and issued result sheets show readiness at run start in the reques
  assert.ok((await s.service.report(created.selectedId,reviewed.etag,[],{language:'xx'})).includes('<section lang="en" data-run-quality>'),'Unknown languages fall back to English');
 });
 
-test('laboratory pages say whether run inputs can be recorded',async t=>{
+test('laboratory pages say that run inputs can be recorded',async t=>{
  const s=await fixture(t);
  assert.equal((await s.reader.query({workspaceId:s.book.id,view:'samples'})).runInputs,true);
  assert.equal((await s.reader.query({workspaceId:s.book.id,view:'analyses'})).runInputs,true);
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-run-quality-pages-')),book=createNotebook('Synthetic research');t.after(()=>rm(root,{recursive:true,force:true}));
- await new Workspace(root).create(book);const legacy=new SampleAnalysisReader(new Laboratory(root));
- assert.equal((await legacy.query({workspaceId:book.id,view:'samples'})).runInputs,false,'Older laboratories hide the run inputs');
 });
 
 test('a blocked run answers 409 with its readiness details',async t=>{

@@ -90,7 +90,6 @@ export class ConfigurationCommands{
  }
  async envelope(context){return {native:true,configurationPin:context.pin,header:{...await context.reader.header(),...(context.name===null?{}:{name:context.name})},draft:context.draft?{id:context.draft.value.id,revision:context.draft.revision,dirty:true}:null};}
  async open(data,options={}){
-  if(await this.workspace.storageKind()!=='catalogue')return {native:false};
   return this.workspace.catalogue(async store=>{
    const owner=this.scope(data),current=await readDraft(store,owner);
    const request=current&&data.saved!==true?{...data,configurationPin:current.value.base.pin,create:current.value.base.create,draftId:current.value.id,draftRevision:current.revision}:data;
