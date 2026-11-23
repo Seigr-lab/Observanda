@@ -21,7 +21,7 @@ test.beforeEach(async({page})=>page.setDefaultTimeout(15000));
 
 async function fixture(configure=()=>{},password=''){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-types-ui-')),book=sampleNotebook();
- book.title='workspace';book.projects=[];book.notebooks=[];book.entries=[];book.website.navigation=[];book.branding=[];book.website.layouts=[];
+ book.title='workspace';book.projects=[];book.notebooks=[];book.entries=[];
  configure(book);
  const owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
  const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});

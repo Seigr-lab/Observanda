@@ -9,7 +9,7 @@ import {validateCatalogue} from '../src/web/i18n/runtime.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const catalogue=locale=>readFile(new URL('../src/web/locales/'+locale+'/workspaceSecurity.json',import.meta.url),'utf8').then(JSON.parse);
 test('storage display translates server labels and review counts without changing paths or request values',async context=>{
- const previous=globalThis.document;globalThis.document={querySelector:()=>null};
+ const previous=globalThis.document;globalThis.document={querySelector:()=>null,addEventListener(){},removeEventListener(){}};
  context.after(()=>{globalThis.document=previous;activateLanguage('en');});
  const source=storageMap('C:/Authored <workspace>',null),descriptor=storageMap(source.root,null,undefined,{catalogue:true}).locations[0];
  source.locations.push(descriptor,{label:'Custom <label>',path:'C:/User <path>'});
