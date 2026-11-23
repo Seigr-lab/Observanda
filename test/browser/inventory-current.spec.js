@@ -13,7 +13,9 @@ import {defaultDashboard,createPanel} from '../../src/web/dashboard-model.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {seedModuleCurrent} from '../module-current-fixture.js';
 for(const count of [65,650])test('inventory cards and selected-item choices stay paged with '+count+' items',async({page})=>{
- test.setTimeout(90000);page.setDefaultTimeout(10000);
+ // Seeding hundreds of large items is fixture setup and gets its own allowance; every
+ // step in the app keeps the ten-second limit below.
+ test.setTimeout(90000+count*300);page.setDefaultTimeout(10000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-cards-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
  const entity=(type,data)=>({id:randomUUID(),type,revision:1,createdAt:now,updatedAt:now,data});
  const resources=Array.from({length:count},(_,i)=>entity('resource',{projectId:null,placementId:null,name:'Item '+String(i).padStart(3,'0'),code:'',kind:'material',description:'Private part notes. '.repeat(3000),categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Bench',unit:'pieces',capacity:1,status:'available',links:[]}));
