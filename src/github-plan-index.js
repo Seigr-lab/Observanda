@@ -44,12 +44,10 @@ export class GithubPlanIndex{
  async page(kind,{offset=0,limit=32}={}){if(!Number.isSafeInteger(offset)||offset<0||offset>this.count(kind)||!Number.isSafeInteger(limit)||limit<1||limit>64)throw new AppError('INVALID');return this.snapshot(async()=>{const items=[];for(let at=offset;at<Math.min(this.count(kind),offset+limit);at++)items.push(await this.value(await this.tree.entryAt({root:this.root(kind)},at)));return {items,offset,total:this.count(kind),next:offset+items.length<this.count(kind)?offset+items.length:null};});}
  async verify(){const fresh=new GithubPlanIndex(this.workspace,this.descriptor,{signal:this.signal});for(const kind of Object.keys(this.descriptor.collections))for await(const value of fresh.values(kind))void value;}
 }
-// Read already-retained inline plans, but every newly-created plan is indexed.
+// Every review, deployment cursor and retained ownership is indexed.
 export function githubPlanReader(workspace,plan,options){
- if(plan?.document){const index=new GithubPlanIndex(workspace,plan.document,options);return index;}
- if(!plan)throw new AppError('PUBLISH_STALE');
- const rows=kind=>kind==='uploads'?[...new Map((plan.entries??[]).map(row=>[row.sha,row])).values()]:kind==='entries'||kind==='preservedEntries'?plan[kind]??[]:(plan[kind]??[]).map(path=>({path}));
- return {count:kind=>rows(kind).length,get:async(kind,path)=>rows(kind).find(row=>row.path===path)??null,at:async(kind,at)=>rows(kind)[at],async *values(kind,{offset=0}={}){yield* rows(kind).slice(offset);},async page(kind,{offset=0,limit=32}={}){const all=rows(kind),items=all.slice(offset,offset+limit);return {items,offset,total:all.length,next:offset+items.length<all.length?offset+items.length:null};}};
+ if(!plan?.document)throw new AppError('PUBLISH_STALE');
+ return new GithubPlanIndex(workspace,plan.document,options);
 }
 export async function* githubRemovedPaths(workspace,plan,directory=''){
  if(!plan)return;for await(const row of githubPlanReader(workspace,plan).values('removed'))yield directory?row.path.slice(directory.length+1):row.path;

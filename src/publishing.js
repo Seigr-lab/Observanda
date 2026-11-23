@@ -168,7 +168,7 @@ export class Publisher {
   async readDestinationPlan(candidate,configEtag,{destinationReview,destinationReviewed}={}) {
     if(destinationReview===undefined)return null;
     const saved=await this.read(),plan=await this.readFile(path.join(this.workspace.root,'.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json'),null,16*1024*1024);
-    if(!plan||![1,2,3].includes(plan.version)||plan.version===1&&(!Array.isArray(plan.entries)||!Array.isArray(plan.preservedEntries))||plan.id!==destinationReview||plan.configEtag!==configEtag||saved.etag!==configEtag||plan.releaseId!==candidate.id||plan.requiresReview&&destinationReviewed!==true)throw new AppError('PUBLISH_STALE');
+    if(!plan||![2,3].includes(plan.version)||plan.id!==destinationReview||plan.configEtag!==configEtag||saved.etag!==configEtag||plan.releaseId!==candidate.id||plan.requiresReview&&destinationReviewed!==true)throw new AppError('PUBLISH_STALE');
     if(plan.version===3&&(plan.replacement.directory!==(saved.config.github.directory??'')||destinationReviewed!==true))throw new AppError('PUBLISH_STALE');
     if(githubPlanReader(this.workspace,plan).count('conflicts'))throw new AppError('PUBLISH_CONFLICT');
     return admitGithubPlan(plan);

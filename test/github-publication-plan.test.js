@@ -8,7 +8,7 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {githubPlanReader} from '../src/github-plan-index.js';
 import {Publisher,defaultPublishing,validatePublishing} from '../src/publishing.js';
-import {githubFilePlan,readGithubOwnership} from '../src/github-publication-plan.js';
+import {indexedGithubFilePlan,readGithubOwnership} from '../src/github-publication-plan.js';
 import {bookWebsiteCandidate} from './fixtures/website-candidate.js';
 import {sampleNotebook} from '../src/sample.js';
 import {githubFixture,sha} from './github-fixture.js';
@@ -82,10 +82,10 @@ test('unowned root files and changed or deleted owned files block every write ev
  }
 });
 
-test('file and directory collisions, symlinks, submodules and case aliases cannot be silently replaced',async()=>{
- const candidate={files:new Map([['index.html','Public page']])};
+test('file and directory collisions, symlinks, submodules and case aliases cannot be silently replaced',async t=>{
+ const {ws}=await fixture(t),candidate={files:new Map([['index.html','Public page']])};
  for(const [path,mode,type] of [['research','100644','blob'],['research','120000','blob'],['research','160000','commit'],['research/index.html/child','100644','blob'],['research/INDEX.html','100644','blob']]){
-  const plan=await githubFilePlan(candidate,[{path,mode,type,sha:'a'.repeat(40)}],null,'research');assert.ok(plan.conflicts.includes(path),path);
+  const plan=await indexedGithubFilePlan(ws,candidate,[{path,mode,type,sha:'a'.repeat(40)}],null,'research');assert.ok(await githubPlanReader(ws,plan).get('conflicts',path),path);
  }
  for(const directory of ['../research','/research','research/','research//pages','research/.git','research/../pages','research\\pages','research?x','research#anchor','research/%2fpages']){
   const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',directory});assert.throws(()=>validatePublishing(config),{code:'PUBLISH_CONFIG'});

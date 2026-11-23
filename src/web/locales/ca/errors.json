@@ -248,7 +248,6 @@
   "GITHUB_BROWSER_UNAVAILABLE": "L'inici de sessió amb el navegador requereix que Observanda s'executi a la sessió d'escriptori local.",
   "PUBLISH_REMOTE": "No s'ha pogut verificar la destinació. Comprova l'accés, la configuració de destinació i la connexió. No es confirma cap publicació correcta.",
   "PUBLISH_TREE_INCOMPLETE": "GitHub ha retornat una llista incompleta del directori, fins i tot en demanar-la per separat. Observanda no pot verificar tots els fitxers del repositori. Torna a provar la verificació o utilitza una altra destinació de publicació; aquesta operació no ha confirmat la publicació.",
-  "PUBLISH_PLAN_CAPACITY": "La revisió del repositori supera la capacitat actual de revisions guardades. L'edició preparada continua disponible i no s'ha fet cap canvi al repositori. Conserva l'edició per tornar-ho a provar després d'una actualització de capacitat o selecciona una altra destinació de publicació.",
   "PUBLISH_OWNERSHIP": "La destinació té canvis fets fora d'aquest publicador. Revisa els canvis del repositori abans de carregar o selecciona un directori d'allotjament dedicat.",
   "PUBLICATION_PERMISSIONS_CHANGED": "Els permisos de publicació de les fonts han canviat o aquesta edició és anterior a la seva aplicació. Prepara una edició nova abans de previsualitzar-la, exportar-la o publicar-la.",
   "PUBLISH_STALE": "La destinació o la versió ha canviat. Comprova la destinació i torna a revisar la versió.",

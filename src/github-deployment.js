@@ -16,21 +16,21 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  const c=config.github,base=`/repos/${c.owner}/${c.repository}`;
  const call=async(route,method='GET',data,missing=false)=>{signal?.throwIfAborted();await guard(method==='GET'?{phase:'read'}:undefined);return publisher.github(base+route,method,data,missing,signal);};
  const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);await save(journal);};
- if(!journal.entries&&!journal.document){
+ if(!journal.document){
   await guard();await publisher.check({plan});
   const reviewed=admitGithubPlan(plan??await publisher.buildDestinationPlan(candidate,(await publisher.read()).etag,{signal}));
   if(githubPlanReader(publisher.workspace,reviewed).count('conflicts'))throw new AppError('PUBLISH_CONFLICT');
   if(!plan&&reviewed.requiresReview)throw new AppError('PUBLISH_OWNERSHIP');
   // Recheck after hashing and tree inspection, before the first network write.
   await publisher.check({plan:reviewed});
-  Object.assign(journal,{...(reviewed.document?{document:reviewed.document,uploadedCount:0}:{entries:reviewed.entries,preservedEntries:reviewed.preservedEntries,removed:reviewed.removed,uploaded:[]}),baseTree:reviewed.replacement?null:reviewed.baseTree,...(reviewed.replacement?{treeMode:'replace'}:{}),repositoryId:reviewed.repositoryId,parent:reviewed.head,createdAt:journal.createdAt??new Date().toISOString()});await checkpoint();
+  Object.assign(journal,{document:reviewed.document,uploadedCount:0,baseTree:reviewed.replacement?null:reviewed.baseTree,...(reviewed.replacement?{treeMode:'replace'}:{}),repositoryId:reviewed.repositoryId,parent:reviewed.head,createdAt:journal.createdAt??new Date().toISOString()});await checkpoint();
  }
- if(!journal.document&&!journal.preservedEntries||!Number.isSafeInteger(journal.repositoryId))throw new AppError('PUBLISH_STALE');
- if(journal.document)requireGithubPlanCollections(journal.document);
- const reader=githubPlanReader(publisher.workspace,journal,{signal}),uploaded=journal.document?null:new Set(journal.uploaded),total=reader.count('uploads');
- if(journal.document&&(!Number.isSafeInteger(journal.uploadedCount)||journal.uploadedCount<0||journal.uploadedCount>total))throw new AppError('PUBLISH_STALE');
- journal.total=total;const report=stage=>progress({stage,done:journal.uploadedCount??uploaded.size,total});
- uploads?.start(journal.uploadedCount??uploaded.size,total);
+ if(!Number.isSafeInteger(journal.repositoryId))throw new AppError('PUBLISH_STALE');
+ requireGithubPlanCollections(journal.document);
+ const reader=githubPlanReader(publisher.workspace,journal,{signal}),total=reader.count('uploads');
+ if(!Number.isSafeInteger(journal.uploadedCount)||journal.uploadedCount<0||journal.uploadedCount>total)throw new AppError('PUBLISH_STALE');
+ journal.total=total;const report=stage=>progress({stage,done:journal.uploadedCount,total});
+ uploads?.start(journal.uploadedCount,total);
  const expected={count:reader.count('entries')+reader.count('preservedEntries'),get:async path=>await reader.get('entries',path)??await reader.get('preservedEntries',path)};
  const repo=await call('');if(repo.id!==journal.repositoryId||!repo.permissions?.push)throw new AppError('PUBLISH_STALE');
  const head=await call(`/git/ref/heads/${c.branch}`,'GET',undefined,true),current=head?.object?.sha??null;
@@ -48,12 +48,11 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
   journal.archive={branch:archiveBranch,commit:journal.parent};await checkpoint();
  }
  if(!journal.commit||current!==journal.commit){
-  for await(const entry of reader.values('uploads',{offset:journal.document?journal.uploadedCount:0})){
-   if(uploaded?.has(entry.sha))continue;
+  for await(const entry of reader.values('uploads',{offset:journal.uploadedCount})){
    await report(messages.uploading);
    const source=c.directory?entry.path.slice(c.directory.length+1):entry.path;
    const body=new GithubBlobBody(await candidate.files.get(source)),blob=await call('/git/blobs','POST',body);
-   if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');if(journal.document)journal.uploadedCount++;else{journal.uploaded.push(entry.sha);uploaded.add(entry.sha);}await checkpoint();
+   if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');journal.uploadedCount++;await checkpoint();
    uploads?.confirmed(1,body.size);
   }
   uploads?.phase('remoteActivate');

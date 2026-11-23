@@ -248,7 +248,6 @@
   "GITHUB_BROWSER_UNAVAILABLE": "Nettlesarpålogging krev at Observanda køyrer i den lokale skrivebordsøkta di.",
   "PUBLISH_REMOTE": "Målet kunne ikkje stadfestast. Kontroller tilgang, målinnstillingar og tilkopling. Inga vellukka publisering er stadfesta.",
   "PUBLISH_TREE_INCOMPLETE": "GitHub returnerte ei ufullstendig mappeliste, sjølv ved separat førespurnad. Observanda kan ikkje stadfeste alle kodelagerfilene. Prøv kontrollen på nytt eller bruk eit anna publiseringsmål; denne operasjonen har ikkje stadfesta publisering.",
-  "PUBLISH_PLAN_CAPACITY": "Kodelagergjennomgangen overskrid den gjeldande kapasiteten for lagra gjennomgangar. Den klargjorde utgåva er framleis tilgjengeleg, og ingen kodelagerendringar vart gjorde. Behald utgåva for eit nytt forsøk etter ei kapasitetsoppdatering, eller vel eit anna publiseringsmål.",
   "PUBLISH_OWNERSHIP": "Målet har endringar frå utanfor denne publiseraren. Sjå gjennom kodelagerendringane før opplasting, eller vel ei eiga vertsmappe.",
   "PUBLICATION_PERMISSIONS_CHANGED": "Publiseringsløyva for kjeldene er endra, eller denne utgåva er frå før handhevinga av dei. Klargjer ei ny utgåve før du førehandsviser, eksporterer eller publiserer henne.",
   "PUBLISH_STALE": "Målet eller utgjevinga er endra. Kontroller målet og sjå gjennom utgjevinga på nytt.",

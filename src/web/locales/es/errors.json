@@ -248,7 +248,6 @@
   "GITHUB_BROWSER_UNAVAILABLE": "El inicio de sesión en navegador requiere que Observanda se ejecute en tu sesión local de escritorio.",
   "PUBLISH_REMOTE": "No se ha podido verificar el destino. Comprueba el acceso, la configuración del destino y la conexión. No se confirma ninguna publicación satisfactoria.",
   "PUBLISH_TREE_INCOMPLETE": "GitHub ha devuelto una lista de directorio incompleta, incluso al solicitarla por separado. Observanda no puede verificar todos los archivos del repositorio. Reintenta la verificación o utiliza otro destino de publicación; esta operación no ha confirmado la publicación.",
-  "PUBLISH_PLAN_CAPACITY": "La revisión del repositorio supera la capacidad actual de revisiones guardadas. La edición preparada sigue disponible y no se han realizado cambios en el repositorio. Conserva la edición para reintentar tras una actualización de capacidad o selecciona otro destino de publicación.",
   "PUBLISH_OWNERSHIP": "El destino tiene cambios ajenos a este publicador. Revisa los cambios del repositorio antes de subir o selecciona un directorio dedicado de alojamiento.",
   "PUBLICATION_PERMISSIONS_CHANGED": "Los permisos de publicación del origen han cambiado o esta edición es anterior a su aplicación. Prepara una edición nueva antes de previsualizarla, exportarla o publicarla.",
   "PUBLISH_STALE": "El destino o la versión han cambiado. Comprueba el destino y revisa de nuevo la versión.",

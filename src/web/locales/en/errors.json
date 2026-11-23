@@ -248,7 +248,6 @@
   "GITHUB_BROWSER_UNAVAILABLE": "Browser sign-in requires Observanda to run in your local desktop session.",
   "PUBLISH_REMOTE": "The destination could not be verified. Check access, destination settings, and connection. No successful publication is confirmed.",
   "PUBLISH_TREE_INCOMPLETE": "GitHub returned an incomplete directory listing, even when requested separately. Observanda cannot verify all repository files. Retry verification or use another publishing destination; this operation has not confirmed publication.",
-  "PUBLISH_PLAN_CAPACITY": "The repository review exceeds the current saved-review capacity. Your prepared edition remains available and no repository changes were made. Keep the edition for retry after a capacity update, or select another publishing destination.",
   "PUBLISH_OWNERSHIP": "The destination has changes outside this publisher. Review the repository changes before uploading, or select a dedicated hosting directory.",
   "PUBLICATION_PERMISSIONS_CHANGED": "Source publication permissions changed, or this edition predates their enforcement. Prepare a new edition before previewing, exporting or publishing it.",
   "PUBLISH_STALE": "The destination or release changed. Check the destination and review the release again.",

@@ -248,7 +248,6 @@
   "GITHUB_BROWSER_UNAVAILABLE": "Nettleserinnlogging krever at Observanda kjører i din lokale skrivebordsøkt.",
   "PUBLISH_REMOTE": "Målet kunne ikke verifiseres. Kontroller tilgang, målinnstillinger og tilkobling. Ingen vellykket publisering er bekreftet.",
   "PUBLISH_TREE_INCOMPLETE": "GitHub returnerte en ufullstendig katalogliste, også ved separat forespørsel. Observanda kan ikke verifisere alle repositoriefilene. Prøv verifiseringen på nytt eller bruk et annet publiseringsmål; denne operasjonen har ikke bekreftet publisering.",
-  "PUBLISH_PLAN_CAPACITY": "Repositoriegjennomgangen overskrider den gjeldende kapasiteten for lagrede gjennomganger. Den klargjorte utgaven er fortsatt tilgjengelig, og ingen repositorieendringer ble gjort. Behold utgaven for et nytt forsøk etter en kapasitetsoppdatering, eller velg et annet publiseringsmål.",
   "PUBLISH_OWNERSHIP": "Målet har endringer utenfor dette publiseringsverktøyet. Gjennomgå repositorieendringene før opplasting, eller velg en dedikert vertskatalog.",
   "PUBLICATION_PERMISSIONS_CHANGED": "Kildens publiseringstillatelser er endret, eller denne utgaven er fra før håndhevingen av dem. Klargjør en ny utgave før du forhåndsviser, eksporterer eller publiserer den.",
   "PUBLISH_STALE": "Målet eller utgaven er endret. Kontroller målet og gjennomgå utgaven på nytt.",
