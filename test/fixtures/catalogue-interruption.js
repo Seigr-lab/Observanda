@@ -9,6 +9,8 @@ import {workspaceJobs} from '../../src/workspace-jobs.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {copyPlan,encryptedCopy} from '../../src/locations.js';
 import {WorkspaceCopyRecovery} from '../../src/workspace-copy-recovery.js';
+import {ProjectRegistry} from '../../src/project-registry.js';
+import {captureWorkspaceCopyDirectory} from '../../src/workspace-copy-directory.js';
 
 // Only a synthetic fixture is passed over this private IPC channel. The parent
 // kills this process at an actual persistence boundary, without running cleanup.
@@ -37,8 +39,10 @@ process.once('message',async({root,vault,point,upload,record,websiteId,intake,fr
    const verify=ResearchCatalogue.prototype.verify;
    ResearchCatalogue.prototype.verify=function(...args){if(this.workspace.root===freshCopy.destination){freshActivation=true;schema=this.db.schema;catalogueClient=this.db.client;}return verify.apply(this,args);};
    const freshVault={...freshCopy.vault,key:Buffer.from(freshCopy.vault.key,'base64')},recovery=new WorkspaceCopyRecovery(workspace,freshCopy.destination,{encryptionAccess:freshCopy.access});
-   const plan={...await copyPlan(root,freshCopy.destination,{vault:workspace.vault}),encrypted:true};
-   await recovery.run(plan,{value:{projects:[]}},()=>encryptedCopy(plan,freshCopy.access,freshVault,workspace.vault,{recovery}));
+   // A copy receipt pins the source's native project directory, as a workspace copy does.
+   const directory=await captureWorkspaceCopyDirectory(new ProjectRegistry(workspace,(await workspace.outline()).metadata.id));
+   const plan={...await copyPlan(root,freshCopy.destination,{vault:workspace.vault}),encrypted:true,projectPlacement:2,projectRegistryRevision:directory.revision};
+   await recovery.run(plan,directory,()=>encryptedCopy(plan,freshCopy.access,freshVault,workspace.vault,{recovery}));
   }else if(point==='evidence-intake-checkpoint'){
    let receipts=0;const write=workspace.writeMetadata.bind(workspace),{worker}=workspaceJobs(workspace);
    workspace.writeMetadata=async(file,value)=>{

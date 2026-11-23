@@ -1,8 +1,6 @@
 import {readProgressStream} from '../src/web/progress-stream.js';
 import {workspaceDestinationFixture} from './workspace-destination-fixture.js';
 import {ownedStorageLeaseFile,workspaceOwnerLeaseFile} from '../src/owned-storage-control.js';
-import {workspaceEncryptedCopyAccess} from '../src/workspace-encrypted-copy.js';
-import {WorkspaceProjectCopy} from '../src/workspace-project-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rename,rm,writeFile,access} from 'node:fs/promises';
@@ -10,6 +8,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
+import {workspaceEncryptedCopyAccess} from '../src/workspace-encrypted-copy.js';
+import {WorkspaceProjectCopy} from '../src/workspace-project-copy.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -19,12 +19,11 @@ import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '..
 import {clearVault} from '../src/encryption.js';
 import {Workspace,workspaceFile,serialize} from '../src/storage.js';
 import {initializeProjectLocation} from '../src/project-storage.js';
-import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {WorkspaceCopyRecovery,WORKSPACE_COPY_RECEIPT} from '../src/workspace-copy-recovery.js';
 import {workspaceInventory} from '../src/workspace-inventory.js';
 import {recordRevision} from '../src/research.js';
-import {inspectLocation,initializeLocation} from '../src/locations.js';
+import {inspectLocation} from '../src/locations.js';
 import {assertOwnersInCluster,assertArchiveCopy} from './owner-workspace-fixture.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 import {readLabBookArchiveIdentity} from '../src/lab-book-archive.js';
@@ -127,22 +126,23 @@ test('owner lease classification excludes only known control paths',()=>{
  for(const name of ['.observanda/media/'+id+'.lock','.observanda/project-registry.observanda','.observanda/project-imports/'+id+'.obsv','.observanda/project-imports/notes.lock','.observanda/project-creation/../'+id+'.lock'])assert.equal(workspaceOwnerLeaseFile(name),false,name);
 });
 
-test('legacy plaintext successor keeps exact encrypted credentials across interruption and retry',async()=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-legacy-successor-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
+test('an interrupted encrypted successor copy resumes with its exact retained credentials',{timeout:180000},async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-encrypted-successor-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];
  try{
-  const sourceRoot=path.join(directory,'Original'),source=new Workspace(sourceRoot),book=createNotebook('Original');
-  await initializeLocation(sourceRoot,book,{formatVersion:1,username:'',password:null},null);
-  await writeFile(path.join(sourceRoot,'.observanda/project-registry.lock'),'');
-  const destination=path.join(directory,'Successor');let interrupt=true;
+  const f=await encryptedFixture(directory,createNotebook('Original')),source=f.workspace;keys.push(f.vault);
+  await writeFile(path.join(source.root,'.observanda/project-registry.lock'),'');
+  const sourceBefore=(await source.read()).book,destination=path.join(directory,'Successor');let interrupt=true;
   const bundle=new WorkspaceProjectCopy(source,{checkpoint:async stage=>{if(stage==='workspace-snapshot'&&interrupt){interrupt=false;throw Error('Synthetic interruption');}}}),plan=await bundle.plan(destination);
-  const prepared=await workspaceEncryptedCopyAccess(source,plan,{password:'Legacy successor password'});vault=prepared.vault;
-  await assert.rejects(bundle.encrypted(plan,prepared.access,vault),/Synthetic interruption/);
-  await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});
-  const retained=await new WorkspaceCopyRecovery(source,destination).read();assert.equal(retained.version,3);
-  await assert.rejects(workspaceEncryptedCopyAccess(source,retained.plan,{password:'Incorrect successor password'}),{code:'ACCESS_DENIED'});
-  const resumed=await workspaceEncryptedCopyAccess(source,retained.plan,{password:'Legacy successor password'});
-  try{assert.equal(resumed.vault.id,vault.id);await bundle.encrypted(retained.plan,resumed.access,resumed.vault);assert.deepEqual((await new Workspace(destination,resumed.vault).read()).book,book);}finally{clearVault(resumed.vault);}
-  assert.deepEqual((await source.read()).book,book);
+  const prepared=await workspaceEncryptedCopyAccess(source,plan,{password:'Successor password',deviceStore:f.deviceStore});keys.push(prepared.vault);
+  await assert.rejects(bundle.encrypted(plan,prepared.access,prepared.vault),/Synthetic interruption/);
+  assert.equal(interrupt,false);await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});
+  const retained=await new WorkspaceCopyRecovery(source,destination).read();assert.equal(retained.version,4);assert.equal(retained.plan.encrypted,true);
+  await assert.rejects(workspaceEncryptedCopyAccess(source,retained.plan,{password:'Incorrect successor password',deviceStore:f.deviceStore}),{code:'ACCESS_DENIED'});
+  const resumed=await workspaceEncryptedCopyAccess(source,retained.plan,{password:'Successor password',deviceStore:f.deviceStore});keys.push(resumed.vault);
+  assert.equal(resumed.vault.id,prepared.vault.id);assert.equal(serialize(resumed.access),serialize(prepared.access));
+  await bundle.encrypted(retained.plan,resumed.access,resumed.vault);
+  assert.deepEqual((await new Workspace(destination,resumed.vault).read()).book,sourceBefore);
+  assert.deepEqual((await source.read()).book,sourceBefore);
   await assert.rejects(access(path.join(destination,'.observanda/project-registry.lock')),{code:'ENOENT'});
- }finally{await provider.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-legacy-successor-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-encrypted-successor-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

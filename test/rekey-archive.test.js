@@ -16,11 +16,15 @@ import {catalogueStamp,CATALOGUE_FILE,CATALOGUE_ARCHIVE} from '../src/postgres.j
 import {CATALOGUE_ACTIVATION} from '../src/postgres-activation.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 import {workspaceRevisions} from './fixtures/workspace-revisions.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {captureWorkspaceCopyDirectory} from '../src/workspace-copy-directory.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rekey-archive-')),f=await encryptedFixture(directory,upgradeNotebook(sampleNotebook()));
  const access=await createWorkspaceAccess('','synthetic archive recovery password',f.deviceStore),vault=takeCreatedVault(access),destination=path.join(directory,'fresh');
  t.after(async()=>{await clearVault(f.vault);await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-rekey-archive-'));await rm(directory,{recursive:true,force:true});});
+ // A copy pins the native project directory, upgrading a first-generation one once; do that before recording the source.
+ await captureWorkspaceCopyDirectory(new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id));
  return {...f,directory,destination,access,freshVault:vault,before:await f.workspace.read(),stamp:await catalogueStamp(f.workspace.root)};
 }
 async function sourceUnchanged(f){assert.deepEqual(await f.workspace.read(),f.before);assert.deepEqual(await catalogueStamp(f.workspace.root),f.stamp);}
@@ -103,7 +107,7 @@ for(const point of ['fresh-copy-before-activation-commit','fresh-copy-activation
  const open=Workspace.prototype.openCatalogue,verify=ResearchCatalogue.prototype.verify;let audits=0,creations=0;
  t.mock.method(Workspace.prototype,'openCatalogue',function(options={}){if(this.root===f.destination&&options.create)creations++;return open.call(this,options);});
  t.mock.method(ResearchCatalogue.prototype,'verify',async function(...args){if(this.workspace.root===f.destination){audits++;assert.deepEqual(await readFile(path.join(f.destination,CATALOGUE_ARCHIVE)),archive);}return verify.apply(this,args);});
- await recovery.run(plan,{value:{projects:[]}},()=>encryptedCopy(plan,f.access,f.freshVault,f.vault,{recovery}));
+ await recovery.run(plan,(await recovery.read()).directory,()=>encryptedCopy(plan,f.access,f.freshVault,f.vault,{recovery}));
  assert.equal(creations,0,'Resume must not repeat rekeying after the durable archive checkpoint');assert.equal(audits,1);
  const binding=JSON.parse(await readFile(path.join(f.destination,CATALOGUE_FILE)));assert.equal(binding.id,pending.id);
  await absent(path.join(f.destination,CATALOGUE_ARCHIVE));await absent(path.join(f.destination,CATALOGUE_ACTIVATION));await absent(path.join(f.destination,'.observanda/copy-in-progress'));

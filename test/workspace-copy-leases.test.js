@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {TestDeviceStore} from './device-fixture.js';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {ProjectApplication} from '../src/project-application.js';
 import {withWorkspaceCopySession} from '../src/workspace-copy-session.js';
 import {workspaceEncryptedCopyAccess} from '../src/workspace-encrypted-copy.js';
@@ -20,11 +23,12 @@ import {ownedStorageLeaseFile} from '../src/owned-storage-control.js';
 // A copy carries the research content, then starts its own controls when used.
 const folderControl=file=>file.path==='.observanda/.staging-reservations.lock'||file.path.startsWith('.observanda/staging-reservations/')||ownedStorageLeaseFile(file.path);
 
-test('a copied encrypted document workspace keeps staged content and starts its own staging and website leases',async()=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-copy-leases-')),source=new Workspace(path.join(directory,'source')),encryptedRoot=path.join(directory,'encrypted'),copyRoot=path.join(directory,'copy'),deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),application=new ProjectApplication(source,{deviceStore}),bytes=Buffer.from('Staged evidence retained by the copy');
- let encryptedApplication,vault;
+test('a copied encrypted workspace keeps staged content and starts its own staging and website leases',{timeout:180000},async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-copy-leases-')),encryptedRoot=path.join(directory,'encrypted'),copyRoot=path.join(directory,'copy'),bytes=Buffer.from('Staged evidence retained by the copy');
+ const provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);
+ let f,application,encryptedApplication,vault;
  try{
-  await source.create({...sampleNotebook(),title:'source'});
+  f=await encryptedFixture(directory,{...sampleNotebook(),title:'source'});const source=f.workspace,deviceStore=f.deviceStore;application=new ProjectApplication(source,{deviceStore});
   await withWorkspaceCopySession(application,{},async copy=>{
    const plan=await copy.plan(encryptedRoot),created=await workspaceEncryptedCopyAccess(source,plan,{password:'synthetic copy password',deviceStore});vault=created.vault;
    await copy.encrypted(plan,created.access,vault);encryptedApplication=new ProjectApplication(new Workspace(encryptedRoot,vault),{deviceStore});await copy.install(encryptedApplication);
@@ -49,5 +53,5 @@ test('a copied encrypted document workspace keeps staged content and starts its 
   assert.deepEqual(await contentBuffer(new FileContent(copiedWorkspace,path.join(copyRoot,'.observanda','later-evidence.bin'),written.size,written.sha256)),later);
   assert.equal(await verifiedStagingReservationNamespace(copyRoot,vault),true);
   await new WebsiteFileStore(copiedWorkspace).scope(()=>{},{write:true});
- }finally{await encryptedApplication?.close();await application.close();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-leases-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await encryptedApplication?.close();await application?.close();await provider.close();detach();await clearVault(vault);if(f)await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-leases-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

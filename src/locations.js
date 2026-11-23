@@ -145,13 +145,13 @@ export async function transferDestination(root,input){
   if(await assertRegular(destination,{missing:true,directory:true})&&(await readdir(destination)).length)throw new AppError('EXISTS');
   return {source,destination,inventorySalt:randomUUID()};
 }
-export async function copyPlan(root,input,{onProgress,vault=null,projectRoots=[],excludeProject}={}){
+export async function copyPlan(root,input,{onProgress,vault=null,excludeProject}={}){
  return withOperationProgress(onProgress,async()=>{
   // A review must authenticate the same transient-file policy as its copy.
   // Unknown cache-shaped content remains ordinary data once access is proved.
   if(!vault?.key)for(const [name,directory] of [['query-cache',true],['staging-reservations',true],['.staging-reservations.lock',false]])if(await assertRegular(path.join(root,'.observanda',name),{missing:true,directory}))throw new AppError('ACCESS_LOCKED');
-  const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots,excludeProject,vault}),{detached:true,existing:true}));
-  return {...plan,...inventory,...(projectRoots.length?{projectRoots}: {})};
+  const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{excludeProject,vault}),{detached:true,existing:true}));
+  return {...plan,...inventory};
  });
 }
 export async function copyWorkspaceTo(root,input,options={}){
