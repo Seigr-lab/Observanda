@@ -5,7 +5,7 @@ import {readAccess} from './access.js';
 import {AppError} from './errors.js';
 export async function workspaceRenameAccess(context,renames){
  const root=context.renameAccessRoot??context.root;
- if(!root)return {value:{formatVersion:1,username:'',password:null},etag:'none'};
+ if(!root)return {value:null,etag:'none'};
  let access=await readAccess(root);
  if(access.etag==='none'){
   const recovery=await renames.recovery(context.root);

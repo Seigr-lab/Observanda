@@ -22,7 +22,7 @@ import {Workspace,workspaceFile,WORKSPACE_FILE,assertRegular,atomicWrite,seriali
 import {validateNotebook} from './model.js';
 import {validDashboard} from './web/dashboard-model.js';
 import {AppError} from './errors.js';
-import {readAccess,takeCreatedVault,isEncryptedAccess} from './access.js';
+import {requireAccess,readAccess,takeCreatedVault,isEncryptedAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {keyringFingerprint} from './security/access-trust.js';
 import {assertNotMoving} from './workspace-move-state.js';
@@ -33,7 +33,7 @@ export const defaultLocation=()=>path.join(os.homedir(),'Observanda','workspaces
 export const preferencesLocation=()=>path.join(os.homedir(),'.observanda','preferences.json');
 export {readPreferences,readPreference,rememberLocation,rememberInterface} from './preferences.js';
 export async function currentAccessReplacement(source,vault,{deviceStore}={}){
-  const current=await readAccess(source,{deviceStore});
+  const current=await requireAccess(source,{deviceStore});
   if(current.value.formatVersion!==3)return null;
   const original=await readAccess(source,{deviceStore:null});
   if(keyringFingerprint(current.value)===keyringFingerprint(original.value))return null;

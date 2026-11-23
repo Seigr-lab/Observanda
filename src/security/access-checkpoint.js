@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {readAccess,accessSummary} from '../access.js';
+import {requireAccess,readAccess,accessSummary} from '../access.js';
 import {Workspace,atomicWrite,serialize} from '../storage.js';
 import {withAccessDevice} from './access-context.js';
 import {clearVault} from '../encryption.js';
@@ -33,7 +33,7 @@ export async function importAccessCheckpoint(root,checkpoint,{verifiedFingerprin
  const value=keyring(checkpoint);
  if(confirmed!==true||verifiedFingerprint!==keyringFingerprint(value))throw new AppError('ACCESS_CONFIRM');
  deviceStore.accessTrust.assertExternal(root);
- const original=await readAccess(root,{deviceStore:null});if(original.value.vaultId!==value.vaultId)throw new AppError('WORKSPACE_CHANGED');
+ const original=await requireAccess(root,{deviceStore:null});if(original.value.vaultId!==value.vaultId)throw new AppError('WORKSPACE_CHANGED');
  const trusted=await deviceStore.accessTrust.current(value.vaultId),vault=await authorize(trusted?.keyring??value);
  try{
   authenticateKeyring(value,vault);authenticateKeyring(original.value,vault);

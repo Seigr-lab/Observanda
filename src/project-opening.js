@@ -8,7 +8,7 @@ import {resolveLocation} from './locations.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {validProjectCatalogueBinding} from './project-catalogue-owner.js';
 import {ProjectStorage} from './project-storage.js';
-import {readAccess,verifyAccess} from './access.js';
+import {requireAccess,readAccess,verifyAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
 // Registered projects reopen in place, always inside the workspace folder; a
@@ -31,7 +31,7 @@ export class ProjectOpening{
   await boundary();let binding=await catalogueBinding(root);
   if(binding&&!validProjectCatalogueBinding(binding))throw new AppError('PROJECT_FOLDER');
   if(binding){const prior=await this.registry.state(binding.projectId);if(prior.state==='active'&&prior.entry.root!==root)throw new AppError('PROJECT_LOCATION_EXISTS');}
-  const access=await readAccess(root);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');let vault;
+  const access=await requireAccess(root);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');let vault;
   try{
    vault=await verifyAccess(access,command.username,command.password,{deviceStore:this.deviceStore,recovery:command.recovery});await check();
    const identity=binding??await readProjectArchiveIdentity(root,vault);

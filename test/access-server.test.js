@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile,mkdir,readdir} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,mkdir,readdir,unlink} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {testServer as startServer,TestDeviceStore} from './device-fixture.js';
@@ -118,6 +118,17 @@ test('workspace creation keeps its admitted response alive through slow initiali
   const saved=await fetch(reopened.origin+'/api/notebook',{headers:{'X-Observanda-Session':session.headers.get('x-observanda-session').split(';')[0]}});assert.equal(saved.status,200);const current=await saved.json();
   assert.equal(current.book.id,created.book.id);assert.equal(current.book.title,title);assert.deepEqual(current.book.entries,created.book.entries);
  }finally{release();await pending.catch(()=>{});}
+});
+
+test('a workspace without its access file is damaged, while setup without a workspace stays open',async t=>{
+  const blank=await setup(t,{create:false}),setupClient=await blank.client(),summary=await (await setupClient.request('/api/access/status')).json();
+  assert.equal(summary.locked,false);assert.equal(summary.protected,false);assert.equal(summary.encrypted,false);assert.equal(summary.version,null);
+  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-access-missing-')),fixture=await encryptedFixture(parent,sampleNotebook());t.after(()=>clearVault(fixture.vault));
+  await unlink(path.join(fixture.workspace.root,'.observanda','access.json'));
+  const app=await startServer({root:fixture.workspace.root,port:0,preferencesFile:path.join(parent,'preferences.json'),deviceStore:fixture.deviceStore});t.after(()=>app.close());
+  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
+  // Starting a session reports the damage instead of opening the folder or asking for an unlock that cannot succeed.
+  assert.equal(session.status>=400,true);assert.equal((await session.json()).code,'ACCESS_FORMAT');
 });
 
 test('missing remembered locations never turn into a replacement workspace',async t=>{

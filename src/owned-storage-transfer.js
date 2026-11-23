@@ -14,7 +14,7 @@ import {workspaceFiles,hashWorkspaceFile} from './workspace-inventory.js';
 import {workspaceFile,assertRegular,atomicWrite,serialize} from './storage.js';
 import {catalogueBinding,CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION} from './postgres-activation.js';
 import {transferCatalogue,openCatalogue,catalogueArchiveDigest,backupCatalogue,prepareTransferredCatalogue} from './postgres.js';
-import {readAccess} from './access.js';
+import {requireAccess,readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {withWriterLease} from './writer-lease.js';
 import {researchId} from './web/research-reference.js';
@@ -55,7 +55,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},beforeVer
  const archive=portable||await outsideWorkspaces(destination);
  requireStorageName(destination,storageFolderName(sourceRoot));
  let boundaries=projectCopyBoundaries(sourceRoot,projectRoots);
- const access=await readAccess(sourceRoot);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,source.vault);
+ const access=await requireAccess(sourceRoot);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,source.vault);
  const target=new Storage(destination,source[ownerId],source.vault),marker=path.join(destination,markerName);
  const prior=await intent(target);
  return withNativeDestination(destination,async admitted=>{

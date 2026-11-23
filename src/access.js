@@ -35,12 +35,14 @@ export async function createWorkspaceAccess(username='',password='',deviceStore=
 export const isEncryptedAccess=value=>value?.formatVersion===2||value?.formatVersion===3;
 export const requiresAccess=value=>!!value?.password||value?.formatVersion===3;
 export async function accessSummary(value,deviceStore=defaultDeviceStore){
+ if(value===null)return {protected:false,encrypted:false,version:null,deviceAvailable:deviceStore.available(),deviceAuthorized:false,passwordAvailable:false,recoveryAvailable:false,username:'',usernameRequired:false};
  const device=value.formatVersion===3?await deviceStore.read().catch(()=>null):null;
  return {protected:requiresAccess(value),encrypted:isEncryptedAccess(value),version:value.formatVersion,
   deviceAvailable:deviceStore.available(),deviceAuthorized:value.formatVersion===3&&value.devices.some(d=>d.identity.id===device?.public.id),
   passwordAvailable:!!value.password,recoveryAvailable:!!value.recovery,username:value.username,usernameRequired:!!value.username};
 }
 export async function resolveAccess(access,{deviceStore=accessDevice(),root=accessRoots.get(access)}={}){
+ if(access.value===null)throw new AppError('ACCESS_FORMAT');
  if(!deviceStore)return access;
  deviceStore.accessTrust.assertExternal(root);
  const value=await deviceStore.accessTrust.resolve(access.value);
@@ -59,10 +61,15 @@ export async function readAccess(root,{deviceStore=accessDevice()}={}){
     }else {if(value.formatVersion!==1||!usernameOK(value.username)||Object.keys(value).sort().join()!=='formatVersion,password,username'||(p!==null&&(!p||Object.keys(p).sort().join()!=='algorithm,hash,salt'||p.algorithm!=='scrypt'||!/^[a-f0-9]{64}$/.test(p.salt)||!/^[a-f0-9]{128}$/.test(p.hash))))throw new AppError('ACCESS_FORMAT');
 }
     const access={value,etag:digest(raw)};accessRoots.set(access,root);return resolveAccess(access,{deviceStore,root});
-  }catch(e){if(e.code==='ENOENT')return {value:{formatVersion:1,username:'',password:null},etag:'none'};throw e;}
+  }catch(e){if(e.code==='ENOENT')return {value:null,etag:'none'};throw e;}
+}
+// Every workspace, project and lab book owns an access file; its absence is damage, not an open folder.
+export async function requireAccess(root,options){
+  const access=await readAccess(root,options);if(access.value===null)throw new AppError('ACCESS_FORMAT');return access;
 }
 export async function verifyAccess(access,username,password,{deviceStore=accessDevice()??defaultDeviceStore,recovery=''}={}){
   if(access.updateRequired)throw new AppError('ACCESS_STATE_CHANGED');
+  if(access.value===null)throw new AppError('ACCESS_FORMAT');
   access=await resolveAccess(access,{deviceStore});
   if(access.value.formatVersion===3){
    const vault=await unlockKeyring(access.value,{username,password,recovery,deviceStore});
@@ -82,7 +89,7 @@ export async function verifyAccess(access,username,password,{deviceStore=accessD
 export async function changeAccess(root,{username,password,currentPassword},expected,{deviceStore=accessDevice()??defaultDeviceStore,vault:sessionVault=null}={}){
   const workspace=new Workspace(root);
   return workspace.withLock(async()=>{
-    const current=await readAccess(root,{deviceStore});if(current.etag!==expected)throw new AppError('CONFLICT');
+    const current=await requireAccess(root,{deviceStore});if(current.etag!==expected)throw new AppError('CONFLICT');
     const vault=current.value.formatVersion===3&&sessionVault?cloneVault(sessionVault):await verifyAccess(current,current.value.username,currentPassword??'',{deviceStore});
     try{
       if(current.value.formatVersion===3){

@@ -303,10 +303,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const sessionResponse=(res,id)=>{res.setHeader('X-Observanda-Session',id);res.setHeader('Set-Cookie','observanda=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/');return {ok:true,session:id};};
   const contextAccess=async()=>{
    const raw=await withAccessDevice(null,()=>workspaceRenameAccess(context,renames));
+   if(raw.value===null)return raw;
    try{return await resolveAccess(raw,{deviceStore,root:context.root});}
    catch(error){if(error.code!=='ACCESS_STATE_CHANGED')throw error;const trusted=await deviceStore.accessTrust.current(raw.value.vaultId);if(!trusted)throw error;return {value:trusted.keyring,etag:'untrusted:'+keyringFingerprint(raw.value),updateRequired:true};}
   };
-  const status=async client=>{const access=await contextAccess();if(context.protectedOnce&&access.etag==='none')throw new AppError('ACCESS_FORMAT');context.protectedOnce ||= requiresAccess(access.value);return {access,locked:!!access.updateRequired||!!context.manualLock||requiresAccess(access.value)&&(client.access!==access.etag||client.expires<Date.now()||(isEncryptedAccess(access.value)&&!context.vault.key))};};
+  // Only a context without a workspace descriptor (setup, folder picker, a missing workspace) has no access file;
+  // a workspace whose access file is missing is damaged, never open.
+  const missingAccess=async access=>access.value===null&&(context.protectedOnce||!!context.root&&!!await assertRegular(await workspaceFile(context.root),{missing:true}));
+  const status=async client=>{const access=await contextAccess();if(await missingAccess(access))throw new AppError('ACCESS_FORMAT');context.protectedOnce ||= requiresAccess(access.value);return {access,locked:!!access.updateRequired||!!context.manualLock||requiresAccess(access.value)&&(client.access!==access.etag||client.expires<Date.now()||(isEncryptedAccess(access.value)&&!context.vault.key))};};
   const limitedAuthentication=async(root,operation)=>{
     const attempts=failures.get(root)??{count:0,until:0};if(attempts.count>=5&&Date.now()<attempts.until)throw new AppError('ACCESS_WAIT');
     try{const result=await operation();failures.delete(root);return result;}catch(e){if(e.code==='ACCESS_DENIED')failures.set(root,{count:Date.now()>attempts.until?1:attempts.count+1,until:Date.now()+60000});throw e;}
@@ -401,9 +405,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           throw new AppError('LOCKED');
         }
         const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
+        // A workspace whose access file is missing is damaged; it never opens as an unprotected folder.
+        if(await missingAccess(access))throw new AppError('ACCESS_FORMAT');
         if(sessions.size>=128)forgetSession(sessions.keys().next().value);
         const local={access:requiresAccess(access.value)?null:access.etag,expires:Date.now()+8*60*60*1000,filesOnly:data.filesOnly===true};
-        if(access.value.formatVersion===3&&!context.manualLock&&!access.updateRequired){
+        if(access.value?.formatVersion===3&&!context.manualLock&&!access.updateRequired){
          try{
           const vault=await diagnosticPhase('session-device',()=>verifyAccess(access,'','',{deviceStore}));
           const latest=await diagnosticPhase('session-access',contextAccess);
@@ -513,7 +519,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         let state=await status(client);
         // A workspace this device opens without a password also unlocks here, for example when its folder
         // became available after this session started. A manual lock and a changed access file are kept.
-        if(state.locked&&state.access.value.formatVersion===3&&!state.access.updateRequired&&!context.manualLock&&!changing&&!loginBusy&&context===selectedContext){
+        if(state.locked&&state.access.value?.formatVersion===3&&!state.access.updateRequired&&!context.manualLock&&!changing&&!loginBusy&&context===selectedContext){
          // Replacing the key drains snapshot readers; they must be admitted again afterwards, as after an unlock.
          loginBusy=true;let drained=false;
          try{
@@ -528,7 +534,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
          }catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
          finally{if(drained)selectedContext.readers.open();loginBusy=false;}
         }
-        const {access,locked}=state;return json({...await accessSummary(access.value,deviceStore),locked,updateRequired:!!access.updateRequired,username:locked?'':access.value.username});
+        const {access,locked}=state;return json({...await accessSummary(access.value,deviceStore),locked,updateRequired:!!access.updateRequired,username:locked?'':access.value?.username??''});
       }
       if(req.method==='POST'&&url.pathname==='/api/access/checkpoint'){
        const data=await body(req,600000);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
@@ -1021,7 +1027,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(changing||loginBusy||activeWrites)throw new AppError('LOCKED');changing=true;
         try{const data=await body(req);
         // A password-protected workspace changes its credentials only with its current password, even in an unlocked session. An empty password would fall back to this device's trust, so it is refused before checking.
-        if(accessState.access.value.password){if(typeof data.currentPassword!=='string'||!data.currentPassword)throw new AppError('ACCESS_DENIED');const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword);await clearVault(verified);}
+        if(accessState.access.value?.password){if(typeof data.currentPassword!=='string'||!data.currentPassword)throw new AppError('ACCESS_DENIED');const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword);await clearVault(verified);}
         const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce ||= requiresAccess(next.value);client.access=next.etag;client.expires=Date.now()+8*60*60*1000;return json({...await accessSummary(next.value,deviceStore),locked:false});}
         finally{changing=false;}
       }

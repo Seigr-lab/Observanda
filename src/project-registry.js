@@ -14,7 +14,7 @@ import path from 'node:path';
 import {realpath} from 'node:fs/promises';
 import {digest,serialize} from './storage.js';
 import {catalogueBinding} from './postgres-activation.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 const exact=(v,names)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===names.sort().join();
@@ -84,7 +84,7 @@ export class ProjectRegistry{
  }
  async describe(storage,parentId,{staged=false}={}){
   if(!researchId(storage.projectId))throw new AppError('INVALID');
-  const root=await realpath(storage.root),binding=await catalogueBinding(root),access=await readAccess(root);
+  const root=await realpath(storage.root),binding=await catalogueBinding(root),access=await requireAccess(root);
   if(binding?.placement!=='project'||binding.projectId!==storage.projectId||access.value.vaultId!==storage.vault?.id)throw new AppError('DATABASE_LOCATION');
   const metadata=staged?await storage.catalogue(async store=>(await store.snapshot()).metadata):(await storage.outline()).metadata;
   return {projectId:storage.projectId,root,vaultId:storage.vault.id,namespaceId:metadata.id,parentId,summary:summaryOf(metadata.projects.find(project=>project.id===storage.projectId))};

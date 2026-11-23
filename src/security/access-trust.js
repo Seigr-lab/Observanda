@@ -46,6 +46,7 @@ export class AccessTrustStore{
   validateKeyring(value.keyring);return value;
  }
  async resolve(value){
+  if(value===null)throw new AppError('ACCESS_FORMAT');
   if(![2,3].includes(value?.formatVersion))return value;
   const current=await this.current(value.vaultId);if(!current)return value;
   const fingerprint=keyringFingerprint(value);if(current.sha256===fingerprint)return current.keyring;

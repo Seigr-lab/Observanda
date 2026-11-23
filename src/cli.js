@@ -4,7 +4,7 @@ import {readPreferences} from './preferences.js';
 import {inspectSource} from './migration/runner.js';
 import {withConsoleProgress} from './operation-progress-console.js';
 import {startWorkspaceDatabases} from './workspace-databases.js';
-import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from './access.js';
+import {requireAccess,createWorkspaceAccess,takeCreatedVault,verifyAccess} from './access.js';
 import {DeviceStore} from './security/device-store.js';
 import {clearVault} from './encryption.js';
 import {initializeLocation} from './locations.js';
@@ -70,7 +70,7 @@ try {
      password=Buffer.concat(chunks).toString('utf8').replace(/\r?\n$/,'');for(const bytes of chunks)bytes.fill(0);
      if(!password)throw new AppError('ACCESS_INVALID');
     }
-    if(root&&['validate','build','intake'].includes(command)){const access=await readAccess(root);vault=await verifyAccess(access,access.value.username,password,{deviceStore});}
+    if(root&&['validate','build','intake'].includes(command)){const access=await requireAccess(root);vault=await verifyAccess(access,access.value.username,password,{deviceStore});}
     const workspace=root?new Workspace(root,vault):null;
     if(command==='intake'){
       try{const result=await intakeCLI(workspace,values,{signal:startup.signal});console.log(JSON.stringify({version:1,ok:!['failed','cancelled'].includes(result.job?.state),result}));if(['failed','cancelled'].includes(result.job?.state))process.exitCode=2;}

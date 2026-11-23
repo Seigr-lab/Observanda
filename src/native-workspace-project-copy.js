@@ -11,7 +11,7 @@ import {captureWorkspaceCopyDirectory,withWorkspaceCopyDirectory,visitWorkspaceC
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertProjectRelocationsSettled} from './project-membership.js';
 import {ProjectBookCopy} from './project-book-copy.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {copyPlan,copyWorkspace,encryptedCopy,transferDestination,resolveLocation} from './locations.js';
 import {copyProjectLocation,projectTransferReceipt} from './project-transfer.js';
 import {withProjectLifecycle} from './project-lifecycle.js';
@@ -34,7 +34,7 @@ export class NativeWorkspaceProjectCopy{
    await visitWorkspaceCopyPlacements(view,this.source.root,destination,async entry=>{
     if(within(entry.root,destination)||within(destination,entry.root))throw new AppError('STORAGE_PATH');await assertProjectRelocationsSettled(this.registry,[entry.projectId]);
     await owner.withProject(entry.projectId,async storage=>{
-     await owner.check();if(portable){const access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_PROJECT_ACCESS',[entry.summary?.title??path.basename(entry.root)]);}
+     await owner.check();if(portable){const access=await requireAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_PROJECT_ACCESS',[entry.summary?.title??path.basename(entry.root)]);}
      const metadata=(await storage.outline()).metadata;if(!same(entry,{projectId:storage.projectId,root:storage.root,vaultId:storage.vault.id,namespaceId:metadata.id,parentId:entry.parentId}))throw new AppError('CONFLICT');
      const books=new ProjectBookCopy(storage);try{await books.prepare(typeof owner.withBook==='function'?(id,use)=>owner.withBook(storage,id,use):undefined,{portable});}finally{books.close();}
     });

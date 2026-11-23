@@ -19,7 +19,7 @@ import {projectTransferRunning,trackProjectTransfer} from './project-transfer-ta
 import {assertRegular,privateDirectory,serialize} from './storage.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {validProjectCatalogueBinding} from './project-catalogue-owner.js';
-import {readAccess} from './access.js';
+import {requireAccess,readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {workspaceDeletion,deletionScope} from './workspace-delete-state.js';
 import {databaseProvider} from './workspace-database-context.js';
@@ -58,7 +58,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
  async list(){const value=await this.receipt();return value?[summary(value)]:[];}
  async status(){
   const value=await this.receipt();if(!value)return null;const result={...summary(value),running:projectTransferRunning(this.file(this.projectId))};
-  if(!result.running&&value.phase!=='complete')try{const root=await this.authenticationRoot(value);if(root){const {value:access}=await readAccess(root);result.password=!!access.password;result.username=access.username;}}catch{/* Recovery reports an unavailable source when the command is resumed. */}
+  if(!result.running&&value.phase!=='complete')try{const root=await this.authenticationRoot(value);if(root){const {value:access}=await requireAccess(root);result.password=!!access.password;result.username=access.username;}}catch{/* Recovery reports an unavailable source when the command is resumed. */}
   return result;
  }
  async authenticationRoot(value){

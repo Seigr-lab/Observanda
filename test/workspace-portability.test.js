@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,rename,readFile,access,cp} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,rename,readFile,access,cp} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../src/sample.js';
@@ -12,6 +12,7 @@ import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {readPreferences,rememberLocation} from '../src/preferences.js';
 import {rememberWorkspaceLocation} from '../src/workspace-reconnection.js';
 import {Workspace} from '../src/storage.js';
+import {verifyPortableAccess} from '../src/workspace-portability.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {contentBuffer} from '../src/file-content.js';
 import {updateWorkspaceAccess,workspaceAccess} from '../src/security/workspace-access.js';
@@ -118,4 +119,10 @@ test('copying a recognized older backup carries current credentials to a new ins
  assert.ok(access.value.password);await assert.rejects(verifyAccess(access,'','',{deviceStore:other}),{code:'DEVICE_UNKNOWN'});
  const current=await verifyAccess(access,'',password,{deviceStore:other});
  try{assert.equal((await new Workspace(destination,current).read()).book.id,(await f.ws.read()).book.id);assert.deepEqual(await new ResearchMaterials(new Workspace(destination,current)).read(f.ref),await f.materials.read(f.ref));}finally{clearVault(current);}
+});
+
+test('a portable check refuses a folder without an access file',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-portability-missing-')),root=path.join(directory,'copy');t.after(()=>rm(directory,{recursive:true,force:true}));
+ await mkdir(path.join(root,'.observanda'),{recursive:true});
+ for(const credentials of [{},{password:'synthetic password 123'},{recovery:'synthetic recovery'}])await assert.rejects(verifyPortableAccess(root,credentials),{code:'ACCESS_FORMAT'});
 });

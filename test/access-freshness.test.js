@@ -6,7 +6,7 @@ import os from 'node:os';
 import {DeviceStore} from '../src/security/device-store.js';
 import {createKeyring,changeKeyringPassword,finishKeyring} from '../src/security/keyring.js';
 import {keyringFingerprint} from '../src/security/access-trust.js';
-import {readAccess,verifyAccess,changeAccess} from '../src/access.js';
+import {readAccess,requireAccess,verifyAccess,changeAccess} from '../src/access.js';
 import {workspaceAccess,updateWorkspaceAccess} from '../src/security/workspace-access.js';
 import {exportAccessCheckpoint,inspectAccessCheckpoint,importAccessCheckpoint} from '../src/security/access-checkpoint.js';
 import {clearVault,seal,unseal} from '../src/encryption.js';
@@ -84,4 +84,16 @@ test('another device must explicitly verify an unknown settings change using its
  await assert.rejects(importAccessCheckpoint(f.root,exported.checkpoint,{verifiedFingerprint:exported.fingerprint,confirmed:true,password:newPassword},other),{code:'ACCESS_DENIED'});
  await importAccessCheckpoint(f.root,exported.checkpoint,{verifiedFingerprint:exported.fingerprint,confirmed:true,password:oldPassword},other);
  await assert.rejects(unlock(f.root,other,oldPassword),{code:'ACCESS_DENIED'});assert.deepEqual(await unlock(f.root,other,newPassword),f.vault.key);
+});
+
+test('a folder without an access file is never an open workspace',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-access-missing-')),root=path.join(directory,'workspace');t.after(()=>rm(directory,{recursive:true,force:true}));
+ await mkdir(path.join(root,'.observanda'),{recursive:true});
+ const missing=await readAccess(root);assert.deepEqual(missing,{value:null,etag:'none'});
+ assert.deepEqual(await readAccess(path.join(directory,'absent')),{value:null,etag:'none'});
+ await assert.rejects(requireAccess(root),{code:'ACCESS_FORMAT'});
+ await assert.rejects(verifyAccess(missing,'','',{deviceStore:null}),{code:'ACCESS_FORMAT'});
+ await assert.rejects(verifyAccess(missing,'Researcher','synthetic password 123'),{code:'ACCESS_FORMAT'});
+ await assert.rejects(changeAccess(root,{username:'',password:newPassword},'none',{deviceStore:null}),{code:'ACCESS_FORMAT'});
+ await assert.rejects(workspaceAccess(root,null),{code:'ACCESS_FORMAT'});
 });

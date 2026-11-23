@@ -4,7 +4,7 @@ import {OwnerDirectoryRegistry} from './owner-directory-registry.js';
 import path from 'node:path';
 import {realpath} from 'node:fs/promises';
 import {catalogueBinding} from './postgres-activation.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {researchId} from './web/research-reference.js';
 import {storageCreationPath,requireStorageName,validateStorageName} from './storage-names.js';
 import {AppError} from './errors.js';
@@ -47,7 +47,7 @@ export class LabBookRegistry{
  location(entry){return {...entry,root:storageCreationPath(this.project.root,entry.directory)};}
  async describe(storage,{staged=false}={}){
   if(!researchId(storage.labBookId)||storage.projectId!==undefined)throw new AppError('INVALID');
-  const [root,parent,binding,access]=await Promise.all([realpath(storage.root),realpath(this.project.root),catalogueBinding(storage.root),readAccess(storage.root)]);
+  const [root,parent,binding,access]=await Promise.all([realpath(storage.root),realpath(this.project.root),catalogueBinding(storage.root),requireAccess(storage.root)]);
   if(path.dirname(root)!==parent||binding?.placement!=='lab-book'||binding.labBookId!==storage.labBookId||access.value.formatVersion!==3||access.value.vaultId!==storage.vault?.id)throw new AppError('DATABASE_LOCATION');
   const metadata=staged?await storage.catalogue(async store=>(await store.snapshot()).metadata):(await storage.outline()).metadata,book=metadata.notebooks.find(item=>item.id===storage.labBookId);
   if(!book||book.projectId!==this.project.projectId)throw new AppError('DATABASE_LOCATION');

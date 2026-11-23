@@ -1,7 +1,7 @@
 import {LabBookRegistry} from './lab-book-registry.js';
 import {LabBookRenames} from './lab-book-rename.js';
 import {LabBookDeletions} from './lab-book-deletion.js';
-import {readAccess,verifyAccess} from './access.js';
+import {requireAccess,readAccess,verifyAccess} from './access.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {AppError} from './errors.js';
@@ -29,7 +29,7 @@ export class LabBookAccessSession{
  }
  async location(){
   const placement=await this.application.bookPlacements?.status(this.project,this.labBookId);
-  if(placement?.canResume){const root=await this.application.bookPlacements.root(this.project,this.labBookId);return {root,vaultId:(await readAccess(root)).value.vaultId};}
+  if(placement?.canResume){const root=await this.application.bookPlacements.root(this.project,this.labBookId);return {root,vaultId:(await requireAccess(root)).value.vaultId};}
   const renames=new LabBookRenames(this.project),pending=await renames.pending(this.labBookId);
   if(pending&&pending.phase!=='complete')return {root:await renames.locate(pending),vaultId:pending.vaultId};
   const deletions=new LabBookDeletions(this.project,this.labBookId),receipt=await deletions.receipt();

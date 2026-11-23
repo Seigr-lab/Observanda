@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {readAccess,isEncryptedAccess} from './access.js';
+import {requireAccess,isEncryptedAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {resolveLocation} from './locations.js';
 import {Workspace} from './storage.js';
@@ -23,7 +23,7 @@ export async function portableRestoreRequest(operation,data,{client,context,devi
  if(operation==='apply'&&(!plan||plan.token!==data.token||plan.contextId!==context.id||plan.source!==source||plan.destination!==destination||plan.expires<=Date.now()))throw new AppError('STALE');
  return withNativeDestination(source,async scope=>{
   await scope.admit();
-  const access=await readAccess(source,{deviceStore});
+  const access=await requireAccess(source,{deviceStore});
   if(isEncryptedAccess(access.value)&&!data.password&&!data.recovery)throw new AppError('STORAGE_PORTABLE_ACCESS');
   const vault=await authenticate(source,access,data.username??'',data.password??'',data.recovery??'');
   try{

@@ -72,7 +72,7 @@ import {ProjectCreation} from './project-creation.js';
 import {MAX_BYTES} from './model.js';
 import {ProjectReferences} from './project-references.js';
 import {workspaceFile,assertRegular} from './storage.js';
-import {readAccess,verifyAccess,resolveAccess} from './access.js';
+import {requireAccess,readAccess,verifyAccess,resolveAccess} from './access.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {retireQueryCacheScope,withQueryCacheScope} from './query-cache-scope.js';
 import {researchId,validTarget} from './web/research-reference.js';
@@ -162,7 +162,7 @@ export class ProjectApplication{
   const recovery=await this.workspaceMoves.unlockRecovery(client,projectId,data,{check});if(recovery)return recovery;
   if(!data||Object.keys(data).some(key=>!['username','password','recovery'].includes(key))||Object.values(data).some(value=>typeof value!=='string'||value.length>1024))throw new AppError('INVALID');
   return this.tracked(async()=>{
-   await check();const session=this.session(client),previous=session.get(projectId),registry=await this.registry(),entry=await registry.locate(projectId),access=await readAccess(entry.root);
+   await check();const session=this.session(client),previous=session.get(projectId),registry=await this.registry(),entry=await registry.locate(projectId),access=await requireAccess(entry.root);
    if(access.value.formatVersion!==3||access.value.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
    const vault=await this.authenticate(entry.root,access,data.username??'',data.password??'',data.recovery??'');
    try{

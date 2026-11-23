@@ -8,7 +8,7 @@ import {copyLabBookLocation} from './lab-book-transfer.js';
 import {privateDirectory} from './storage.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
 import {assertNotMoving} from './workspace-move-state.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {withWriterLease} from './writer-lease.js';
 import {resolveLocation} from './locations.js';
@@ -42,7 +42,7 @@ export class LabBookCopies{
     value={version:1,id,kind:this.kind,projectId:this.project.projectId,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,source:entry.root,destination,phase:'copying'};
    }
    await checkDestination(value.destination);
-   if(this.kind==='export'){const access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_BOOK_ACCESS');}
+   if(this.kind==='export'){const access=await requireAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_BOOK_ACCESS');}
    await check();await this.state.save(value);
    try{await copyLabBookLocation(storage,value.destination,{id,portable:this.kind==='export',onProgress,checkpoint});}
    finally{await databaseProvider()?.closeLabBook(value.destination);}

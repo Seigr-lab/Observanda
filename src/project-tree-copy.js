@@ -8,7 +8,7 @@ import {withProjectLifecycle} from './project-lifecycle.js';
 import {withProjectMembership,assertProjectCreationSettled,assertProjectRelocationsSettled} from './project-membership.js';
 import {workspaceCopyTransferId} from './workspace-copy-directory.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {serialize,digest} from './storage.js';
 import {operationStage,operationItem,operationAdvance} from './operation-progress.js';
 import {AppError} from './errors.js';
@@ -21,7 +21,7 @@ export class ProjectTreeCopy{
   for await(const entry of this.tree.entries())await this.withProject(entry.projectId,async storage=>{
    await withProjectLifecycle(this.registry,entry.projectId,'open',async()=>{}, {wait:false});
    if(storage.root!==entry.root||storage.vault.id!==entry.vaultId||(await storage.outline()).metadata.id!==entry.namespaceId)throw new AppError('CONFLICT');
-   if(this.portable){const access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_PROJECT_ACCESS',[path.basename(storage.root)]);}
+   if(this.portable){const access=await requireAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_PROJECT_ACCESS',[path.basename(storage.root)]);}
    const books=new ProjectBookCopy(storage);try{await books.prepare(this.withBook?(id,use)=>this.withBook(storage,id,use):undefined,{portable:this.portable});}finally{books.close();}
   });
   await this.current();await writeProjectTree(this.storage,this.tree.manifest);return this.tree;

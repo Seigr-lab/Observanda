@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {Workspace,atomicWrite,serialize} from '../storage.js';
-import {readAccess} from '../access.js';
+import {requireAccess,readAccess} from '../access.js';
 import {authenticateKeyring,grantDevice,recoveryKey} from './keyring.js';
 import {AppError} from '../errors.js';
 import {defaultDeviceStore} from './device-store.js';
@@ -8,7 +8,7 @@ import {accessDevice} from './access-context.js';
 import {keyringFingerprint} from './access-trust.js';
 
 export async function workspaceAccess(root,vault,{deviceStore=accessDevice()??defaultDeviceStore}={}){
- const access=await readAccess(root,{deviceStore});if(access.value.formatVersion!==3)throw new AppError('ACCESS_UPGRADE');
+ const access=await requireAccess(root,{deviceStore});if(access.value.formatVersion!==3)throw new AppError('ACCESS_UPGRADE');
  authenticateKeyring(access.value,vault);
  return {etag:access.etag,vaultId:access.value.vaultId,fingerprint:keyringFingerprint(access.value),recoveryAvailable:!!access.value.recovery,
  devices:access.value.devices.map(d=>({id:d.identity.id})),passwordAvailable:!!access.value.password,scope:'workspace'};

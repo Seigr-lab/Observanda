@@ -1,7 +1,7 @@
 import {bookPlacementPending} from './lab-book-placement-state.js';
 import {readLabBookArchiveIdentity} from './lab-book-archive.js';
 import {LabBookStorage} from './lab-book-storage.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {AppError} from './errors.js';
@@ -14,7 +14,7 @@ export class LabBookRouter{
   // than wait behind it: a held move must not occupy the reader's request and
   // database slots, which the project's other reads need.
   const placement=await bookPlacementPending(this.registry.project,labBookId);if(placement)throw new AppError(placement.kind==='import'?'LAB_BOOK_IMPORT_PENDING':'LAB_BOOK_MOVE_PENDING');
-  const entry=await this.registry.locate(labBookId),binding=await catalogueBinding(entry.root),access=await readAccess(entry.root);
+  const entry=await this.registry.locate(labBookId),binding=await catalogueBinding(entry.root),access=await requireAccess(entry.root);
   if(binding&&(binding.placement!=='lab-book'||binding.labBookId!==labBookId)||access.value.formatVersion!==3||access.value.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
   const vault=await this.unlock(entry,access);if(!vault?.key)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,vault);
   if(!binding){const identity=await readLabBookArchiveIdentity(entry.root,vault);if(identity.labBookId!==labBookId||identity.namespaceId!==entry.namespaceId)throw new AppError('DATABASE_LOCATION');}

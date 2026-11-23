@@ -2,7 +2,7 @@ import {incomingProjectMove} from './project-incoming-moves.js';
 import {assertImportedProjectReady} from './project-import-state.js';
 import {readProjectArchiveIdentity} from './project-archive.js';
 import {ProjectStorage} from './project-storage.js';
-import {readAccess} from './access.js';
+import {requireAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {projectInsideWorkspace} from './project-root-boundaries.js';
@@ -17,7 +17,7 @@ export class ProjectRouter{
   if(!['read','write'].includes(action)||typeof operation!=='function')throw new AppError('INVALID');
   if(await this.authorize({projectId,action,target})!==true)throw new AppError('ACCESS_DENIED');
   if(!locationOnly&&await incomingProjectMove(this.registry,projectId))throw new AppError('STORAGE_PROJECT_BUSY');
-  await assertImportedProjectReady(this.registry,projectId);const entry=await this.registry.locate(projectId);await this.assertInside(entry);const binding=await catalogueBinding(entry.root),access=await readAccess(entry.root);
+  await assertImportedProjectReady(this.registry,projectId);const entry=await this.registry.locate(projectId);await this.assertInside(entry);const binding=await catalogueBinding(entry.root),access=await requireAccess(entry.root);
   if(binding&&(binding.placement!=='project'||binding.projectId!==projectId)||access.value.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
   const vault=await this.unlock(entry,access);if(!vault?.key)throw new AppError('ACCESS_LOCKED');
   if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,vault);

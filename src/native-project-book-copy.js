@@ -11,7 +11,7 @@ import {LabBookRegistry} from './lab-book-registry.js';
 import {LabBookStorage} from './lab-book-storage.js';
 import {copyLabBookLocation,labBookTransferReceipt} from './lab-book-transfer.js';
 import {catalogueBinding} from './postgres-activation.js';
-import {readAccess} from './access.js';
+import {requireAccess,readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
@@ -63,7 +63,7 @@ export class NativeProjectBookCopy{
   const hash=createHash('sha256');let count=0;
   await this.view(async view=>{for await(const {entry} of view.entries()){const use=()=>this.withBook(entry.labBookId,async storage=>{
    const book=await this.validate(entry,storage);if(obligations)await assertInventoryObligationsSettled(storage);
-   if(portable){const access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_BOOK_ACCESS');}
+   if(portable){const access=await requireAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_BOOK_ACCESS');}
    hash.update(serialize(book)+'\n');if(store)await store.put(book.labBookId,book);count++;
   });if(lifecycle)await this.lease(entry,use);else await use();}});
   if(count!==this.count)throw new AppError('CONFLICT');return hash.digest('hex');
