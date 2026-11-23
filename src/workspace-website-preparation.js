@@ -9,8 +9,8 @@ import {lastWebsiteLibraryDiscovery} from './website-library-discovery.js';
 // the lab book records shared for websites, so the website editor's library
 // can offer them. Closing the dashboard or opening the editor does not cancel it.
 export class WorkspaceWebsitePreparation{
- // An activity entry shows the preparation in the app's activity surface; the
- // durable upgrade journals let a cancelled or interrupted preparation resume.
+ // An activity entry shows the preparation in the app's activity surface while it
+ // runs; durable receipts let a cancelled or interrupted preparation resume.
  constructor(workspace,{activity}={}){this.workspace=workspace;this.clients=new WeakSet();this.activity=activity;this.cancelled=false;}
  async status(){
   const progress=this.progress??{state:'ready',total:0,done:0};
@@ -19,15 +19,17 @@ export class WorkspaceWebsitePreparation{
   return library?{...progress,library}:progress;
  }
  start(client,options){
-  const {check,discover,retry=false}=options;
+  const {check,discover,retry=false,requested=false}=options;
   if(this.clients.has(client)&&!retry)return;
   if(this.task){this.next=[client,options];return;}
   this.clients.add(client);this.cancelled=false;
   const controller=new AbortController(),{signal}=controller;
   this.controller=controller;
-  // The activity appears only once there is work to show; an already prepared workspace adds none.
-  let entry=null,converting=false;const started=Date.now();
-  const report=value=>{if(value.stage!=='discovering-library')converting=true;entry??=this.activity?.()??null;entry?.progress({stage:value.stage??value.phase??'preparing',completed:value.completed??0,...(Number.isSafeInteger(value.stageTotal)?{total:value.stageTotal}:{}),unit:'items'});};
+  // The activity appears only while there is work to show. Finding the library is
+  // routine upkeep, so a successful run leaves no entry behind, unless a person
+  // asked for it (resumed it), who then sees it completed.
+  let entry=null;
+  const report=value=>{entry??=this.activity?.()??null;entry?.progress({stage:value.stage??value.phase??'preparing',completed:value.completed??0,...(Number.isSafeInteger(value.stageTotal)?{total:value.stageTotal}:{}),unit:'items'});};
   this.task=independentDiagnostics(()=>diagnosticPhase('website-library-discovery',()=>
    withDatabaseRequest(signal,()=>backgroundWriterWait(async()=>{
     this.progress={state:'preparing',stage:'discovering-library',total:0,done:0};
@@ -43,7 +45,7 @@ export class WorkspaceWebsitePreparation{
     }
     this.progress={state:'ready',total:0,done:0};
    },{signal,check}))
-  )).then(()=>{if(entry&&!converting&&Date.now()-started<2000)entry.remove();else entry?.finish();},error=>{
+  )).then(()=>{if(requested)entry?.finish();else entry?.remove();},error=>{
    // A person who stops preparation sees it cancelled; stopping it because the
    // workspace locks or closes is not the person's activity and leaves no entry.
    if(signal.aborted&&!this.cancelled)entry?.remove();

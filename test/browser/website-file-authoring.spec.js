@@ -173,7 +173,7 @@ test('a prepared website opens from saved files without another user action',asy
   calls.push(route);
   switch(route){
    case '/api/website-files/session':return sessionWith([],{state:'preparing'});
-   case '/api/website-files/preparation':return {preparation:++checks===1?{state:'preparing',stage:'copying-files',completed:8,stageTotal:15}:{state:'ready'}};
+   case '/api/website-files/preparation':return {preparation:++checks===1?{state:'preparing',stage:'discovering-library',completed:8,stageTotal:15}:{state:'ready'}};
    case '/api/website-files/list':return {items:[savedSite],next:null};
    case '/api/website-files/open':return savedPage;
    default:throw Error('Unexpected request '+route);
@@ -181,7 +181,7 @@ test('a prepared website opens from saved files without another user action',asy
  });
  await mountFilesEditor(page);await expect(page.getByRole('status')).toHaveText('Preparing saved websites…');
  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
- await expect(page.getByRole('status')).toHaveText('Copying website files (8 of 15)');
+ await expect(page.getByRole('status')).toHaveText('Finding records for the website library (8 of 15)');
  await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
  // Opening also checks for a recoverable draft of the opened page.
  expect(calls).toEqual(['session','preparation','preparation','list','open','recovery/page'].map(op=>'/api/website-files/'+op));

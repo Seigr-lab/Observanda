@@ -60,7 +60,7 @@ import {layerPath,managedWebsiteContent} from './website-layer-model.js';
 const tr=(key,args)=>t('websiteFiles',key,args);
 
 const fileRoute=siteId=>'#/websites/'+siteId+'/editor';
-const preparationStages=new Set(['discovering-library','checking-saved-editions','capturing-entries','rendering-pages','reading-saved-files','converting-entries','copying-files','saving-files']);
+const preparationStages=new Set(['discovering-library']);
 
 function preparationMessage(preparation){
  if(!preparationStages.has(preparation.stage))return tr('preparing');

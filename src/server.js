@@ -268,7 +268,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    if(!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown||changing||client.filesOnly&&!resume||!client.access)return;
    const check=async()=>{if(context!==ctx||ctx.manualLock||shuttingDown||client.expires<=Date.now()||![...sessions.values()].includes(client)||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
    const projects=projectApplication(ctx),sourceReader=publicationSourceFactory(projects,client,ctx.workspace,{check});
-   websitePreparation(ctx).start(client,{check,retry,discover:async({signal})=>{
+   websitePreparation(ctx).start(client,{check,retry,requested:resume,discover:async({signal})=>{
     const reader=await sourceReader({signal});
     try{return await discoverEligibleWebsiteSources(ctx.publicationConversion.files,reader,{signal});}
     finally{await reader.close();}
