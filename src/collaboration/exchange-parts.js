@@ -38,7 +38,7 @@ export class ExchangeParts{
  async finish(extra,{write=this.write}={}){await write(()=>this.workspace.writeMetadata(this.prefix+'/head.json',JSON.stringify({count:this.count,bytes:this.bytes,...extra})));}
  async open(){const raw=await this.workspace.readMetadata(this.prefix+'/head.json',8192);valid(!!raw);const head=JSON.parse(raw);valid(Number.isSafeInteger(head.count)&&head.count>=1&&(this.scope==='reviews'||head.count<=100000)&&Number.isSafeInteger(head.bytes)&&head.bytes>=0&&head.bytes<=2**41&&['incoming','outgoing','base'].includes(head.direction)&&/^[a-f0-9]{64}$/.test(head.selectionHash));this.count=head.count;this.bytes=head.bytes;return head;}
  async *items(){
-  let bytes=0;const native=await this.workspace.storageKind()==='catalogue';
+  let bytes=0;
   for(let offset=0;offset<this.count;offset+=32){
    const read=async()=>{
     const rows=[];for(let i=offset;i<Math.min(this.count,offset+32);i++){
@@ -47,7 +47,7 @@ export class ExchangeParts{
    };
    // A cross-owner stream must not open one source connection per descriptor.
    // Release each bounded read snapshot before yielding file content.
-   const rows=await (native?this.workspace.catalogue(read):read());for(const item of rows){bytes+=item.size;yield item;}
+   const rows=await this.workspace.catalogue(read);for(const item of rows){bytes+=item.size;yield item;}
   }
   valid(bytes===this.bytes);
  }

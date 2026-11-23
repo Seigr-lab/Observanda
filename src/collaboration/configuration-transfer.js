@@ -72,7 +72,7 @@ export async function verifyPackageConfigurations(parts,metadata,options={}){
  const read=()=>checkPackageConfigurations(parts,metadata,options);
  // Import holds a different owner's writer. Keep package graph reads on one
  // authenticated source snapshot instead of reopening it for every node.
- return parts.workspace&&await parts.workspace.storageKind()==='catalogue'?parts.workspace.catalogue(read):read();
+ return parts.workspace.catalogue(read);
 }
 async function checkPackageConfigurations(parts,metadata,{signal,onNode}={}){
  if(!hasSharedConfigurations(metadata)){

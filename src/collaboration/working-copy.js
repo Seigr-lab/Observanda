@@ -36,7 +36,7 @@ export async function updatedStructure(current,base,selection,{workspace,retaine
 
 export async function retainWorkingBase(workspace,parts,selection){
  const retain=()=>retainWorkingBaseFromSnapshot(workspace,parts,selection);
- return await parts.workspace.storageKind()==='catalogue'?parts.workspace.catalogue(retain):retain();
+ return parts.workspace.catalogue(retain);
 }
 async function retainWorkingBaseFromSnapshot(workspace,parts,selection){
  const base=new ExchangeParts(workspace,selection.id),old=await workspace.readMetadata(base.prefix+'/head.json',8192);

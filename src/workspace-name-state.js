@@ -8,9 +8,7 @@ export async function synchronizeWorkspaceName(workspace){
  const title=validateWorkspaceName(workspaceFolderName(workspace.root));
  const outline=await workspace.outline();
  if(outline.metadata.title===title)return outline;
- if(await workspace.storageKind()!=='catalogue'){
-  await workspace.update(book=>book.title===title?null:{...book,title});
- }else await workspace.withLock(()=>workspace.catalogue(async store=>{
+ await workspace.withLock(()=>workspace.catalogue(async store=>{
   const head=await store.head(),snapshot=await store.snapshot(head);
   if(snapshot.metadata.title===title)return;
   const current=snapshot;

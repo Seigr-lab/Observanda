@@ -63,7 +63,7 @@ export async function populateSharedWorkspace(workspace,parts){
  // Reuse only the packet owner's connection; each read keeps a fresh snapshot.
  // The destination's existing writer and all content/hash checks stay separate.
  const populate=()=>populateSharedWorkspaceFromSource(workspace,parts);
- return await parts.workspace.storageKind()==='catalogue'?parts.workspace.withCatalogueConnections(populate):populate();
+ return parts.workspace.withCatalogueConnections(populate);
 }
 async function populateSharedWorkspaceFromSource(workspace,parts){
  const selection=await packageSelection(parts),records=await packageRecords(parts),notebooks=new Set(selection.metadata.notebooks.map(n=>n.id));

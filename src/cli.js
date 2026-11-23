@@ -80,7 +80,7 @@ try {
     if (command === 'validate') {
      const outline=await withConsoleProgress(async()=>{
       const outline=await workspace.outline();
-      if(await workspace.storageKind()==='catalogue')await workspace.catalogue(store=>store.verify(catalogueDescriptor(outline.metadata)));
+      await workspace.catalogue(store=>store.verify(catalogueDescriptor(outline.metadata)));
       return outline;
      },{translate:localization.translate});
      console.log(text('validated',{entries:outline.recordCount,revision:outline.metadata.revision}));

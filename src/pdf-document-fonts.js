@@ -22,7 +22,7 @@ function matchesFont(font,info){
 export async function preparePdfFont(storage,fontId,{signal,check=async()=>{}}={}){
  if(!customFontId(fontId))fail('INVALID');await check();signal?.throwIfAborted();
  const read=()=>withoutRecordOwnerResourceAdoption(()=>new WorkspaceFonts(storage).get(fontId));
- const source=await (storage.storageKind&&await storage.storageKind()==='catalogue'?storage.catalogue(read):read()),bytes=Buffer.from(source.bytes),font=fontMetadata(source);
+ const source=await (typeof storage.storageKind==='function'?storage.catalogue(read):read()),bytes=Buffer.from(source.bytes),font=fontMetadata(source);
  if(!font.embed||font.restricted)fail('FONT_EMBED');const info=await inspectUploadedFont(bytes,{signal});
  if(info.restricted)fail('FONT_EMBED');if(!matchesFont(font,info))fail('FONT_INVALID');
  await check();signal?.throwIfAborted();const prepared=Object.freeze({id:font.id,label:font.label,sha256:info.sha256,size:bytes.length});preparedFonts.set(prepared,{font,bytes});return prepared;

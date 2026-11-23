@@ -85,7 +85,7 @@ export class ChangeReview{
    if(data.operation==='item')return {item:await reader.item({...query,key:data.key})};
    return reader.window({...query,offset:data.offset??0,limit:data.limit??20});
   };
-  return await source.workspace.storageKind()==='catalogue'?source.workspace.catalogue(read):read();
+  return source.workspace.catalogue(read);
  }
  async materials(reviewId,recordId,version){
   await this.record(reviewId,recordId,version);
