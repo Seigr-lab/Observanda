@@ -15,7 +15,6 @@ export class RecordRuns{
  async list(command,{signal}={}){
   const {workspaceId,recordId,cursor=null,compare=false}=command??{};
   if(!command||Object.keys(command).some(key=>!['workspaceId','recordId','cursor','compare'].includes(key))||!researchId(workspaceId)||!researchId(recordId)||typeof compare!=='boolean')throw new AppError('INVALID');
-  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
   const page=await new RecordQuery(this.workspace).list({workspaceId,query:{projectId:null,notebookId:null,filter:'run',search:'',browse:recordBrowse({sort:'date-asc'})},runOf:recordId,selection:{excludeId:recordId,recordType:'run'},cursor,limit:RUN_PAGE_SIZE},{signal});
   const runs=page.records.map(({id,title,occurredOn,status,outcome,revision})=>({id,title,occurredOn,status,outcome:outcome??'',revision}));
   if(compare&&runs.length){
@@ -33,7 +32,7 @@ export class RecordRuns{
  async comparison(command,{signal}={}){
   const {workspaceId,recordId,runId,snapshotId,windows}=command??{};
   if(!command||Object.keys(command).sort().join()!=='recordId,runId,snapshotId,windows,workspaceId'||![workspaceId,recordId,runId].every(researchId)||!revisionId(snapshotId)||!validRunDetailWindows(windows))throw new AppError('INVALID');
-  signal?.throwIfAborted();if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
+  signal?.throwIfAborted();
   return this.workspace.catalogue(async store=>{
    const current=await store.snapshot(),snapshot=await store.snapshot(snapshotId);if(current.metadata.id!==workspaceId||snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const row=await store.member(snapshot,runId);if(!await hasRunParent(store,row,recordId))throw new AppError('MISSING');

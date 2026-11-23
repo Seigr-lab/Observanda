@@ -11,7 +11,6 @@ export async function validateResultSources(workspace,record,{signal}={}){
   for(const figure of record.figures??[]){if(await hasRetainedFigureTarget(workspace,figure,statement.figureId,{signal})){found=true;break;}}
   if(!found)throw new AppError('ANALYSIS_INVALID');
  }
- if(record.results.statements.some(statement=>statement.table?.version===3)&&await workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
  const materials=new ResearchMaterials(workspace);for(const ref of resultReferences(record.results))await materials.read(ref);
  for(const s of record.results.statements)if(s.table){const expected=await retainedTable(materials,{ref:s.source,selection:s.table.selection,version:s.table.version});if(revisionText(expected)!==revisionText(s.table))throw new AppError('DATASET_TABLE');}
 }

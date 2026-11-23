@@ -62,7 +62,7 @@ export async function retainRecordOwnerExternalReference(store,receipt,ref,{sour
  if(!prior)await store.putObject(key,value);
 }
 export async function recordOwnerExternalReference(workspace,ref){
- if(!validMaterialReference(ref)||await workspace.storageKind()!=='catalogue')return null;
+ if(!validMaterialReference(ref))return null;
  return workspace.catalogue(async store=>{
   let selectedKey=externalKey(ref),value=await store.object(selectedKey);if(!value&&ref.workspaceId){const unqualified={kind:ref.kind,id:ref.id,revision:ref.revision};const alias=await store.object(externalKey(unqualified));if(alias?.sourceOwner?.workspaceId===ref.workspaceId){value=alias;selectedKey=externalKey(unqualified);}}if(!value)return null;
   if(!exact(value,['version','reference','namespaceId','sourceOwner','recordId','transferId'])||value.version!==1||!validRecordOwner(value.sourceOwner)||!validMaterialReference(value.reference)||externalKey(value.reference)!==selectedKey||(value.reference.kind!==ref.kind||value.reference.id!==ref.id||value.reference.revision!==ref.revision||ref.workspaceId&&value.sourceOwner.workspaceId!==ref.workspaceId)||!validRecordOwner(value.sourceOwner)||value.reference.workspaceId&&value.reference.workspaceId!==value.sourceOwner.workspaceId||!researchId(value.recordId)||!researchId(value.transferId)||value.namespaceId!==(await store.snapshot()).metadata.id)damaged();

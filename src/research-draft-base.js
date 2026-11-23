@@ -4,7 +4,6 @@ import {historicalBook,recordRevision} from './research.js';
 // saved body, nor a current record that may have changed since editing began.
 export async function researchDraftBase(workspace,workspaceId,change,{read=true}={}){
  if(change.baseRevision===null)return null;
- if(await workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
  return workspace.catalogue(async store=>{
   if((await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const index=store.historyIndex(change.record.id);

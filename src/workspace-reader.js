@@ -2,8 +2,7 @@
 // server-held transaction spans requests; the authenticated cursor pins its root.
 import {AppError} from './errors.js';
 import {SnapshotIndex} from './snapshot-index.js';
-import {upgradeNotebook} from './model.js';
-import {recordRevision,recordRevisions} from './research.js';
+import {recordRevision} from './research.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {validRecordSelection} from './web/record-scope.js';
@@ -32,23 +31,16 @@ export class WorkspaceReader {
   if(!this.workspace)return {book:null};
   try{
    const outline=await this.workspace.outline();
-   if(await this.workspace.storageKind()==='catalogue'){
-    return await this.workspace.catalogue(async store=>{
-     const etag=snapshotId??await store.head(),snapshot=await store.snapshot(etag);
-     if(workspaceId&&snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-     if(snapshot.metadata.id!==outline.metadata.id)throw new AppError('WORKSPACE_CHANGED');
-     signal?.throwIfAborted();
-     const anchor={version:1,workspaceId:snapshot.metadata.id,etag,after:null,offset:0,bytes:0};
-     const counts=await catalogueOutline(store,snapshot,{signal});
-     return {metadata:snapshot.metadata,etag,...counts,
-      cursor:store.encode('workspace-page',anchor.workspaceId,anchor).toString('base64url')};
-    });
-   }
-   // A pinned request must never silently fall back to the latest snapshot.
-   if(snapshotId!==null)throw new AppError('INVALID');
-   // Document storage keeps its full validation.
-   const result=await this.workspace.read(),book=upgradeNotebook(result.book);
-   signal?.throwIfAborted();return {...result,book,recordRevisions:recordRevisions(book)};
+   return await this.workspace.catalogue(async store=>{
+    const etag=snapshotId??await store.head(),snapshot=await store.snapshot(etag);
+    if(workspaceId&&snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
+    if(snapshot.metadata.id!==outline.metadata.id)throw new AppError('WORKSPACE_CHANGED');
+    signal?.throwIfAborted();
+    const anchor={version:1,workspaceId:snapshot.metadata.id,etag,after:null,offset:0,bytes:0};
+    const counts=await catalogueOutline(store,snapshot,{signal});
+    return {metadata:snapshot.metadata,etag,...counts,
+     cursor:store.encode('workspace-page',anchor.workspaceId,anchor).toString('base64url')};
+   });
   }catch(error){if(error.code==='MISSING')return {book:null};throw error;}
  }
  async selection(command,{signal}={}){
@@ -84,7 +76,7 @@ export class WorkspaceReader {
   if(!researchId(workspaceId)||!revisionId(baseEtag))throw new AppError('INVALID');
   signal?.throwIfAborted();
   if(!this.workspace)throw new AppError('MISSING');
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const current=await store.snapshot();
    if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const base=await store.snapshot(baseEtag);
@@ -93,9 +85,6 @@ export class WorkspaceReader {
    const patch=await store.recordPatch(baseEtag,{signal});
    signal?.throwIfAborted();return patch;
   });
-  const result=await this.workspace.read(),book=upgradeNotebook(result.book);
-  if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  signal?.throwIfAborted();return {...result,book,recordRevisions:recordRevisions(book)};
  }
  async changePage(command,{signal}={}){
   if(!command||Object.keys(command).sort().join()!=='cursor,workspaceId'||!researchId(command.workspaceId)||typeof command.cursor!=='string'||!command.cursor.length||command.cursor.length>4096)throw new AppError('INVALID');

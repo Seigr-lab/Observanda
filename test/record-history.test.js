@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
+import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -46,8 +46,8 @@ test('record history reuses encrypted snapshots, omits other saves and restores 
  clearVault(vault);await assert.rejects(history.list(command),{code:'ACCESS_LOCKED'});
 });
 
-test('record restore rejects stale review, forged revisions and damaged history without changing data',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-')),ws=new Workspace(root),history=new RecordHistory(ws,media);
+test('record restore rejects stale review and forged revisions without changing data',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-')),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-device-')),'device.key')}),vault=takeCreatedVault(await createWorkspaceAccess('','synthetic record conflict password',deviceStore)),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
  let saved=await ws.create(sampleNotebook());const command={workspaceId:saved.book.id,recordId:saved.book.entries[0].id};
  saved.book.entries[0].title='Version two';saved=await ws.save(saved.book,saved.etag);
  const listing=await history.list(command),old=listing.versions.find(v=>!v.current);
@@ -56,9 +56,6 @@ test('record restore rejects stale review, forged revisions and damaged history 
  await assert.rejects(history.restore({...command,...old,revision:'0'.repeat(64),expectedRevision:recordRevision(saved.book.entries[0])}),{code:'RECORD_HISTORY_MISSING'});
  await assert.rejects(history.read({...command,...old,source:{kind:'workspace',id:'../observanda'}}),{code:'INVALID'});
  await assert.rejects(history.list({...command,workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
- assert.equal((await ws.read()).etag,saved.etag);
- const file=path.join(root,'.observanda','revisions',old.source.id+'.json');await writeFile(file,(await readFile(file,'utf8'))+' ');
- await assert.rejects(history.restore({...command,...old,expectedRevision:recordRevision(saved.book.entries[0])}),{code:'FORMAT'});
  assert.equal((await ws.read()).etag,saved.etag);
 });
 

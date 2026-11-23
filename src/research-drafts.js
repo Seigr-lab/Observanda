@@ -1,5 +1,5 @@
-import {hasPlotResourceFigure,hasPlotResourceFigures,plotResourceFigureDocument} from './plot-resource-format.js';
-import {hasApproximateFigure,hasApproximateFigures,approximateFigureDocument} from './record-computation-format.js';
+import {hasPlotResourceFigures} from './plot-resource-format.js';
+import {hasApproximateFigures} from './record-computation-format.js';
 import {requireFigureProjectionPolicies,catalogueRequiresFigureProjectionPolicies} from './catalogue-format.js';
 import {requireApproximateCalculator,catalogueRequiresApproximateCalculator} from './catalogue-format.js';
 import {validFigureEdit,hasAuthoredFigures} from './figure-authoring-format.js';
@@ -14,7 +14,7 @@ import {validPreparationEdit,attemptValueField} from './web/record-attempt-value
 import {projectRecordOwnerDraft,recordOwnerDraftProjectionNeeded} from './record-owner-drafts.js';
 import {upgradeRecord} from './web/record-model.js';
 import {validDraftRecord as record} from './record-draft-validation.js';
-import {ResearchDraftIndex,draftSummary,draftKey,recordRecoverySummary} from './research-draft-index.js';
+import {ResearchDraftIndex,draftSummary,recordRecoverySummary} from './research-draft-index.js';
 import {digest,serialize} from './storage.js';
 import {MAX_RECORD_COMMAND_BYTES as MAX_BYTES} from './web/research-capacity.js';
 import {recordRevision} from './research.js';
@@ -47,8 +47,7 @@ const validChanges=validDraftChanges;
 export class ResearchDrafts {
   constructor(workspace){this.workspace=workspace;this.index=new ResearchDraftIndex(workspace,id=>this.read(id,{indexed:false,expand:false,header:true,raw:true}),result=>projectRecordOwnerDraft(workspace,result),(store,summary)=>recordOwnerDraftProjectionNeeded(store,summary.id));}
   async read(idValue,{indexed=true,expand=true,header=false,raw=false,includePending=false}={}){
-    if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(()=>this.readValue(idValue,indexed,expand,header,{raw,includePending}));
-    return this.readValue(idValue,false,expand,header,{raw,includePending});
+    return this.workspace.catalogue(()=>this.readValue(idValue,indexed,expand,header,{raw,includePending}));
   }
   async readValue(idValue,indexed,expand,header,options){
     if(!id(idValue))throw new AppError('INVALID');
@@ -67,13 +66,13 @@ export class ResearchDrafts {
     }else if([3,4].includes(draft?.formatVersion)){
       if(!keys(draft,['formatVersion','id','workspaceId','updatedAt','count','titles','base','content',...(draft.formatVersion===4?['document']:[])])||draft.formatVersion===4&&!validDraftDocument(draft.document)||draft.id!==idValue||!id(draft.workspaceId)||!text(draft.updatedAt)||draft.count!==1||!Array.isArray(draft.titles)||draft.titles.length!==1||!text(draft.titles[0])||draft.titles[0].length>160||!keys(draft.base,['recordId','revision'])||!id(draft.base.recordId)||!revision(draft.base.revision)||!new RecordDraftChunks(this.workspace,idValue).valid(draft.content))throw new AppError('FORMAT');
     }else if(!keys(draft,['formatVersion','id','workspaceId','updatedAt','changes'])||![1,2].includes(draft.formatVersion)||draft.id!==idValue||!id(draft.workspaceId)||!text(draft.updatedAt)||!validChanges(draft.changes,draft.formatVersion===2))throw new AppError('FORMAT');
-    if(draft.changes?.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
+    if(draft.changes?.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))&&!await this.workspace.catalogue(async store=>catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
     if(draft.changes?.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))&&!await this.workspace.catalogue(async store=>catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
-    if(draft.changes?.some(change=>hasRecordProjection(change.record)||hasRecordProjection(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
-    if(draft.changes?.some(change=>hasPlotResourceFigures(change.record)||hasPlotResourceFigures(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
-    if(draft.changes?.some(change=>hasApproximateFigures(change.record)||hasApproximateFigures(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresApproximateCalculator(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
+    if(draft.changes?.some(change=>hasRecordProjection(change.record)||hasRecordProjection(change.base))&&!await this.workspace.catalogue(async store=>catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
+    if(draft.changes?.some(change=>hasPlotResourceFigures(change.record)||hasPlotResourceFigures(change.base))&&!await this.workspace.catalogue(async store=>catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
+    if(draft.changes?.some(change=>hasApproximateFigures(change.record)||hasApproximateFigures(change.base))&&!await this.workspace.catalogue(async store=>catalogueRequiresApproximateCalculator(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
      if(draft.changes?.some(change=>hasAuthoredFigures(change.record)||hasAuthoredFigures(change.base))&&!await this.workspace.catalogue(async store=>catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
-     if(draft.changes?.some(change=>hasRetainedFigures(change.record)||hasRetainedFigures(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresRetainedFigures(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
+     if(draft.changes?.some(change=>hasRetainedFigures(change.record)||hasRetainedFigures(change.base))&&!await this.workspace.catalogue(async store=>catalogueRequiresRetainedFigures(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
     let result={draft,revision:digest(raw)};
     if(indexed)await this.index.verifySelected(result,digest(serialize({text:raw})));
     if(!options.raw){result=await projectRecordOwnerDraft(this.workspace,result,options);if(!result)return null;draft=result.draft;}
@@ -100,25 +99,7 @@ export class ResearchDrafts {
     if(workspaceId!==null&&workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
     const owner=this.recoveryOwner(book);
     const presentSummary=includeRecovery?(result,sourceRevision)=>recordRecoverySummary(result,sourceRevision,owner):draftSummary;
-    if(await this.workspace.storageKind()==='catalogue')return this.index.page(book.id,{cursor,excludeId,limit},{signal,presentSummary});
-    // The old file representation has no authenticated index. Keep its
-    // compatibility path bounded in body memory; current workspaces use PostgreSQL.
-    let anchor={after:null,reverse:false};
-    if(cursor){try{anchor=JSON.parse(Buffer.from(cursor,'base64url'));}catch{throw new AppError('DRAFT_CURSOR');}
-      if(!anchor||anchor.workspaceId!==book.id||anchor.excludeId!==excludeId||anchor.limit!==limit||typeof anchor.after!=='string'||typeof anchor.reverse!=='boolean')throw new AppError('DRAFT_CURSOR');
-    }
-    const items=[];let more=false,opposite=false;
-    for await(const name of this.workspace.metadataNames('.observanda/drafts')){
-      signal?.throwIfAborted();if(!/^[a-f0-9-]{36}\.json$/.test(name)||name.slice(0,-5)===excludeId)continue;
-      const result=await this.read(name.slice(0,-5),{expand:false,header:true});if(!result||result.draft.workspaceId!==book.id)continue;
-      const {sourceRevision,workspaceId:namespace,...item}=presentSummary(result,result.revision);void sourceRevision;void namespace;
-      const key=draftKey(item),direction=anchor.reverse?-1:1;
-      if(anchor.after&&(anchor.reverse?key>=anchor.after:key<=anchor.after)){opposite=true;continue;}
-      items.push(item);items.sort((a,b)=>(draftKey(a)<draftKey(b)?-1:1)*direction);if(items.length>limit){items.pop();more=true;}
-    }
-    if(anchor.reverse)items.reverse();
-    const encode=(item,reverse)=>Buffer.from(JSON.stringify({workspaceId:book.id,excludeId,limit,after:draftKey(item),reverse})).toString('base64url');
-    return {workspaceId:book.id,drafts:items,previousCursor:items.length&&(anchor.reverse?more:opposite)?encode(items[0],true):null,nextCursor:items.length&&(anchor.reverse?opposite:more)?encode(items.at(-1),false):null};
+    return this.index.page(book.id,{cursor,excludeId,limit},{signal,presentSummary});
   }
   recoveryOwner(book){
     const labBookId=this.workspace.labBookId??null;
@@ -143,21 +124,20 @@ export class ResearchDrafts {
     return this.workspace.withLock(async()=>{
       const {metadata:book}=await this.workspace.outline();
       if(book.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-      const indexed=await this.workspace.storageKind()==='catalogue';
-      if(indexed)await this.index.ensureLocked(book.id);
+      await this.index.ensureLocked(book.id);
       const previous=await this.read(command.id,{expand:false,header:true});
       if(previous?.draft.workspaceId===command.workspaceId&&([3,4].includes(previous.draft.formatVersion)?previous.draft.content.sha256===digest(JSON.stringify(command.changes)):serialize(previous.draft.changes)===serialize(command.changes)))return {revision:previous.revision,updatedAt:previous.draft.updatedAt};
       if((previous?.revision??null)!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
       if(compact)await researchDraftBase(this.workspace,book.id,command.changes[0],{read:false});
-      if(indexed)await this.workspace.catalogue(store=>(command.changes.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))?requireNestedAttemptCollections:requireDraftEdits)(store.db));
-      if(command.changes.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requirePagedResearchTables(store.db));}
-      if(command.changes.some(change=>hasRecordProjection(change.record)||hasRecordProjection(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireNativeNumericalModels(store.db));}
-      if(command.changes.some(change=>hasPlotResourceFigures(change.record)||hasPlotResourceFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireFigureProjectionPolicies(store.db));}
-      if(command.changes.some(change=>hasApproximateFigures(change.record)||hasApproximateFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireApproximateCalculator(store.db));}
-       if(command.changes.some(change=>hasAuthoredFigures(change.record)||hasAuthoredFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireFigureAuthoring(store.db));}
-       if(command.changes.some(change=>hasRetainedFigures(change.record)||hasRetainedFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireRetainedFigures(store.db));}
+      await this.workspace.catalogue(store=>(command.changes.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))?requireNestedAttemptCollections:requireDraftEdits)(store.db));
+      if(command.changes.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))){await this.workspace.catalogue(store=>requirePagedResearchTables(store.db));}
+      if(command.changes.some(change=>hasRecordProjection(change.record)||hasRecordProjection(change.base))){await this.workspace.catalogue(store=>requireNativeNumericalModels(store.db));}
+      if(command.changes.some(change=>hasPlotResourceFigures(change.record)||hasPlotResourceFigures(change.base))){await this.workspace.catalogue(store=>requireFigureProjectionPolicies(store.db));}
+      if(command.changes.some(change=>hasApproximateFigures(change.record)||hasApproximateFigures(change.base))){await this.workspace.catalogue(store=>requireApproximateCalculator(store.db));}
+       if(command.changes.some(change=>hasAuthoredFigures(change.record)||hasAuthoredFigures(change.base))){await this.workspace.catalogue(store=>requireFigureAuthoring(store.db));}
+       if(command.changes.some(change=>hasRetainedFigures(change.record)||hasRetainedFigures(change.base))){await this.workspace.catalogue(store=>requireRetainedFigures(store.db));}
       await this.workspace.writeMetadata('.observanda/drafts/'+command.id+'.json',raw);
-      if(indexed){if(previous)await this.index.removeLocked(previous.draft);await this.index.putLocked({draft,revision:digest(raw)},digest(serialize({text:raw})));}
+      if(previous)await this.index.removeLocked(previous.draft);await this.index.putLocked({draft,revision:digest(raw)},digest(serialize({text:raw})));
       await new RecordDraftChunks(this.workspace,command.id).clear();
       return {revision:digest(raw),updatedAt:draft.updatedAt};
     });
@@ -169,11 +149,11 @@ export class ResearchDrafts {
   async removeLocked(command){
     if(!keys(command,['id','workspaceId','expectedRevision'])||!id(command.id)||!id(command.workspaceId)||!revision(command.expectedRevision))throw new AppError('INVALID');
       if((await this.workspace.outline()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-      const indexed=await this.workspace.storageKind()==='catalogue';if(indexed)await this.index.ensureLocked(command.workspaceId);
+      await this.index.ensureLocked(command.workspaceId);
       const current=await this.read(command.id,{expand:false,header:true});
       if(!current)return {ok:true};
       if(current.draft.workspaceId!==command.workspaceId||current.revision!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
-      if(indexed)await this.index.removeLocked(current.draft);
+      await this.index.removeLocked(current.draft);
       await new RecordDraftChunks(this.workspace,command.id).clear();
       await this.workspace.removeMetadata('.observanda/drafts/'+command.id+'.json');return {ok:true};
   }

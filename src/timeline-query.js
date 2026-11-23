@@ -2,7 +2,6 @@ import {timelineSource} from './web/tools/timeline-source.js';
 import {QUERY_ORDER_VERSION} from './web/query-order.js';
 import {AppError} from './errors.js';
 import {digest} from './storage.js';
-import {upgradeNotebook} from './model.js';
 import {summaryPage} from './summary-page.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -36,14 +35,10 @@ export class TimelineQuery{
    return {workspaceId,snapshotId:anchor.snapshotId,records,books,projects,missingSources,total,offset:anchor.offset,changed:head!==anchor.snapshotId,cursor:encode(anchor),
     previousCursor:anchor.offset?encode({...anchor,offset:anchor.offset-limit,after:previousAfter}):null,nextCursor:next<total?encode({...anchor,offset:next,after}):null};
   };
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const head=await store.head();if((await store.snapshot(head)).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    return run({head,cacheWorkspace:this.workspace,snapshot:id=>store.snapshot(id),indexedPage:!query.query&&!query.status&&!query.from&&!query.to?(source,ids,anchor)=>recordDatePage(store,source,ids,anchor,{signal,ascending:!query.descending}):null,documents:(source,ids)=>store.queryDocuments(store.searchMembers(source,ids,'',{signal}),source.metadata,{signal,search:false}),
     encode:value=>store.encode('timeline-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('timeline-page',workspaceId,Buffer.from(value,'base64url'))});
   });
-  const source=await this.workspace.read(),book=upgradeNotebook(source.book);
-  if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  return run({head:source.etag,snapshot:async id=>{if(id!==source.etag)throw new AppError('RECORD_QUERY_CURSOR');return {metadata:book};},documents:async function*(){yield* book.entries;},
-   encode:value=>Buffer.from(JSON.stringify(value)).toString('base64url'),decode:value=>JSON.parse(Buffer.from(value,'base64url').toString('utf8'))});
  }
 }

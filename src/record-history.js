@@ -2,10 +2,7 @@ import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 // Record history projects existing encrypted snapshots; it does not create a
 // second history store. Restoration changes only one record under the same lock.
-import path from 'node:path';
 import {AppError} from './errors.js';
-import {assertRegular} from './storage.js';
-import {upgradeNotebook,validateNotebook} from './model.js';
 import {recordRevision,historicalBook} from './research.js';
 import {ResearchMaterials} from './research-materials.js';
 import {researchId} from './web/research-reference.js';
@@ -26,46 +23,15 @@ export class RecordHistory {
  constructor(workspace,media){this.workspace=workspace;this.media=media;this.materials=new ResearchMaterials(workspace);}
  async context({workspaceId,recordId}){
   if(!researchId(workspaceId)||!researchId(recordId))throw new AppError('INVALID');
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const manifest=await store.snapshot(),row=await store.member(manifest,recordId);
    if(manifest.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    if(!row)throw new AppError('RECORD_CHANGED');
    const book=historicalBook(manifest.metadata,await store.record(row.id,row.revision));
    return {book,record:book.entries[0]};
   });
-  const book=upgradeNotebook((await this.workspace.read()).book);
-  if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  const record=book.entries.find(e=>e.id===recordId);
-  if(!record)throw new AppError('RECORD_CHANGED');
-  return {book,record};
  }
- async list(command){
-  if(await this.workspace.storageKind()==='catalogue')return this.page(command);
-  const {book,record}=await this.context(command),versions=new Map();
-  const add=(value,source,current=false)=>{
-   const revision=recordRevision(value);
-   if(!versions.has(revision))versions.set(revision,{revision,source,current,title:value.title,status:value.status,updatedAt:value.updatedAt});
-  };
-  add(record,{kind:'current'},true);
-  // Traverse one snapshot at a time; return only this record's distinct revisions.
-  for await(const snapshot of this.workspace.revisionSnapshots()){
-   if(snapshot.book.id!==book.id)throw new AppError('FORMAT');
-   const value=upgradeNotebook(snapshot.book).entries.find(e=>e.id===record.id);
-   if(value)add(value,{kind:'workspace',id:snapshot.id});
-  }
-  // Exact references can retain a revision outside the workspace save sequence.
-  for(const relative of ['.observanda','.observanda/materials','.observanda/materials/records','.observanda/materials/records/'+record.id]){
-   if(!await assertRegular(path.join(this.workspace.root,relative),{directory:true,missing:true}))return this.result(record,versions);
-  }
-  for await(const name of this.workspace.metadataNames('.observanda/materials/records/'+record.id)){
-   const revision=name.replace(/\.json$/,'');
-   if(!revisionId(revision)||name!==revision+'.json')continue;
-   const value=await this.materials.read({kind:'record',id:record.id,revision});
-   if(value.id!==record.id)throw new AppError('FORMAT');
-   add(value,{kind:'retained',id:revision});
-  }
-  return this.result(record,versions);
- }
+ async list(command){return this.page(command);}
  async page(command){
   const {workspaceId,recordId,cursor=null,limit=20}=command;
   if(!researchId(workspaceId)||!researchId(recordId)||!Number.isSafeInteger(limit)||limit<1||limit>50||cursor!==null&&(typeof cursor!=='string'||cursor.length>4096))throw new AppError('INVALID');
@@ -117,9 +83,6 @@ export class RecordHistory {
    return {recordId,title:currentView.title,currentRevision:currentView.revision,versions,total,offset:anchor.offset,cursor:store.encode('history-page',recordId,anchor).toString('base64url'),nextCursor,changed:row.revision!==current.revision};
   });
  }
- result(record,versions){
-  return {recordId:record.id,currentRevision:recordRevision(record),versions:[...versions.values()].sort((a,b)=>Number(b.current)-Number(a.current)||b.updatedAt.localeCompare(a.updatedAt)||a.revision.localeCompare(b.revision))};
- }
  async historical(command,book){
   const {source,revision,recordId}=command;
   if(!revisionId(revision)||!source||!['current','workspace','retained'].includes(source.kind))throw new AppError('INVALID');
@@ -128,25 +91,19 @@ export class RecordHistory {
   else{
    if(!revisionId(source.id))throw new AppError('INVALID');
    if(source.kind==='workspace'){
-    if(await this.workspace.storageKind()==='catalogue'){
-     value=await this.workspace.catalogue(async store=>{
-      await assertRecordOwnerRevisionVisible(store,recordId,revision,{code:'RECORD_HISTORY_MISSING'});
-      const manifest=await store.recordSnapshot(source.id,recordId),row=await store.member(manifest,recordId);
-      if(manifest.metadata.id!==book.id||!row)throw new AppError('RECORD_HISTORY_MISSING');
-      return historicalBook(manifest.metadata,await store.record(row.id,row.revision)).entries[0];
-     });
-    }else{
-    const previous=upgradeNotebook(await this.workspace.readRevision(source.id));
-    if(previous.id!==book.id)throw new AppError('WORKSPACE_CHANGED');
-    value=previous.entries.find(e=>e.id===recordId);
-    }
+    value=await this.workspace.catalogue(async store=>{
+     await assertRecordOwnerRevisionVisible(store,recordId,revision,{code:'RECORD_HISTORY_MISSING'});
+     const manifest=await store.recordSnapshot(source.id,recordId),row=await store.member(manifest,recordId);
+     if(manifest.metadata.id!==book.id||!row)throw new AppError('RECORD_HISTORY_MISSING');
+     return historicalBook(manifest.metadata,await store.record(row.id,row.revision)).entries[0];
+    });
    }else value=await this.materials.read({kind:'record',id:recordId,revision:source.id});
   }
   if(!value||value.id!==recordId||recordRevision(value)!==revision)throw new AppError('RECORD_HISTORY_MISSING');
   return value;
  }
  async read(command,{signal}={}){
-  if(command.paged===true&&await this.workspace.storageKind()==='catalogue'){
+  if(command.paged===true){
    const result=await new RecordHistoryDocuments(this.workspace,this.media).read(command,{signal});if(result)return result;
   }
   const {book,record}=await this.context(command);
@@ -155,11 +112,12 @@ export class RecordHistory {
  async restore(command,{compact=false,recordIds=null,receipt=false}={}){
   if(typeof receipt!=='boolean')throw new AppError('INVALID');
   if(!researchId(command.workspaceId)||!researchId(command.recordId)||!revisionId(command.expectedRevision)||command.baseEtag!==undefined&&!revisionId(command.baseEtag))throw new AppError('INVALID');
-  if(receipt&&await this.workspace.storageKind()==='catalogue'){
+  if(receipt){
    const result=await new RecordHistoryDocuments(this.workspace,this.media).restore(command);if(result)return result;
   }
   const apply=async source=>{
-   const {partialRecords,...value}=source,book=partialRecords?structuredClone(value):upgradeNotebook(value);
+   // Catalogue edits receive only the selected records, never a whole notebook.
+   const {partialRecords,...value}=source,book=structuredClone(value);
    if(book.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const index=book.entries.findIndex(e=>e.id===command.recordId),current=book.entries[index];
    if(!current||recordRevision(current)!==command.expectedRevision)throw new AppError('RECORD_CHANGED');
@@ -171,14 +129,13 @@ export class RecordHistory {
    // facts. Their corrections are appended explicitly in the attempt editor.
    if(current.attempt)restored.attempt=structuredClone(current.attempt);
    restored.attachments=restored.attachments.map(a=>({...a,...privatePublicationFlags(a)}));
-   book.entries[index]=restored;if(!partialRecords)validateNotebook(book);
+   book.entries[index]=restored;
    for(const attachment of restored.attachments){
     const file=await this.media.get(attachment.id,{streamed:true});
     if(file.kind!==attachment.kind)throw new AppError('MEDIA_INVALID');
    }
    return book;
   };
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.updateRecords({workspaceId:command.workspaceId,changes:[{id:command.recordId}],...(command.baseEtag?{baseEtag:command.baseEtag}:{})},apply,{compact,recordIds});
-  return this.workspace.update(apply);
+  return this.workspace.updateRecords({workspaceId:command.workspaceId,changes:[{id:command.recordId}],...(command.baseEtag?{baseEtag:command.baseEtag}:{})},apply,{compact,recordIds});
  }
 }

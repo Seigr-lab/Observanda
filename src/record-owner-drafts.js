@@ -45,7 +45,7 @@ export async function recordOwnerDraftOrigin(store,id){
  await authorized(store,value);return value;
 }
 export async function projectRecordOwnerDraft(workspace,result,{includePending=false}={}){
- if(!result||await workspace.storageKind()!=='catalogue')return result;
+ if(!result)return result;
  return workspace.catalogue(async store=>{
   const {draft}=result,imported=await recordOwnerDraftOrigin(store,draft.id);
   if(imported&&imported.revision===result.revision){

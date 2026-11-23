@@ -17,7 +17,6 @@ export class WorkspaceEdits{
   const outline=await this.workspace.outline();
   if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(outline.etag!==command.baseEtag)throw new AppError('CONFLICT');
-  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
   const save=()=>this.workspace.withLock(()=>this.workspace.catalogue(store=>this.apply(store,command,{response})));
   return this.publicationConversion?this.publicationConversion.mutate(this.workspace,{route:'/api/workspace/save',data:command},save):save();
  }

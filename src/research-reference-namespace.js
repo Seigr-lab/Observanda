@@ -11,7 +11,7 @@ export async function referenceNamespaceMatches(store,ref){
 }
 export async function workspaceReferenceNamespaceMatches(workspace,ref){
  if(!ref?.workspaceId)return true;
- return await workspace.storageKind()==='catalogue'?workspace.catalogue(store=>referenceNamespaceMatches(store,ref)):(await workspace.read()).book.id===ref.workspaceId;
+ return workspace.catalogue(store=>referenceNamespaceMatches(store,ref));
 }
 
 // Equivalent addresses are granted per identity. A foreign namespace without

@@ -65,28 +65,23 @@ export class ResearchDraftTransfer{
   // changed meanwhile. An identical concurrent finish returns its exact receipt.
   if(!manifest||manifest.workspaceId!==command.workspaceId||manifest.content.sha256!==command.transferHash||manifest.expectedRevision!==inspected.manifest.expectedRevision||serialize(manifest.content)!==serialize(inspected.manifest.content))throw new AppError('DRAFT_CHANGED');
   if(manifest.receipt)return this.receipt(manifest);
-  const {base,title}=inspected,indexed=await this.workspace.storageKind()==='catalogue';
-  if(indexed)await this.drafts.index.ensureLocked(command.workspaceId);
+  const {base,title}=inspected;
+  await this.drafts.index.ensureLocked(command.workspaceId);
   const prior=await this.current(command.id);if((prior?.revision??null)!==manifest.expectedRevision)throw new AppError('DRAFT_CHANGED');
   // History may have been removed after inspection; do not publish an
   // unrecoverable checkpoint even when its transferred bytes are still valid.
   await researchDraftBase(this.workspace,command.workspaceId,{record:{id:base.recordId},baseRevision:base.revision,expectedRevision:base.revision},{read:false});
   signal?.throwIfAborted();
-  const document=indexed?await retainDraftDocument(this.workspace,command.id,manifest.content,inspected,{signal}):null;
-  const draft={formatVersion:document?4:3,id:command.id,workspaceId:command.workspaceId,updatedAt:new Date().toISOString(),count:1,titles:[title],base,content:manifest.content,...(document?{document}:{})};
+  const document=await retainDraftDocument(this.workspace,command.id,manifest.content,inspected,{signal});
+  const draft={formatVersion:4,id:command.id,workspaceId:command.workspaceId,updatedAt:new Date().toISOString(),count:1,titles:[title],base,content:manifest.content,document};
   const raw=serialize(draft),receipt={revision:digest(raw),updatedAt:draft.updatedAt};
   await this.workspace.writeMetadata('.observanda/drafts/'+command.id+'.json',raw);
-  if(indexed){if(prior)await this.drafts.index.removeLocked(prior.draft);await this.drafts.index.putLocked({draft,revision:receipt.revision},digest(serialize({text:raw})));}
+  if(prior)await this.drafts.index.removeLocked(prior.draft);await this.drafts.index.putLocked({draft,revision:receipt.revision},digest(serialize({text:raw})));
   await this.workspace.writeMetadata(file(command.id),serialize({...manifest,receipt}));
   await new RecordDraftChunks(this.workspace,command.id).release(prior?.draft.content?.root??null,[manifest.content.root]);signal?.throwIfAborted();return receipt;
  }
  async finish(command,{signal}={}){
   requireValue(exact(command,['id','workspaceId','transferHash'])&&researchId(command.id)&&researchId(command.workspaceId)&&revisionId(command.transferHash));
-  if(await this.workspace.storageKind()!=='catalogue'){
-   // Legacy files have no read snapshot: retain their existing single-writer
-   // protection while inspecting bytes that another writer could otherwise GC.
-   return this.workspace.withLock(async()=>{const inspected=await this.#inspectFinish(command,{signal});return inspected.receipt??this.#commitFinish(command,inspected,{signal});});
-  }
   const inspected=await this.workspace.catalogue(()=>this.#inspectFinish(command,{signal}));
   if(inspected.receipt)return inspected.receipt;
   return this.workspace.withLock(()=>this.#commitFinish(command,inspected,{signal}));

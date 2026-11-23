@@ -1,4 +1,3 @@
-import path from 'node:path';
 import {digest,serialize} from './storage.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
@@ -11,8 +10,7 @@ const withRevision=view=>({...view,revision:digest(serialize(view))});
 // writes and the workspace lock; never put search text in record/public history.
 export class RecordViews{
  constructor(workspace){this.workspace=workspace;}
- async context(){return await this.workspace.storageKind()==='catalogue'?this.workspace.catalogue(async store=>(await store.snapshot()).metadata):(await this.workspace.read()).book;}
- file(){return path.join(this.workspace.root,'.observanda','record-views.json');}
+ async context(){return this.workspace.catalogue(async store=>(await store.snapshot()).metadata);}
  async read(workspaceId){
   if(!researchId(workspaceId))throw new AppError('INVALID');
   if((await this.context()).id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');

@@ -3,10 +3,7 @@ import {isConfigurationReference} from './web/configuration-reference.js';
 import {validateCurrentInlineRecordTemplate} from './record-template-configuration.js';
 import {recordContentRevision} from './record-encoding.js';
 import {AppError} from './errors.js';
-import {upgradeNotebook,validateNotebook,validateRecordChanges,currentWorkspaceMetadata} from './model.js';
-import {validateAttemptChange} from './attempts.js';
-import {validateResultSources} from './result-statements.js';
-import {validateFigureSources} from './figure-provenance.js';
+import {validateRecordChanges,currentWorkspaceMetadata} from './model.js';
 
 // These opaque content revisions are independent of the storage adapter and
 // workspace revision. A change elsewhere must not invalidate this record.
@@ -55,7 +52,6 @@ export class ResearchRecords {
     if(!exact(command,['workspaceId','recordId','expectedRevision'])||!id(command.workspaceId)||!id(command.recordId)||!revision(command.expectedRevision))throw new AppError('INVALID');
     const outline=await this.workspace.outline();
     if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
     return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
       const head=await store.head(),source=await store.snapshot(head);
       if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -80,9 +76,7 @@ export class ResearchRecords {
     if(!exact(command,['workspaceId','changes',...(Object.hasOwn(command??{},'baseEtag')?['baseEtag']:[])])||!id(command.workspaceId)||!Array.isArray(command.changes)||!command.changes.length)throw new AppError('INVALID');
     validateRecordEdits(command.changes);
     if(Object.hasOwn(command,'baseEtag')&&!revision(command.baseEtag))throw new AppError('INVALID');
-    if(await this.workspace.storageKind()==='catalogue')return this.workspace.updateRecords(command,source=>this.prepare(source,command),{compact,recordIds,receipt,storedBases:true});
-    if(receipt)throw new AppError('INVALID');
-    return this.workspace.update(source=>this.prepare(source,command));
+    return this.workspace.updateRecords(command,source=>this.prepare(source,command),{compact,recordIds,receipt,storedBases:true});
   }
   // Compose the same record command with a domain receipt in an existing
   // workspace transaction. The catalogue still checks revisions and references.
@@ -95,7 +89,7 @@ export class ResearchRecords {
     const {partialRecords,replacementBases,...value}=source;
     // Copy the headers that this command may change, not the untouched bodies
     // of every previous record. Incoming replacements retain their own copy.
-    const book=partialRecords?{...value,entries:value.entries.map(record=>({...record}))}:upgradeNotebook(value);
+    const book={...value,entries:value.entries.map(record=>({...record}))};
     if(book.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
     let changed=false;
     for(const change of command.changes){
@@ -103,9 +97,6 @@ export class ResearchRecords {
       const priorRevision=replacementBases?basis?.revision??null:previous?recordRevision(previous):null;
       if(priorRevision!==change.expectedRevision)throw new AppError('RECORD_CHANGED',[{field:'record',recordId:change.id}]);
       const record=structuredClone(change.record);
-      if(!partialRecords&&(previous?.attempt||record.attempt))await validateAttemptChange(this.workspace,book.id,previous,record);
-      if(!partialRecords&&record.results)await validateResultSources(this.workspace,record);
-      if(!partialRecords)await validateFigureSources(this.workspace,record);
       if(record.template){
         const {values,...schema}=record.template;
         if(basis?.templateRevision){if(recordRevision(schema)!==basis.templateRevision)throw new AppError('INVALID',[{field:'Record type snapshot',recordId:record.id}]);}
@@ -125,7 +116,6 @@ export class ResearchRecords {
       if(index<0)book.entries.push(record);else book.entries[index]=record;
       changed=true;
     }
-    if(!source.partialRecords)validateNotebook(book);
     // Evidence is already staged privately. Check references before making
     // them visible in the same durable record/revision commit.
     for(const change of command.changes){

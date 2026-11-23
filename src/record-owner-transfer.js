@@ -50,7 +50,6 @@ export class RecordOwnerTransfer{
  async start(command,options={}){
   if(!validRecordOwnerTransferCommand(command)||command.workspaceId!==this.sourceOwner.workspaceId||command.targetWorkspaceId!==this.targetOwner.workspaceId||this.targetOwner.labBookId&&command.targetNotebookId!==this.targetOwner.labBookId)throw new AppError('INVALID');
   await options.check?.();options.signal?.throwIfAborted();
-  if(await this.source.storageKind()!=='catalogue'||await this.target.storageKind()!=='catalogue')throw new AppError('FORMAT');
   await this.target.catalogue(async store=>{const snapshot=await store.snapshot();if(snapshot.metadata.id!==command.targetWorkspaceId||!snapshot.metadata.notebooks.some(value=>value.id===command.targetNotebookId))throw new AppError('WORKSPACE_CHANGED');});
   const fingerprint=recordOwnerTransferFingerprint(command,this.sourceOwner,this.targetOwner);
   const existing=await this.source.catalogue(store=>readRecordOwnerTransfer(store,command.id));

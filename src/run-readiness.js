@@ -5,7 +5,6 @@ import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {ResearchMaterials} from './research-materials.js';
 import {recordRevision} from './research.js';
-import {currentAttemptItems} from './web/attempt-model.js';
 import {researchId} from './web/research-reference.js';
 import {analysisDependencyState} from './analysis-dependencies.js';
 import {intakeHash} from './intake/contract.js';
@@ -25,16 +24,13 @@ export class RunReadiness{
  async target(command,{attempt=false,criteriaOffset=0,signal}={}){
   if(!researchId(command.recordId)||!researchId(command.workspaceId))throw new AppError('INTAKE_INVALID');
   signal?.throwIfAborted();
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const snapshot=await store.snapshot();if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MATERIAL_INVALID');
    const summary=await materialRecordSummary(store,row),record={id:row.id};
    if(attempt)record.unresolvedCriteria=await withRecordDocument(store,row.id,row.revision,document=>attemptDocumentReadiness(document,{signal,offset:criteriaOffset}));
    return {record,revision:summary.revision,documentRevision:row.revision,projectId:snapshot.metadata.notebooks.find(n=>n.id===row.notebookId)?.projectId};
   });
-  const book=await this.materials.owner(command.recordId);if(book.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  const record=book.entries[0],revision=recordRevision(record),projectId=book.notebooks.find(n=>n.id===record.notebookId)?.projectId;
-  return {book,record,revision,projectId};
  }
  receiptStore(recordId){return new RunReceiptStore(this.workspace,recordId);}
  async receiptPage(recordId,options){return this.receiptStore(recordId).page(options);}
@@ -76,8 +72,7 @@ export class RunReadiness{
     const sources=[];for(const item of page.items){digest.add(item);if(item.kind==='artifact')counts.artifacts++;if(item.kind==='analysis'){counts.analyses++;sources.push({recordId:record.id,label:item.title,analysis:{kind:item.kind,id:item.id,revision:item.revision}});}}
     const state=await analysisDependencyState(this.materials,sources,{signal,inputs});counts.staleAnalyses+=state.items.length;for(const item of state.items)if(issues.length<100)issues.push({kind:'stale-analysis',id:item.analysis.id,label:item.label});
    }while(cursor);
-   const preparation=record.attempt?.preparations.at(-1),assessments=currentAttemptItems(record.attempt?.assessments??[]);
-   const unresolved=record.unresolvedCriteria?.items??(preparation?.criteria??[]).filter(c=>!assessments.some(a=>a.preparationId===preparation.id&&a.criterionId===c.id&&['met','not-met'].includes(a.outcome)));
+   const unresolved=record.unresolvedCriteria.items;
    const reviews=new Reviews(this.workspace),index=await reviews.index();
    for(const id of index.ids){
     signal?.throwIfAborted();const summary=await readReviewSummary(this.workspace,id,key=>reviews.packet(key),{cache:false});
@@ -87,7 +82,7 @@ export class RunReadiness{
     if(!summary.decisions.some(d=>d.id===record.id&&['reviewed','witnessed'].includes(d.decision)))counts.pendingReviews++;
    }
    const evidenceRevision=digest.finish(),valid=await receiptStore.matching(policy.required,[basis,revision],evidenceRevision,{signal}),missing=policy.required.filter(k=>!valid.has(k));
-   return {version:1,recordId:record.id,revision,evidenceRevision,projectId,policy:{...policy,etag:intakeHash(policy)},missing,counts,unresolvedPage:record.unresolvedCriteria?{offset:record.unresolvedCriteria.offset,total:record.unresolvedCriteria.total,next:record.unresolvedCriteria.next}:null,unresolved:unresolved.map(c=>({id:c.id,label:c.label})),issues,receiptPage:{next:receiptPage.next,total:receiptPage.total},receipts:receiptPage.items.map(r=>({...r,current:applicableReceipt(r,[basis,revision],evidenceRevision),evidenceChanged:r.evidenceRevision!==evidenceRevision}))};
+   return {version:1,recordId:record.id,revision,evidenceRevision,projectId,policy:{...policy,etag:intakeHash(policy)},missing,counts,unresolvedPage:{offset:record.unresolvedCriteria.offset,total:record.unresolvedCriteria.total,next:record.unresolvedCriteria.next},unresolved:unresolved.map(c=>({id:c.id,label:c.label})),issues,receiptPage:{next:receiptPage.next,total:receiptPage.total},receipts:receiptPage.items.map(r=>({...r,current:applicableReceipt(r,[basis,revision],evidenceRevision),evidenceChanged:r.evidenceRevision!==evidenceRevision}))};
   });
  }
  // Invoked by the shared record commit, so GUI/API/import cannot bypass policy.

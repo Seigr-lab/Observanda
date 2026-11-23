@@ -41,7 +41,7 @@ async function selected(store,relative,{recordId,limit=16*1024*1024,staged=false
  return {text:part.text,recordId:alias.recordId,transferId:alias.transferId,sourceOwner:receipt.sourceOwner,targetOwner:receipt.targetOwner,previousSha256:alias.previousSha256};
 }
 export async function readRecordOwnerAuditMetadata(workspace,relative,options={}){
- if(!validRecordOwnerAuditPath(relative)||await workspace.storageKind()!=='catalogue')return null;
+ if(!validRecordOwnerAuditPath(relative))return null;
  return workspace.catalogue(store=>selected(store,relative,options));
 }
 export async function readRecordOwnerMetadata(workspace,relative,limit,options={}){

@@ -6,11 +6,10 @@ import {QUERY_ORDER_VERSION} from './web/query-order.js';
 import {summaryPage} from './summary-page.js';
 import {AppError} from './errors.js';
 import {digest} from './storage.js';
-import {upgradeNotebook} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {validViewQuery,viewScopeIssue} from './web/record-view-model.js';
-import {recordBrowse,recordQueryMatcher,recordQueryOrder,recordQueryDocument} from './web/record-query.js';
+import {recordBrowse,recordQueryMatcher,recordQueryOrder} from './web/record-query.js';
 import {notebooksIn} from './web/workspace-structure.js';
 import {recordCounts} from './web/record-workflow.js';
 import {validRecordDate} from './web/record-date.js';
@@ -77,7 +76,7 @@ export class RecordQuery{
    return {workspaceId,snapshotId:anchor.snapshotId,records:found,recordTypes:[],domains:[...domains].sort(),total,counts,offset:anchor.offset,
     cursor:encode(anchor),previousCursor:previous?encode(previous):null,nextCursor:next<total?encode({...anchor,offset:next,after}):null,changed:head!==anchor.snapshotId};
   };
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const head=await store.head();if((await store.snapshot(head)).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const referenceNamespaces=relatedTo?await recordReferenceNamespaces(store,relatedTo):null;
    const rows=(source,ids)=>runOf?recordRunMembers(store,source,runOf,{signal,notebookIds:ids}):relatedTo?recordReferenceCandidates({store,snapshot:source,notebooks:ids,workspaceId:relatedTo.workspaceId,signal,search:query.search},relatedTo.id):store.searchMembers(source,ids,query.search,{signal});
@@ -85,22 +84,13 @@ export class RecordQuery{
     resolveRevision:async(source,item)=>recordRevision(historicalBook(source.metadata,await store.record(item.id,item.storageRevision)).entries[0]),
     encode:value=>store.encode('record-query-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('record-query-page',workspaceId,Buffer.from(value,'base64url'))});
   });
-  // Older file-backed fixtures retain their original storage; opening a view
-  // never converts a workspace. A changed file requires a fresh result list.
-  const current=await this.workspace.read(),book=upgradeNotebook(current.book);
-  if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  return run({head:current.etag,manifest:async id=>{if(id!==current.etag)invalidCursor();return {metadata:book};},
-   documents:async function*(){for(const record of book.entries)if(!runOf||record.type==='run'&&record.relations.some(link=>link.role==='run-of'&&link.target.workspaceId===workspaceId&&link.target.id===runOf))yield {...recordQueryDocument(record),...(selection?{revision:recordRevision(record)}:{})};},
-   encode:value=>Buffer.from(JSON.stringify(value)).toString('base64url'),decode:value=>JSON.parse(Buffer.from(value,'base64url').toString('utf8'))});
  }
  async open({workspaceId,recordId,baseEtag}={}){
   if(!researchId(workspaceId)||!researchId(recordId)||!revisionId(baseEtag))throw new AppError('INVALID');
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const source=await store.snapshot();if(source.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    if(!await store.member(source,recordId))throw new AppError('RECORD_CHANGED');
    return store.recordPatch(baseEtag);
   });
-  const result=await this.workspace.read();if(result.book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(!result.book.entries.some(r=>r.id===recordId))throw new AppError('RECORD_CHANGED');return result;
  }
 }
