@@ -7,7 +7,6 @@ import {assertNotRenaming} from './workspace-rename-state.js';
 import {serialize} from './storage-format.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {constants as bufferConstants} from 'node:buffer';
-import {requireDatabase} from './postgres.js';
 import {hasCatalogue,catalogueContext,openCatalogue,ResearchCatalogue,isCatalogue,catalogueDescriptor} from './research-catalogue.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 import {withCatalogueFormatRead} from './catalogue-format-read.js';
@@ -311,19 +310,6 @@ export class Workspace {
       // Creation may have completed while this writer waited.
       if(await hasCatalogue(this.root))return this.withLock(operation,{detached,moveId,existing:true});
       return operation(internal);
-    });
-  }
-  async create(book) {
-    validateNotebook(book);
-    if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');
-    await requireDatabase();
-    return this.withLock(async () => {
-      if (await assertRegular(await workspaceFile(this.root), { missing: true })) throw new AppError('EXISTS');
-      const marker=path.join(this.root,'.observanda','copy-in-progress');
-      await atomicWrite(marker,'initializing\n');
-      await this.initializeResearch(book);
-      await unlink(marker);
-      return this.read();
     });
   }
   async save(book, expectedEtag) {

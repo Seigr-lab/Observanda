@@ -67,7 +67,7 @@ test('calendar dates open a scoped day plan and create dated drafts without savi
   await expect(page.getByLabel('Ends (exclusive date)',{exact:true})).toHaveValue('2026-11-01');
   await expect(page.getByRole('button',{name:'Calendar',exact:true})).toHaveText('Studio');
   await page.getByLabel('Event title',{exact:true}).fill('Sound check');
-  expect((await store.read()).entities.some(e=>e.data.title==='Sound check')).toBe(false);
+  expect((await store.current()).entities.some(e=>e.data.title==='Sound check')).toBe(false);
   await page.getByLabel('All day',{exact:true}).uncheck();
   await expect(page.getByLabel('Starts',{exact:true})).toHaveValue('2026-10-31T09:00');
   await main.getByRole('button',{name:'Save event',exact:true}).click();
@@ -78,7 +78,7 @@ test('calendar dates open a scoped day plan and create dated drafts without savi
   await page.getByLabel('Event title',{exact:true}).fill('Discard this');
   await main.getByRole('button',{name:'Discard edits',exact:true}).click();
   await main.getByRole('button',{name:'Calendars',exact:true}).click();
-  expect((await store.read()).entities.some(e=>e.data.title==='Discard this')).toBe(false);
+  expect((await store.current()).entities.some(e=>e.data.title==='Discard this')).toBe(false);
   await page.getByRole('button',{name:'Dismiss',exact:true}).click();
   await main.getByRole('button',{name:'Next day',exact:true}).click();
   await expect(page.getByLabel('Date',{exact:true})).toHaveValue('2026-11-01');

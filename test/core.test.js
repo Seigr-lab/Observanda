@@ -3,8 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtemp, symlink, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { encryptedFixture } from './browser/encrypted-fixture.js';
+import { TestDeviceStore } from './device-fixture.js';
+import { createWorkspaceAccess, takeCreatedVault } from '../src/access.js';
+import { clearVault } from '../src/encryption.js';
+import { initializeLocation } from '../src/locations.js';
 import { createNotebook, validateNotebook, MAX_BYTES } from '../src/model.js';
 import { Workspace, serialize } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
@@ -56,9 +60,11 @@ test('saved changes survive reopening; stale writers cannot replace newer conten
 });
 
 test('a symlinked internal directory fails closed', async () => {
-  const linked = await temp(), outside = await temp();
+  const linked = await temp(), outside = await temp(), device = await temp();
   await symlink(outside, path.join(linked, '.observanda'), process.platform === 'win32' ? 'junction' : 'dir');
-  await assert.rejects(new Workspace(linked, {id: randomUUID(), key: randomBytes(32)}).create(createNotebook()), code('UNSAFE'));
+  const access = await createWorkspaceAccess('', '', new TestDeviceStore({ file: path.join(device, 'device.key') })), vault = takeCreatedVault(access);
+  try { await assert.rejects(initializeLocation(linked, createNotebook(), access, vault), code('UNSAFE')); }
+  finally { await clearVault(vault); }
   assert.deepEqual(await readdir(outside), []);
 });
 

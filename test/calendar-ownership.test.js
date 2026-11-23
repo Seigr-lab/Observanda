@@ -6,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdtemp,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {ownerOf,scopedItems} from '../src/web/modules/scope.js';
@@ -21,9 +21,9 @@ const material=projectId=>({projectId,name:'Pigment',code:'P1',kind:'material',d
 const cal=projectId=>({projectId,name:'Studio',color:'#3958ba',archived:false});
 const event=calendarId=>({calendarId,title:'Recording',startsAt:'2026-10-01',endsAt:'2026-10-03',allDay:true,timeZone:'Europe/Oslo',location:'Studio',notes:'Private event',status:'confirmed'});
 async function setup(){
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-calendar-')),book=sampleNotebook(),wing=book.projects[0],parent={...wing,id:randomUUID(),title:'Collective',parentId:null},sibling={...wing,id:randomUUID(),title:'Field work',parentId:null};
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-calendar-')),book=sampleNotebook(),wing=book.projects[0],parent={...wing,id:randomUUID(),title:'Collective',parentId:null},sibling={...wing,id:randomUUID(),title:'Field work',parentId:null};
  wing.parentId=parent.id;book.projects.push(parent,sibling);for(const project of book.projects)project.tools=['resources','planning'];
- const vault={id:randomUUID(),key:Buffer.alloc(32,9)},workspace=new Workspace(root,vault);await workspace.create(book);const store=workspaceModules(workspace);
+ const {workspace,vault}=await encryptedFixture(directory,book),root=workspace.root,store=workspaceModules(workspace);
  const command=(action,payload)=>store.execute({workspaceId:book.id,commandId:randomUUID(),action,payload});
  const save=(type,id,data,expectedRevision=null)=>command(type+'.save',{id,data,expectedRevision});
  return {root,book,wing,parent,sibling,vault,workspace,store,command,save};
@@ -32,10 +32,10 @@ test('ownership drives nested inventory, duplicate codes are local, and stock hi
  const s=await setup(),a=randomUUID(),b=randomUUID();
  await s.save('resource',a,material(s.wing.id));await s.save('resource',b,material(s.sibling.id));
  await s.command('stock.move',{resourceId:a,expectedRevision:1,delta:'2.5',reason:'Receipt',links:[]});
- const before=await s.store.read();
+ const before=await s.store.current();
  await assert.rejects(s.save('resource',randomUUID(),material(s.wing.id)));
  await assert.rejects(s.save('resource',randomUUID(),{...material(randomUUID()),code:'X'}),{code:'MODULE_REFERENCE'});
- assert.deepEqual(await s.store.read(),before);
+ assert.deepEqual(await s.store.current(),before);
  const items=scopedItems(s.book,before.entities,s.parent.id);assert.equal(items.filter(e=>e.type==='resource').length,1);
  assert.equal(ownerOf(items.find(e=>e.type==='movement'),before.entities),s.wing.id);
  assert.equal(scopedItems(s.book,before.entities,s.parent.id,false).length,0);
@@ -47,17 +47,17 @@ test('ownership drives nested inventory, duplicate codes are local, and stock hi
 });
 test('calendar edits are revision guarded, events aggregate through owners and cancelled events disappear',async()=>{
  const s=await setup(),calendar=randomUUID(),id=randomUUID();await s.save('calendar',calendar,cal(s.wing.id));await s.save('event',id,event(calendar));
- let snapshot=await s.store.read(),data=localCalendar(s.book,snapshot.entities);
+ let snapshot=await s.store.current(),data=localCalendar(s.book,snapshot.entities);
  assert.equal(visibleCalendar(s.book,data,{projectId:s.parent.id,from:'2026-10-01',to:'2026-11-01'}).events.length,1);
  assert.equal(visibleCalendar(s.book,data,{projectId:s.sibling.id}).events.length,0);
  assert.equal(visibleCalendar(s.book,data,{hidden:new Set([calendar])}).events.length,0);
  await s.save('calendar',calendar,{...cal(s.sibling.id),name:'New owner'},1);
- snapshot=await s.store.read();data=localCalendar(s.book,snapshot.entities);
+ snapshot=await s.store.current();data=localCalendar(s.book,snapshot.entities);
  assert.equal(visibleCalendar(s.book,data,{projectId:s.parent.id}).events.length,0);
  await assert.rejects(s.save('event',id,event(calendar),0),{code:'MODULE_CHANGED'});
  await assert.rejects(s.save('event',randomUUID(),event(randomUUID())),{code:'MODULE_REFERENCE'});
  await s.save('event',id,{...event(calendar),status:'cancelled'},1);
- assert.equal(localCalendar(s.book,(await s.store.read()).entities).events.length,0);
+ assert.equal(localCalendar(s.book,(await s.store.current()).entities).events.length,0);
 });
 test('task deadlines and bookings share the calendar while booking conflicts span owner locations',async()=>{
  const s=await setup(),equipment=randomUUID();await s.save('resource',equipment,{...material(s.wing.id),kind:'equipment',unit:''});
@@ -65,7 +65,7 @@ test('task deadlines and bookings share the calendar while booking conflicts spa
  await s.save('booking',randomUUID(),booking);
  await assert.rejects(s.save('booking',randomUUID(),{...booking,projectId:s.wing.id}),{code:'BOOKING_CONFLICT'});
  await s.save('task',randomUUID(),{projectId:s.wing.id,title:'Prepare',description:'',status:'todo',priority:'normal',dueOn:'2026-10-01',assignees:[],checklist:[],dependencies:[],links:[]});
- const data=localCalendar(s.book,(await s.store.read()).entities);
+ const data=localCalendar(s.book,(await s.store.current()).entities);
  assert.equal(data.events.length,2);assert.equal(visibleCalendar(s.book,data,{projectId:s.parent.id}).events[0].type,'task');
 });
 const ics=lines=>['BEGIN:VCALENDAR','VERSION:2.0',...lines,'END:VCALENDAR'].join('\r\n');
@@ -119,7 +119,7 @@ test('subscriptions refresh without duplicate events, preserve local results on 
  await assert.rejects(calendarPage(s.workspace,service,{workspaceId:s.book.id,...range,limit:1,cursor:first.nextCursor}),{code:'CALENDAR_CURSOR'});
  fail=true;result=await service.data(s.workspace,range,{refresh:true});
  assert.equal(result.events.length,1);assert.ok(result.sources.find(e=>e.id===id).error);
- await s.save('subscription',id,{...subscription,enabled:false},1);service.reconcile((await s.store.read()).entities);
+ await s.save('subscription',id,{...subscription,enabled:false},1);service.reconcile((await s.store.current()).entities);
  assert.equal(service.cache.size,0);result=await service.data(s.workspace,range);assert.equal(result.sources.some(e=>e.id===id),false);
 });
 test('feed parsing releases its worker when the requesting view is cancelled',async()=>{

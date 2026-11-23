@@ -4,19 +4,22 @@ import {mkdtemp,readFile,readdir,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
-import {randomBytes,randomUUID} from 'node:crypto';
 import {MediaStore} from '../src/media.js';
 import {Workspace,digest} from '../src/storage.js';
 import {MediaPolicy,defaultMediaPolicy} from '../src/media-policy.js';
 import {createNotebook} from '../src/model.js';
+import {clearVault} from '../src/encryption.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {sampleNotebook} from '../src/sample.js';
 import {contentBuffer} from '../src/file-content.js';
 const svg=body=>Buffer.from(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">${body}</svg>`);
-async function fixture(t,vault=null){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-svg-'));t.after(async()=>{vault?.key?.fill(0);await rm(root,{recursive:true,force:true});});if(vault)await new Workspace(root,vault).create(createNotebook('Media study'));return {root,store:new MediaStore(root,vault)};}
+// An encrypted fixture is a created workspace; without one, the store works in a plain folder.
+// Media is imported only into an unlocked workspace, as in the product.
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-svg-')),{workspace:{root},vault}=await encryptedFixture(directory,createNotebook('Media study'));t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});return {root,vault,store:new MediaStore(root,vault)};}
 
 test('SVG originals remain exact and encrypted; only a static prepared image reaches publication',async t=>{
- const vault={id:randomUUID(),key:randomBytes(32)}, {root,store}=await fixture(t,vault);
+ const {root,vault,store}=await fixture(t);
  const original=svg('<metadata>PRIVATE /home/private/source.svg</metadata><defs><linearGradient id="g"><stop stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient></defs><style>.mark{fill:url(#g)}</style><path class="mark" d="M5 5H115V75H5Z"/>');
  const asset=await store.import(original,'image'),dir=path.join(root,'.observanda/media',asset.id);
  const ws=new Workspace(root,vault);
@@ -47,10 +50,10 @@ test('SVG imports reject external resources and active content without fetching 
 });
 
 test('SVG import rejects malformed files and oversized canvases, respects output limits and cancellation',async t=>{
- const {root,store}=await fixture(t);
+ const {root,vault,store}=await fixture(t);
  await assert.rejects(store.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><broken></svg>'),'image'),{code:'MEDIA_INVALID'});
  await assert.rejects(store.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="999999" height="999999"/>'),'image'),{code:'SVG_LIMIT'});
- const policy=new MediaPolicy(root);await policy.save({...defaultMediaPolicy(),maxPreparedBytes:10},'new');
+ const policy=new MediaPolicy(root,vault);await policy.save({...defaultMediaPolicy(),maxPreparedBytes:10},'new');
  await assert.rejects(store.import(svg('<circle r="20"/>'),'image'),{code:'MEDIA_LIMIT'});
  const controller=new AbortController();controller.abort();
  await assert.rejects(store.import(svg('<circle r="20"/>'),'image',{signal:controller.signal}),{name:'AbortError'});

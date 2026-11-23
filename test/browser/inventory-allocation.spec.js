@@ -54,7 +54,7 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   await main.getByRole('button',{name:'Save item',exact:true}).click();
   await expect(table().getByRole('row').filter({hasText:'Central stock'})).toContainText('100');
   await expect(main.locator('.inventory-metrics')).toContainText('100 apples');
-  expect((await store.read()).entities.filter(e=>e.type==='resource')).toHaveLength(1);
+  expect((await store.current()).entities.filter(e=>e.type==='resource')).toHaveLength(1);
   await preferences();
   await controls.locator('[data-tool-project="'+a.id+'"]').check();await controls.locator('[data-tool-project="'+b.id+'"]').check();
   await controls.getByRole('button',{name:'Save changes',exact:true}).click();
@@ -81,7 +81,7 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   await main.getByRole('button',{name:'Transfer stock',exact:true}).click();
   await main.getByLabel('To',{exact:true}).selectOption(a.id);await main.getByLabel('Quantity (apples)',{exact:true}).fill('10');
   await main.getByLabel('Reason / reference').fill('Draft allocation');
-  const before=(await store.read()).entities.find(e=>e.type==='resource');
+  const before=(await store.current()).entities.find(e=>e.type==='resource');
   await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'resource.save',payload:{id:before.id,expectedRevision:before.revision,data:{...before.data,description:'Checked by a second editor'}}});
   await main.locator('form').getByRole('button',{name:'Transfer stock',exact:true}).click();
   await expect(main.getByRole('alert')).toContainText('Nothing was transferred or consumed');
@@ -112,7 +112,7 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   if(await page.locator('#notice').isVisible())await page.locator('#notice').getByRole('button',{name:'Dismiss'}).click();
   await rootInventory().click();await expect(main.getByRole('heading',{name:'Seigr inventory',exact:true})).toBeVisible();await page.reload();
   await expect(main.locator('.inventory-metrics')).toContainText('95 apples');
-  const entities=(await store.read()).entities,item=entities.find(e=>e.type==='resource'),saved=(await workspace.read()).book;
+  const entities=(await store.current()).entities,item=entities.find(e=>e.type==='resource'),saved=(await workspace.read()).book;
   expect(item.data.projectId).toBe(null);expect(balance(entities,item.id).physical).toBe('95');
   expect(inventoryQuantity(saved,entities,item.id,a.id).physical).toBe('35');
   expect(inventoryQuantity(saved,entities,item.id,b.id).physical).toBe('35');

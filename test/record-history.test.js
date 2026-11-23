@@ -12,13 +12,14 @@ import {recordRevision} from '../src/research.js';
 import {encrypted,clearVault} from '../src/encryption.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
+import {initializeLocation} from '../src/locations.js';
 import {recordRevisionView,recordRevisionComparison} from '../src/web/record-revision-view.js';
 const media={get:async()=>{throw Error('Unexpected attachment');}};
 const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 
 test('record history reuses encrypted snapshots, omits other saves and restores only the reviewed record',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-')),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-device-')),'device.key')}),vault=takeCreatedVault(await createWorkspaceAccess('','synthetic record history password',deviceStore)),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
- let saved=await ws.create(sampleNotebook());const original=structuredClone(saved.book.entries[0]),otherId=saved.book.entries[1].id,command={workspaceId:saved.book.id,recordId:original.id};
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-')),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-record-history-device-')),'device.key')}),access=await createWorkspaceAccess('','synthetic record history password',deviceStore),vault=takeCreatedVault(access),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
+ await initializeLocation(root,sampleNotebook(),access,vault);let saved=await ws.read();const original=structuredClone(saved.book.entries[0]),otherId=saved.book.entries[1].id,command={workspaceId:saved.book.id,recordId:original.id};
  const pin=await new ResearchMaterials(ws).pinRecord(original.id,recordRevision(original));
  const secondBook={id:randomUUID(),projectId:saved.book.projects[0].id,title:'Moved lab book'};saved.book.notebooks.push(secondBook);
  saved.book.entries[0].title='Changed record title';saved.book.entries[0].body='New interpretation';saved.book.entries[0].notebookId=secondBook.id;
@@ -47,8 +48,8 @@ test('record history reuses encrypted snapshots, omits other saves and restores 
 });
 
 test('record restore rejects stale review and forged revisions without changing data',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-')),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-device-')),'device.key')}),vault=takeCreatedVault(await createWorkspaceAccess('','synthetic record conflict password',deviceStore)),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
- let saved=await ws.create(sampleNotebook());const command={workspaceId:saved.book.id,recordId:saved.book.entries[0].id};
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-')),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-record-conflict-device-')),'device.key')}),access=await createWorkspaceAccess('','synthetic record conflict password',deviceStore),vault=takeCreatedVault(access),ws=new Workspace(root,vault),history=new RecordHistory(ws,media);
+ await initializeLocation(root,sampleNotebook(),access,vault);let saved=await ws.read();const command={workspaceId:saved.book.id,recordId:saved.book.entries[0].id};
  saved.book.entries[0].title='Version two';saved=await ws.save(saved.book,saved.etag);
  const listing=await history.list(command),old=listing.versions.find(v=>!v.current);
  saved.book.entries[0].body='Concurrent same-record edit';saved=await ws.save(saved.book,saved.etag);

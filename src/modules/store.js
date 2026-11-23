@@ -1,6 +1,5 @@
 import {verifyProjectDomains} from '../project-domain-verification.js';
 import {moduleDomainContext,moduleDomainRoute} from '../module-domain-context.js';
-import {readProjectDomainRegistry} from '../project-domain-registry.js';
 import {ProjectModuleCommands} from '../project-module-commands.js';
 import {moduleCommandFingerprint as fingerprint} from './command-fingerprint.js';
 import {serialize} from '../storage.js';
@@ -40,10 +39,6 @@ export class ModuleStore{
   if(history&&data.revision!==data.events.length)throw new AppError('MODULE_FORMAT');
   for(const validate of this.definitions.validate??[])validate(data.entities,{workspaceId:data.workspaceId});
   return data;
- }
- async read(book){
-  book??=(await this.workspace.outline()).metadata;
-  return this.workspace.catalogue(async store=>{if((await readProjectDomainRegistry(store))?.commandVersion===1)throw new AppError('ACCESS_UPGRADE');return this.validate(await store.moduleData(book.id));});
  }
  async current(book){
   book??=(await this.workspace.outline()).metadata;
