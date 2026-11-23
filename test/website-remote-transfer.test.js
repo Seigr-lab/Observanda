@@ -12,18 +12,23 @@ import {websiteFilesHttp} from '../src/website-files-http.js';
 import {defaultPublishing} from '../src/publishing.js';
 import {githubFixture} from './github-fixture.js';
 import {sshFixture} from './ssh-fixture.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createNotebook} from '../src/model.js';
+import {clearVault} from '../src/encryption.js';
 import {withOperationProgress} from '../src/operation-progress.js';
 
-async function fixture(t,options){
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-transfer-'));await mkdir(path.join(root,'.observanda'));
- const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});
- workspace.catalogue=()=>assert.fail('File publication opened the research catalogue');
+// Website files never open the research catalogue. A server login is workspace metadata, kept in the
+// workspace database, so a test that publishes over SSH uses a real workspace instead of the guard.
+async function fixture(t,options,{serverLogins=false}={}){
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-transfer-'));let workspace;
+ if(serverLogins){let vault;({workspace,vault}=await encryptedFixture(root,createNotebook('Website workspace')));t.after(()=>clearVault(vault));}
+ else{await mkdir(path.join(root,'.observanda'));workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>assert.fail('File publication opened the research catalogue');}
  t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:8,retryDelay:150});});
  const request=async(operation,data={})=>{
   let answer;await websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL('/api/website-files/'+operation,'http://localhost'),body:async()=>data,check:async()=>{},json:value=>{answer=value;},publisherOptions:options});return answer;
  };
  const page=await request('create',{name:'Field atlas'}),siteId=page.site.id;
- return {page,call:(operation,data)=>request(operation,{siteId,...data})};
+ return {page,workspace,call:(operation,data)=>request(operation,{siteId,...data})};
 }
 const confirmation=(plan,site,config)=>({expectedRevision:site.revision,configEtag:config.etag,destinationReview:plan.id,destinationReviewed:true});
 test('the remote destination receives only included pages and removes a withdrawn page on the next reviewed delivery',async t=>{
@@ -109,8 +114,9 @@ test('saved HTML GitHub publication recovers a lost ref reply without a second b
 });
 
 test('saved HTML SSH publication settles a lost activation after an edit, without uploading the stale files, then publishes the reviewed new page',async t=>{
- const remote=await sshFixture(t),{page,call}=await fixture(t,{ssh:remote.host});
- const cfg=defaultPublishing();cfg.kind='ssh';cfg.ssh=remote.config;
+ const remote=await sshFixture(t),{page,workspace,call}=await fixture(t,{ssh:remote.host},{serverLogins:true});
+ // A website's SSH destination names a saved server login and its own folder.
+ const cfg=defaultPublishing();cfg.kind='ssh';cfg.ssh=await remote.target(workspace);
  const config=await call('destination/save',{config:cfg,etag:'new'}),plan=await call('plan',{expectedRevision:page.site.revision,configEtag:config.etag}),intent=confirmation(plan,page.site,config);
  let lost=false;remote.setHook((command,phase)=>{if(!lost&&phase==='after'&&command.args.at(-1).includes('mv -Tf')){lost=true;throw Error('Lost SSH switch reply');}});
  const observed=[];await assert.rejects(withOperationProgress(value=>observed.push(value),()=>call('publish',intent)));assert.ok(lost);remote.setHook(null);

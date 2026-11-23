@@ -11,6 +11,10 @@ import {EventEmitter} from 'node:events';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {githubFixture,sha} from './github-fixture.js';
 import {defaultPublishing} from '../src/publishing.js';
+import {ServerLogins} from '../src/server-logins.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createNotebook} from '../src/model.js';
+import {clearVault} from '../src/encryption.js';
 
 test('website folder selection requires the same live grant when the native dialog returns',async()=>{
  const siteId=randomUUID(),workspace={catalogue:()=>assert.fail('Folder selection opened research')};
@@ -74,10 +78,11 @@ test('GitHub destination review, ownership and upload use the file revision with
 });
 
 test('SSH update review pages the exact outgoing files without connecting to the destination',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'obs-site-ssh-'));await mkdir(path.join(root,'.observanda'));
+ // The destination names a server login, which is workspace metadata in the workspace database.
+ const root=await mkdtemp(path.join(os.tmpdir(),'obs-site-ssh-')),{workspace,vault}=await encryptedFixture(root,createNotebook('Website workspace'));
  try{
-  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace);
-  workspace.catalogue=()=>assert.fail('SSH review opened research');
+  const store=new WebsiteFileStore(workspace),logins=new ServerLogins(workspace);
+  const login=(await logins.save({name:'Hosting server',protocol:'ssh',host:'host.example',port:22,user:'research',identityFile:''},(await logins.read()).etag)).logins.at(-1).id;
   const siteId=randomUUID(),html='<!doctype html><html><body><main>Lab release</main></body></html>';
   const files=new Map([['index.html',html],['style.css','']]);
   for(let i=0;i<34;i++)files.set('assays/'+i+'.html',html);
@@ -86,12 +91,12 @@ test('SSH update review pages the exact outgoing files without connecting to the
    url:new URL('/api/website-files/'+operation,'http://localhost'),workspace,check:async()=>{},
    publisherOptions:{request:()=>assert.fail('Review contacted a remote service')},body:async()=>({siteId,expectedRevision,...options}),json:value=>{result=value;},
   });return result;};
-  const config=defaultPublishing();config.kind='ssh';Object.assign(config.ssh,{host:'host.example',user:'research',directory:'/srv/atlas'});
+  const config=defaultPublishing();config.kind='ssh';config.ssh={login,directory:'/srv/atlas'};
   const saved=await call('destination/save',{config,etag:'new'}),configEtag=saved.etag;
   assert.equal((await call('publish-target')).destination.config.kind,'ssh');
   const plan=await call('plan',{configEtag});assert.equal(plan.included.length,32);
   const next=await call('plan/page',{configEtag,id:plan.id,kind:'included',offset:plan.windows.included.next});
   assert.deepEqual([...plan.included,...next.items].sort(),[...files.keys(),'publication.json'].sort());assert.equal(next.next,null);
   await assert.rejects(call('plan/page',{configEtag,id:randomUUID(),kind:'included',offset:32}),{code:'PUBLISH_STALE'});
- }finally{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true});}
+ }finally{await closeIdleMutationFiles();await clearVault(vault);await rm(root,{recursive:true,force:true});}
 });
