@@ -11,7 +11,7 @@ const base={website:0,staged:false,owners:0,publication:false,transfers:false},r
 const first=211106232533114,maximum=CATALOGUE_MAX_GENERATION,weightedMaximum=422212465066105,bit=211106232532992;
 const object='.observanda/materials/objects/id/revision.json',job='.observanda/jobs/id.json',work='.observanda/materials/aggregation-work/id.json',chunk='.observanda/materials/sequences/chunks/hash.json',table='.observanda/materials/tables/hash.json';
 function database(format=122){let stored=format;const statements=[];return {db:{all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}},statements,get format(){return stored;}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 
 test('weighted fit occupies an independent catalogue bit and retains historical feature generations',async()=>{
  assert.ok(CATALOGUE_MAX_GENERATION>=weightedMaximum);assert.equal(configurationCatalogueGeneration({...base,weightedFit:true}),first);assert.equal(first-bit,122);assert.equal(catalogueRequiresWeightedFit(first-1),false);assert.equal(catalogueRequiresWeightedFit(first),true);assert.equal(configurationCatalogueFeatures(first).coordinateAlignment,undefined);assert.equal(configurationCatalogueFeatures(first-1).coordinateAlignment,true);assert.equal(configurationCatalogueGeneration(configurationCatalogueFeatures(weightedMaximum)),weightedMaximum);

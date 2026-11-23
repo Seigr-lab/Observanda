@@ -25,7 +25,7 @@ test('equation form fields reopen nested TeX structures at their original ranges
 test('static MathML saves, exports and reuses across website pages with research unavailable; active foreign markup fails closed',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-equation-'));await mkdir(path.join(root,'.observanda'));
  t.after(async()=>{await closeIdleMutationFiles();assert.equal(path.dirname(root),path.resolve(os.tmpdir()));await rm(root,{recursive:true,force:true,maxRetries:8});});
- const ws=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});ws.catalogue=ws.storageKind=()=>assert.fail('Equation opened research storage');
+ const ws=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});ws.catalogue=()=>assert.fail('Equation opened research storage');
  const store=new WebsiteFileStore(ws),id=randomUUID(),source='\\frac{a_1}{\\sqrt{b^2}}';
  const fragment=renderEquation(source).replace(/^<span class="katex">|<\/span>$/g,'');
  const html='<html><body><main><figure data-website-equation>'+fragment+'<figcaption>Equation of motion</figcaption></figure></main></body></html>';

@@ -83,7 +83,7 @@ test('changed prefixes and different saved bases retain complete immutable-histo
 });
 
 test('new source references remain checked once, reject wrong ownership, and honour cancellation',async t=>{
- const f=await fixture(),p=f.attempt.preparations[0],workspaceId=randomUUID(),recordId=randomUUID(),ref={workspaceId,id:randomUUID(),kind:'record',revision:'a'.repeat(64),label:'Exact retained method'},checked=[],workspace={storageKind:async()=>'catalogue',catalogue:async consume=>consume({snapshot:async()=>({metadata:{id:workspaceId}}),workspace:{},object:async()=>null})};
+ const f=await fixture(),p=f.attempt.preparations[0],workspaceId=randomUUID(),recordId=randomUUID(),ref={workspaceId,id:randomUUID(),kind:'record',revision:'a'.repeat(64),label:'Exact retained method'},checked=[],workspace={catalogue:async consume=>consume({snapshot:async()=>({metadata:{id:workspaceId}}),workspace:{},object:async()=>null})};
  t.mock.method(ResearchMaterials.prototype,'checkReference',async value=>{checked.push(value);});
  const next=await append(f.document,{events:[event(p,{references:[ref]}),event(p,{references:[ref]})]});
  await validateAttemptDocumentChange(workspace,workspaceId,f.document,next,recordId);assert.deepEqual(checked,[ref]);

@@ -74,7 +74,7 @@ test('recoverable type changes atomically guard their format and survive ordinar
  const destination=path.join(f.workspace.root,'type-copy','project');await mkdir(path.dirname(destination));const copied=await copyProjectLocation(storage,destination,{id:randomUUID()});
  const access=await createWorkspaceAccess('','synthetic type recovery password',new TestDeviceStore({file:path.join(f.root,'type-recovery-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const descriptor=await storage.readFile(await workspaceFile(storage.root),'utf8'),fresh=new ProjectStorage(path.join(await f.receivingWorkspace(),'project'),f.projectId,vault);
- await mkdir(path.join(fresh.root,'.observanda'),{recursive:true});await atomicWrite(path.join(fresh.root,'.observanda/access.json'),serialize(access));await fresh.writeFile(await workspaceFile(fresh.root,{secure:true}),descriptor);await rekeyCatalogue(storage,fresh,JSON.parse(descriptor));
+ await mkdir(path.join(fresh.root,'.observanda'),{recursive:true});await atomicWrite(path.join(fresh.root,'.observanda/access.json'),serialize(access));await fresh.writeFile(await workspaceFile(fresh.root),descriptor);await rekeyCatalogue(storage,fresh,JSON.parse(descriptor));
  // A copy may add later catalogue features; it must still admit record type drafts (generation 13 or later).
  for(const copy of [copied,fresh]){assert.ok(await generation(copy)>=13);assert.deepEqual((await new RecordValueDrafts(copy).read(lookup)).value,command.value);await copy.catalogue(store=>store.verifySnapshot(undefined,book.id));}
 });
@@ -102,7 +102,7 @@ test('whole-record checkpoint type corrections are guarded, recoverable and reta
  ResearchCatalogue.prototype.record.mock.restore();
  const access=await createWorkspaceAccess('','synthetic corrected type password',new TestDeviceStore({file:path.join(f.root,'corrected-type-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const descriptor=await storage.readFile(await workspaceFile(storage.root),'utf8'),copied=new ProjectStorage(path.join(await f.receivingWorkspace(),'project'),f.projectId,vault);
- await mkdir(path.join(copied.root,'.observanda'),{recursive:true});await atomicWrite(path.join(copied.root,'.observanda/access.json'),serialize(access));await copied.writeFile(await workspaceFile(copied.root,{secure:true}),descriptor);await rekeyCatalogue(storage,copied,JSON.parse(descriptor));
+ await mkdir(path.join(copied.root,'.observanda'),{recursive:true});await atomicWrite(path.join(copied.root,'.observanda/access.json'),serialize(access));await copied.writeFile(await workspaceFile(copied.root),descriptor);await rekeyCatalogue(storage,copied,JSON.parse(descriptor));
  const restored=new RecordDraftReview(copied,media);assert.equal(await copied.catalogue(store=>catalogueFormat(store.db)),13);
  assert.deepEqual(await restored.prepare(prepare),plan);await restored.apply(target(plan));
  const result=(await copied.read()).book.entries.find(r=>r.id===original.id);assert.equal(result.type,'analysis');assert.equal(result.title,mine.title);assert.deepEqual(result.sections,original.sections);await copied.catalogue(store=>store.verifySnapshot(undefined,book.id));

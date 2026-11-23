@@ -60,7 +60,7 @@ test('resumable file ownership rejects linked paths and cancellation retains onl
 for(const resumed of [false,true])test('durable target reservations protect '+(resumed?'resumed':'new')+' file copies without discarding authenticated chunks',async t=>{
  const f=await fixture(t,2*BLOCK+7);let prefix=Buffer.alloc(0);
  if(resumed){await assert.rejects(f.content.copyTo(f.target,f.destination,{resume:true,onProgress(done){if(done>=BLOCK)throw Error('Pause retained copy');}}),/Pause retained copy/);prefix=await readFile(f.temp);}
- t.mock.method(f.target,'readMetadata',async()=>null);t.mock.method(f.target,'storageKind',async()=>'catalogue');t.mock.method(f.target,'metadataPage',async()=>({items:[]}));
+ t.mock.method(f.target,'readMetadata',async()=>null);t.mock.method(f.target,'metadataPage',async()=>({items:[]}));
  await withStagingAuthority(f.target,async authority=>{
   const claim=await authority.reserve({id:randomUUID(),principalId:randomUUID(),ownerId:randomUUID(),grantGeneration:1,entries:1,expectedBytes:BLOCK,expiresAt:Date.now()+60000}),remaining=HEADER+f.bytes.length+3*EXTRA-prefix.length,probe=t.mock.method(diskCapacity,'probe',async()=>({id:'isolated-target-volume',available:BigInt(STAGING_FREE_BYTES+remaining)}));
   try{await assert.rejects(f.content.copyTo(f.target,f.destination,{resume:true}),{code:'STORAGE_FULL'});await assert.rejects(lstat(f.destination),{code:'ENOENT'});if(resumed)assert.deepEqual(await readFile(f.temp),prefix);else await assert.rejects(lstat(f.temp),{code:'ENOENT'});}finally{probe.mock.restore();await claim.close();while(await authority.recover()){};}

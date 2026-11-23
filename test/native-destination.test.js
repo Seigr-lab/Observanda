@@ -7,7 +7,8 @@ import {withNativeDestination} from '../src/native-destination.js';
 import {atomicWrite,privateDirectory,Workspace} from '../src/storage.js';
 import {prepareCopyDestination} from '../src/locations.js';
 import {withNativeWorkspaceCopy} from '../src/native-workspace-copy.js';
-import {createHash} from 'node:crypto';
+import {createHash,randomBytes,randomUUID} from 'node:crypto';
+import {ENCRYPTION_OVERHEAD} from '../src/encryption.js';
 
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-destination-')),destination=path.join(root,'destination'),outside=path.join(root,'outside');await mkdir(outside);await writeFile(path.join(outside,'keep'),'unrelated');
@@ -59,8 +60,8 @@ test('destination preparation rejects unrelated content inserted during its clai
 
 test('workspace control reads enforce their caller budget on the retained file',async t=>{
  const f=await fixture(t);await withNativeDestination(f.destination,async()=>{
-  await prepareCopyDestination(f.destination);const file=path.join(f.destination,'.observanda/control'),workspace=new Workspace(f.destination);await atomicWrite(file,'bounded control');
-  await assert.rejects(workspace.readFile(file,'utf8',4),{code:'LIMIT'});assert.equal(await workspace.readFile(file,'utf8',15),'bounded control');
+  await prepareCopyDestination(f.destination);const file=path.join(f.destination,'.observanda/control'),workspace=new Workspace(f.destination,{id:randomUUID(),key:randomBytes(32)});await workspace.writeFile(file,'bounded control');
+  await assert.rejects(workspace.readFile(file,'utf8',4),{code:'LIMIT'});assert.equal(await workspace.readFile(file,'utf8',15+ENCRYPTION_OVERHEAD),'bounded control');
  });
 });
 test('nested owner file copies do not use the containing workspace as their output root',async t=>{

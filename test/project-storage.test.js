@@ -126,7 +126,7 @@ test('fresh project access keys preserve original record identities and history 
  const target=new ProjectStorage(path.join(receiver.workspace.root,'fresh-project',path.basename(a.storage.root)),a.id,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});
  const descriptor=await a.storage.readFile(await workspaceFile(a.storage.root),'utf8');
  const {atomicWrite,serialize}=await import('../src/storage.js'),{rekeyCatalogue,verifyCatalogueArchive}=await import('../src/research-catalogue.js');
- await atomicWrite(path.join(target.root,'.observanda','access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+ await atomicWrite(path.join(target.root,'.observanda','access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root),descriptor);
  await rekeyCatalogue(a.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));
  assert.deepEqual(await target.read(),saved);assert.deepEqual(await target.readRevision(before.etag),before.book);assert.deepEqual(await a.storage.read(),saved);
  assert.equal((await catalogueBinding(target.root)).projectId,a.id);

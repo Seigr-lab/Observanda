@@ -110,12 +110,16 @@ test('switching workspace closes a native selection that belongs to the previous
 });
 
 test('native-created empty folders accept verified ordinary and encrypted copies; newly occupied folders are preserved',async()=>{
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-copy-')),source=path.join(parent,'source');await initializeLocation(source,createNotebook('Original'),await createAccess());const before=await workspaceManifest(source);
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-copy-')),source=path.join(parent,'source'),deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-native-copy-device-')),'device.key')});
+ const sourceAccess=await createWorkspaceAccess('','',deviceStore),sourceVault=takeCreatedVault(sourceAccess);
+ try{
+ await initializeLocation(source,createNotebook('Original'),sourceAccess,sourceVault);const before=await workspaceManifest(source);
  for(const secure of [false,true]){
-   const destination=path.join(parent,secure?'encrypted':'plain');await mkdir(destination);const plan=await copyPlan(source,destination);
-   if(secure){const access=await createAccess('','synthetic empty folder password'),vault=takeCreatedVault(access);try{await encryptedCopy(plan,access,vault);assert.equal((await new Workspace(destination,vault).read()).book.title,'Original');}finally{clearVault(vault);}}
-   else{await copyWorkspace(plan);assert.deepEqual(await workspaceManifest(destination),before);}
+   const destination=path.join(parent,secure?'encrypted':'ordinary');await mkdir(destination);const plan=await copyPlan(source,destination,{vault:sourceVault});
+   if(secure){const access=await createAccess('','synthetic empty folder password'),vault=takeCreatedVault(access);try{await encryptedCopy(plan,access,vault,sourceVault);assert.equal((await new Workspace(destination,vault).read()).book.title,'Original');}finally{clearVault(vault);}}
+   else{await copyWorkspace(plan,{vault:sourceVault});assert.equal((await new Workspace(destination,sourceVault).read()).book.title,'Original');}
  }
- const occupied=path.join(parent,'became-occupied');await mkdir(occupied);const plan=await copyPlan(source,occupied);await writeFile(path.join(occupied,'retain.txt'),'untouched');
- await assert.rejects(copyWorkspace(plan),{code:'EXISTS'});assert.equal(await readFile(path.join(occupied,'retain.txt'),'utf8'),'untouched');assert.deepEqual(await readdir(occupied),['retain.txt']);assert.deepEqual(await workspaceManifest(source),before);
+ const occupied=path.join(parent,'became-occupied');await mkdir(occupied);const plan=await copyPlan(source,occupied,{vault:sourceVault});await writeFile(path.join(occupied,'retain.txt'),'untouched');
+ await assert.rejects(copyWorkspace(plan,{vault:sourceVault}),{code:'EXISTS'});assert.equal(await readFile(path.join(occupied,'retain.txt'),'utf8'),'untouched');assert.deepEqual(await readdir(occupied),['retain.txt']);assert.deepEqual(await workspaceManifest(source),before);
+ }finally{clearVault(sourceVault);}
 });

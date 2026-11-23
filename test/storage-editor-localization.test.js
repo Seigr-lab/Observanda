@@ -11,8 +11,8 @@ const catalogue=locale=>readFile(new URL('../src/web/locales/'+locale+'/workspac
 test('storage display translates server labels and review counts without changing paths or request values',async context=>{
  const previous=globalThis.document;globalThis.document={querySelector:()=>null,addEventListener(){},removeEventListener(){}};
  context.after(()=>{globalThis.document=previous;activateLanguage('en');});
- const source=storageMap('C:/Authored <workspace>',null),descriptor=storageMap(source.root,null,undefined,{catalogue:true}).locations[0];
- source.locations.push(descriptor,{label:'Custom <label>',path:'C:/User <path>'});
+ const source=storageMap('C:/Authored <workspace>',null);
+ source.locations.push({label:'Custom <label>',path:'C:/User <path>'});
  const state={book:{title:'User workspace'},storageBusy:false,dirty:false,storage:{...source,applicationRoot:'C:/Application <path>',database:{ready:true,message:'PostgreSQL is connected.',placement:'workspace',path:'C:/Database <path>'}},access:{encrypted:true,version:3,deviceAvailable:false,passwordAvailable:true,username:'User <name>'}};
  const original=structuredClone(state.storage),calls=[];let dialog='';
  const ui=storageUI({state,api:async(path,data)=>{calls.push({path,data});assert.equal(path,'/api/storage/copy/preview');return {destination:data.path,files:1,bytes:1048576};},activity:{storageBusy:()=>false},writerRecovery:{},esc,field:(label,control)=>'<label>'+label+'</label>'+control,save:async()=>{},render:()=>{},showDialog:value=>{dialog=value;},notify:()=>{},reload:()=>{},resetInterface:()=>{},isUploading:()=>false});

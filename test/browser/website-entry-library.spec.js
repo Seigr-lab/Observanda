@@ -16,7 +16,7 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
  const directory=await mkdtemp(path.join(os.tmpdir(),'website-entry-library-'));
  try{
   await mkdir(path.join(directory,'.observanda'));const vault=new Workspace(directory,{id:randomUUID(),key:randomBytes(32)});
-  vault.storageKind=vault.catalogue=()=>{throw Error('Unexpected research read');};
+  vault.catalogue=()=>{throw Error('Unexpected research read');};
   const store=new WebsiteFileStore(vault),corpus=await seedWebsitePickerCorpus(store,{count:24});
   const first=await store.create({name:'Survey atlas'}),id=first.site.id;
   await store.createPage(id,{path:'notes.html',title:'Field notes',expectedRevision:first.site.revision,inclusion:'included'});

@@ -54,7 +54,6 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
      if(key){const {verifiedStagingReservationNamespace}=await import('./staging-reservations.js');if(await verifiedStagingReservationNamespace(root,key))continue;}
     }
     if(relative==='.observanda'&&['postgresql','database-transition','project-transfer-files','lab-book-transfer-files','publishing-staging'].includes(item.name)){await assertRegular(path.join(absolute,item.name),{directory:true});continue;}
-    if(relative==='.observanda'&&item.name==='database-conversion.observanda'){await assertRegular(path.join(absolute,item.name));continue;}
     if(workspaceTransferControl(path.posix.join(relative,item.name))){await assertRegular(path.join(absolute,item.name));continue;}
     if(ownedStorageLeaseFile(path.posix.join(relative,item.name))){await assertRegular(path.join(absolute,item.name),{missing:true});continue;}
     if([MOVE_RECEIPT,MOVE_SOURCE].includes(path.posix.join(relative,item.name))){await assertRegular(path.join(absolute,item.name));continue;}

@@ -8,7 +8,7 @@ import {datasetResourceMetadata} from '../src/dataset-resource-format.js';
 const base={website:0,staged:false,owners:0,publication:false,transfers:false};
 function database(format=122){let stored=format;const statements=[],db={all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}};return {db,statements,get format(){return stored;}};}
 const complete={...base,pairedStatistics:true,quantileAggregation:true,measurementScalarPolicies:true,datasetResourcePolicies:true};
-const workspace=format=>({storageKind:()=> 'catalogue',catalogue:async operation=>operation({catalogueDb:database(format).db})});
+const workspace=format=>({catalogue:async operation=>operation({catalogueDb:database(format).db})});
 test('paired statistics and previous feature bits remain independent through every selected combination and restoration',async()=>{
  for(const pairedStatistics of [false,true])for(const axisPermutation of [false,true])for(const quantileAggregation of [false,true])for(const tensorValues of [false,true])for(const clockSynchronization of [false,true]){
   const flags={pairedStatistics,axisPermutation,quantileAggregation,tensorValues,clockSynchronization},features={...base,...flags},format=configurationCatalogueGeneration(features),expected={...base,...Object.fromEntries(Object.entries(flags).filter(([,enabled])=>enabled))};assert.deepEqual(configurationCatalogueFeatures(format),expected);

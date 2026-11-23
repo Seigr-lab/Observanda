@@ -6,4 +6,4 @@ export function domainAlgebraMetadata(relative,value){
  if(relative.startsWith('.observanda/materials/sequences/chunks/'))return value?.kind==='calculation-nodes'&&value.items?.some(node=>node.kind==='domain-arithmetic');
  return domainAlgebraMaterial(value);
 }
-export async function assertDomainAlgebraFormat(workspace){if(typeof workspace.storageKind!=='function')return;await workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDomainAlgebra}=await import('./catalogue-format.js');if(!catalogueRequiresDomainAlgebra(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}
+export async function assertDomainAlgebraFormat(workspace){if(typeof workspace.catalogue!=='function')return;await workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDomainAlgebra}=await import('./catalogue-format.js');if(!catalogueRequiresDomainAlgebra(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}

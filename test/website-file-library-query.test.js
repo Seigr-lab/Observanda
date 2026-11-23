@@ -51,7 +51,7 @@ test('independent website and PDF tag consent controls what the indexed website 
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-library-query-'));await mkdir(path.join(root,'.observanda'));
  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});
- for(const key of ['catalogue','openCatalogue','storageKind'])workspace[key]=()=>assert.fail('Website metadata search accessed research '+key);
+ for(const key of ['catalogue','openCatalogue'])workspace[key]=()=>assert.fail('Website metadata search accessed research '+key);
  t.after(async()=>{await pinnedQueryResults.clear();await closeIdleMutationFiles();assert.equal(path.dirname(root),path.resolve(os.tmpdir()));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:50});});
  const files=new WebsiteFileStore(workspace),projectId=randomUUID(),notebookId=randomUUID(),otherBook=randomUUID();
  async function put(title,html,{notebook=notebookId,visible=true,target='website'}={}){
@@ -76,7 +76,7 @@ test('fielded search, contextual tag counts and duplicate-safe pages use permitt
   await files.writeControl(location,shard);
  },{write:true});
  const openedWorkspace=new Workspace(workspace.root,{...workspace.vault});
- for(const key of ['catalogue','openCatalogue','storageKind'])openedWorkspace[key]=workspace[key];
+ for(const key of ['catalogue','openCatalogue'])openedWorkspace[key]=workspace[key];
  const reopened=new WebsiteFileStore(openedWorkspace);
  const request=q=>reopened.searchLibrary(q),facets=q=>reopened.scope(scope=>websiteLibraryFacets(reopened,scope,q));
  const ids=async q=>(await page(request,q,null,20)).items.map(row=>row.id);

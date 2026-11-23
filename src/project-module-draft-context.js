@@ -9,7 +9,7 @@ export async function projectModuleDraftContext(context,moduleId,{writable=false
   if(typeof relative!=='string'||!['.observanda/module-drafts/','.observanda/module-draft-list/','.observanda/module-draft-transfers/'].some(prefix=>relative.startsWith(prefix))&&relative!=='.observanda/module-draft-list.json'||relative.split('/').some(part=>!part||part==='.'||part==='..'))throw new AppError('UNSAFE');return 'metadata:'+relative;
  };
  const workspace={root:context.research.workspace.root,
-  storageKind:async()=>'catalogue',catalogue:operation=>operation(store),outline:async()=>({metadata:(await context.research.snapshot()).metadata}),
+  catalogue:operation=>operation(store),outline:async()=>({metadata:(await context.research.snapshot()).metadata}),
   withLock:operation=>{if(!writable)throw new AppError('INVALID');return operation();},
   moduleHistory:(id,operation)=>projectModuleHistoryContext(context,id,operation),
   async readMetadata(relative,limit){const value=await store.object(key(relative));if(value===null)return null;if(typeof value.text!=='string')throw new AppError('FORMAT');if(Buffer.byteLength(value.text)>limit)throw new AppError('LIMIT');return value.text;},

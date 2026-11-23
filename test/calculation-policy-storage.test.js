@@ -46,7 +46,7 @@ test('dedicated calculation policies and unfinished policy drafts survive replay
  assert.equal((await new ProjectModuleDrafts(copied,f.book.id).read(scope)).etag,saved.etag);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'replacement-device')})),vault=takeCreatedVault(access);
  try{
-  const recovered=new ProjectStorage(path.join(await f.receivingWorkspace(),'recovered'),f.projectId,vault);await mkdir(path.join(recovered.root,'.observanda'),{recursive:true});await atomicWrite(path.join(recovered.root,'.observanda/access.json'),serialize(access));await recovered.writeFile(await workspaceFile(recovered.root,{secure:true}),original);
+  const recovered=new ProjectStorage(path.join(await f.receivingWorkspace(),'recovered'),f.projectId,vault);await mkdir(path.join(recovered.root,'.observanda'),{recursive:true});await atomicWrite(path.join(recovered.root,'.observanda/access.json'),serialize(access));await recovered.writeFile(await workspaceFile(recovered.root),original);
   await rekeyCatalogue(f.storage,recovered,JSON.parse(original));await verifyCatalogueArchive(recovered,JSON.parse(original));
   assert.equal((await new ProjectModuleDrafts(recovered,f.book.id).read(scope)).etag,saved.etag);
   const item=(await new ProjectModuleReader(recovered,f.book.id).selected({workspaceId:f.book.id,id:command.payload.id})).entity;

@@ -7,8 +7,8 @@ import {initializeWorkspaceSettings} from './workspace-settings.js';
 import {withProjectModuleInitialization} from './project-module-initialization.js';
 import {workspaceCreationPath,requireWorkspaceName,validateWorkspaceName} from './workspace-names.js';
 import {workspaceFiles,workspaceInventory,hashWorkspaceFile as fileHash} from './workspace-inventory.js';
-import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,rekeyCatalogue,isCatalogue,verifyCatalogueArchive,openCatalogue} from './research-catalogue.js';
-import {backupCatalogue,hasCatalogue,requireDatabase} from './postgres.js';
+import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,rekeyCatalogue,verifyCatalogueArchive} from './research-catalogue.js';
+import {backupCatalogue,requireDatabase} from './postgres.js';
 import {describeContent} from './file-content.js';
 import {clearVault} from './encryption.js';
 import path from 'node:path';
@@ -68,8 +68,8 @@ export async function inspectLocation(input){
     await assertRegular(path.join(root,'.observanda'),{directory:true});
     if(await assertRegular(path.join(root,'.observanda','copy-in-progress'),{missing:true}))throw new AppError('STORAGE_INCOMPLETE');
   }
-  if(items.includes('observanda.json')||items.includes(WORKSPACE_FILE)){
-    const access=await readAccess(root);if(!isEncryptedAccess(access.value))await new Workspace(root).read();return {root,kind:'workspace',protected:!!access.value.password,encrypted:isEncryptedAccess(access.value)};
+  if(items.includes(WORKSPACE_FILE)){
+    const access=await readAccess(root);if(!isEncryptedAccess(access.value))throw new AppError('ACCESS_FORMAT');return {root,kind:'workspace',protected:!!access.value.password,encrypted:true};
   }
   return {root,kind:items.length?'occupied':'empty',protected:false};
 }
@@ -95,36 +95,31 @@ export async function createFolder(parent,name){
   try{await mkdir(target,{mode:0o700});}catch(error){if(error.code==='EEXIST')throw new AppError('FOLDER_EXISTS');throw error;}
   return {folder:target};
 }
-export function storageMap(root,preferencesFile,dataFile='observanda.json',{catalogue=false}={}){
+export function storageMap(root,preferencesFile){
   return {root,preferencesFile:preferencesFile??null,locations:[
-    ['Research records, projects, themes and pages',dataFile],['Saved research revisions','.observanda/revisions'],['PostgreSQL catalogue binding',CATALOGUE_FILE],['Portable encrypted research archive',CATALOGUE_ARCHIVE],['Original media and prepared copies','.observanda/media'],['Resources and planning','.observanda/modules.json'],['Module revision history','.observanda/module-history'],['Module recovery checkpoints','.observanda/module-drafts'],['Laboratory records','.observanda/laboratory.json'],['Laboratory revision history','.observanda/laboratory-history'],['Publishing destinations','.observanda/publishing.json'],['Publishing receipts','.observanda/publishing-receipts.json'],['Encrypted access grants','.observanda/access.json'],['Workspace dashboard settings','.observanda/dashboard.observanda']
-  ].filter(([,relative])=>!catalogue||![ '.observanda/revisions','.observanda/modules.json','.observanda/module-history','.observanda/module-drafts','.observanda/laboratory.json','.observanda/laboratory-history','.observanda/publishing.json','.observanda/publishing-receipts.json','.observanda/dashboard.observanda'].includes(relative)).map(([label,relative])=>({label:catalogue&&relative===dataFile?'Encrypted workspace descriptor':label,path:path.join(root,relative)}))};
+    ['Encrypted workspace descriptor',WORKSPACE_FILE],['PostgreSQL catalogue binding',CATALOGUE_FILE],['Portable encrypted research archive',CATALOGUE_ARCHIVE],['Original media and prepared copies','.observanda/media'],['Encrypted access grants','.observanda/access.json']
+  ].map(([label,relative])=>({label,path:path.join(root,relative)}))};
 }
 export async function initializeLocation(input,book,access,suppliedVault,{dashboard,populate}={}){
-  if(populate!==undefined&&(typeof populate!=='function'||!isEncryptedAccess(access)))throw new AppError('INVALID');
+  if(populate!==undefined&&typeof populate!=='function')throw new AppError('INVALID');
   const vault=suppliedVault??takeCreatedVault(access);
-  if(isEncryptedAccess(access)&&(!vault?.key||vault.id!==access.vaultId))throw new AppError('ACCESS_LOCKED');
+  if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
   try{
   validateNotebook(book);if(dashboard!==undefined&&!validDashboard(dashboard))throw new AppError('INVALID');
   // An occupied location is refused before any database is started.
   const info=await probeLocation(input);
   if(!['new','empty'].includes(info.kind))throw new AppError('EXISTS');
-  if(isEncryptedAccess(access))await requireDatabase();
+  await requireDatabase();
   if(info.kind==='new')await mkdir(info.root,{mode:0o700});
   const ws=new Workspace(info.root,vault);
   await ws.withLock(async()=>{
     if((await readdir(info.root)).some(name=>name!=='.observanda'))throw new AppError('EXISTS');
     const marker=path.join(info.root,'.observanda','copy-in-progress');await atomicWrite(marker,'initializing\n');
     await atomicWrite(path.join(info.root,'.observanda','access.json'),serialize(access));
-    if(isEncryptedAccess(access))await ws.initializeResearch(book,{},async workspace=>{
+    await ws.initializeResearch(book,{},async workspace=>{
       await workspace.catalogue(store=>withProjectModuleInitialization(store,book.id,({root})=>initializeWorkspaceSettings(root,{dashboard})));
       if(populate)await populate(workspace);
     });
-    else{
-      await ws.writeFile(await workspaceFile(info.root),serialize(book));
-      validateNotebook(JSON.parse(await ws.readFile(await workspaceFile(info.root),'utf8')));
-      if(dashboard)await ws.writeMetadata('.observanda/dashboard.observanda',serialize(dashboard));
-    }
     await unlink(marker);
   });
   return info.root;
@@ -172,6 +167,7 @@ export async function prepareCopyDestination(expected){
 export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterVerified,reuseCatalogue=false,activateCatalogue=false,beforePublish,recovery,beforeSnapshot,afterSnapshotVerified,relocation=false,excludeProject}={}){
   if(typeof relocation!=='boolean')throw new AppError('INVALID');
   if(reuseCatalogue&&(activateCatalogue||beforePublish||recovery))throw new AppError('INVALID');
+  if(!vault?.key)throw new AppError('ACCESS_LOCKED');
   return withNativeDestination(plan.destination,admitted=>withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
    let publication;
    const result=recovery?.snapshotReady?(publication={destination:plan.destination,marker:recovery.marker},plan.destination):await new Workspace(plan.source,vault).withStorageHandoff(async()=>{
@@ -179,8 +175,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     if(beforeSnapshot)await beforeSnapshot();
     operationTransfer({phase:'checking',files:0,bytes:0,totalFiles:plan.transferFiles??plan.fileCount,totalBytes:plan.fileBytes??plan.bytes});
     let destination,marker;
-    const catalogue=await hasCatalogue(plan.source);
-    if(catalogue)await new Workspace(plan.source,vault).catalogue(store=>assertRecordOwnerReclamationSettled(store));
+    await new Workspace(plan.source,vault).catalogue(store=>assertRecordOwnerReclamationSettled(store));
     await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,vault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
      Object.assign(plan,inventory);
      ({destination,marker}=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination));
@@ -202,29 +197,20 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     operationTransfer({phase:'verifying'});
     await admitted.assertNamed();
     await reviewedInventory(plan,{excludeProject,vault});
-    if(catalogue&&reuseCatalogue){
+    if(reuseCatalogue){
       // A move keeps the installation's database. Verify that database against
       // the copied files below while the destination is still marked incomplete.
       const binding=await catalogueBinding(plan.source);
       await publishCatalogueBinding(destination,binding.id,{cluster:binding.cluster,installation:binding.placement==='installation'});
-    }else if(catalogue){
-      if(!recovery?.databaseReady)await backupCatalogue(plan.source,destination);
-    }
+    }else if(!recovery?.databaseReady)await backupCatalogue(plan.source,destination);
     if(recovery&&!recovery.databaseReady)await recovery.database();
-    const access=await readAccess(destination);if(!isEncryptedAccess(access.value))validateNotebook(JSON.parse(await readFile(await workspaceFile(destination),'utf8')));
-    if(vault?.key){
-      const target=new Workspace(destination,vault),descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
-      if(catalogue||isCatalogue(descriptor)){
-        if(activateCatalogue){
-          // Restore and fully verify the independent database exactly once.
-          // Opening the verified destination can then reuse its committed binding.
-          const checked=await target.openCatalogue();await checked.close();
-        }else await verifyCatalogueArchive(target,descriptor);
-      }
-    }else if(catalogue){
-      if(activateCatalogue||reuseCatalogue)throw new AppError('ACCESS_LOCKED');
-      const checked=await openCatalogue(destination,{detached:true});await checked.close();
-    }
+    if(!isEncryptedAccess((await readAccess(destination)).value))throw new AppError('ACCESS_FORMAT');
+    const target=new Workspace(destination,vault),descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
+    if(activateCatalogue){
+      // Restore and fully verify the independent database exactly once.
+      // Opening the verified destination can then reuse its committed binding.
+      const checked=await target.openCatalogue();await checked.close();
+    }else await verifyCatalogueArchive(target,descriptor);
     // A recognized older backup uses current grants on this installation. Its
     // newly verified copy must carry those grants to a different installation,
     // instead of exporting the obsolete file that was copied and hashed above.
@@ -255,8 +241,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
     else await source.withStorageHandoff(async()=>{
       await assertInventoryObligationsSettled(source);
       if(beforeSnapshot)await beforeSnapshot();
-      const catalogue=await hasCatalogue(plan.source);
-      if(catalogue)await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
+      await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
       await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,vault:sourceVault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
         Object.assign(plan,inventory);
         publication=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination);
@@ -266,7 +251,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
         operationTransfer({phase:'copying',files:0,bytes:0,totalFiles:inventory.transferFiles,totalBytes:inventory.fileBytes});
         for await(const file of items()){
           if(file.path==='.observanda/access.json'||workspaceOwnerLeaseFile(file.path)||[CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path))continue;
-          const relative=file.path==='observanda.json'&&access.formatVersion===3?WORKSPACE_FILE:file.path,output=path.join(plan.destination,relative);
+          const output=path.join(plan.destination,file.path);
           if(!within(plan.destination,output))throw new AppError('UNSAFE');
           const content=await describeContent(source,path.join(plan.source,file.path),{verification:'descriptor'});
           if(await assertRegular(output,{missing:true})){
@@ -281,13 +266,10 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
       await admitted.assertNamed();await reviewedInventory(plan,{excludeProject,vault:sourceVault});
       operationTransfer({phase:'verifying'});
       const copied=JSON.parse(await target.readFile(await workspaceFile(plan.destination),'utf8'));
-      if(catalogue){
-        // Rekey checkpoints the durable archive, then imports and fully verifies
-        // it before activation. A resumed copy uses that same retained archive.
-        if(!recovery?.databaseReady)await rekeyCatalogue(source,target,copied,{activate:true,...(recovery?{afterArchive:()=>recovery.database()}: {})});
-        else{const checked=await target.openCatalogue();await checked.close();}
-      }else if(isCatalogue(copied))await verifyCatalogueArchive(target,copied);
-      else validateNotebook(copied);
+      // Rekey checkpoints the durable archive, then imports and fully verifies
+      // it before activation. A resumed copy uses that same retained archive.
+      if(!recovery?.databaseReady)await rekeyCatalogue(source,target,copied,{activate:true,...(recovery?{afterArchive:()=>recovery.database()}: {})});
+      else{const checked=await target.openCatalogue();await checked.close();}
       if(afterSnapshotVerified)await afterSnapshotVerified(plan.destination);
       if(recovery)await recovery.snapshot();
     },{detached:true,existing:true});

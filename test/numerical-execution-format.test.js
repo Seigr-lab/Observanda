@@ -8,7 +8,7 @@ import {numericalExecutionMetadata,assertNumericalExecutionFormat} from '../src/
 import {spectrumMetadata} from '../src/dataset-spectrum-format.js';
 const base={website:0,staged:false,owners:0,publication:false,transfers:false};
 function database(format=122){let stored=format;return {db:{all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}},get format(){return stored;}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 test('numerical execution admission is independent, survives both upgrade orders, and restores exactly',async()=>{
  for(const order of [[requireNumericalExecution,requireDatasetSpectra],[requireDatasetSpectra,requireNumericalExecution]])for(const website of [0,3])for(const owners of [0,2]){
   const db=database(configurationCatalogueGeneration({...base,website,owners}));for(const upgrade of order)await upgrade(db.db);const features=configurationCatalogueFeatures(db.format);assert.equal(features.numericalExecution,true);assert.equal(features.datasetSpectra,true);assert.equal(features.datasetResourcePolicies,true);assert.equal(features.website,website);assert.equal(features.owners,owners);const recovered=database();await restoreConfigurationCatalogueFormat(recovered.db,db.format);assert.equal(recovered.format,db.format);

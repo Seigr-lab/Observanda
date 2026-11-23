@@ -43,7 +43,7 @@ test('PDF documents save independently, roll back failed writes, and reopen from
  assert.deepEqual(await new PdfDocuments(archive,f.book.id).read('layouts'),await documents.read('layouts'));
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'fresh-device')})),vault=takeCreatedVault(access);
  try{
-  const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'pdf-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+  const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'pdf-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root),descriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));
   const reopened=new PdfDocuments(target,f.book.id);assert.deepEqual(await reopened.read('history',{id}),await documents.read('history',{id}));assert.equal((await reopened.read('section',{id,sectionId:section.id,revision:changed.revision})).section.content,'Updated observation');
   assert.deepEqual(await reopened.read('layouts'),await documents.read('layouts'));

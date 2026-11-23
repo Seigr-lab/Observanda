@@ -30,7 +30,7 @@ test('streamed website recordings and captions survive publication, reuse, repla
  const root=await mkdtemp(path.join(os.tmpdir(),'website-recordings-'));await mkdir(path.join(root,'.observanda'));
  t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
  const fixtures=await mediaFixtures(root),workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});
- workspace.catalogue=workspace.storageKind=()=>assert.fail('Opened research');const store=new WebsiteFileStore(workspace);
+ workspace.catalogue=()=>assert.fail('Opened research');const store=new WebsiteFileStore(workspace);
  let opened=await store.create({name:'Acoustic observations'});
  opened=await store.createPage(opened.site.id,{expectedRevision:opened.site.revision,path:'notes.html',title:'Notes',inclusion:'included'});
  opened=await store.open(opened.site.id);

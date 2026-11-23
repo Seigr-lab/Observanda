@@ -19,7 +19,7 @@ test('upload, play and replace an authored recording and captions using portable
  const root=await mkdtemp(path.join(os.tmpdir(),'website-recording-browser-'));let server;
  try{
   await mkdir(path.join(root,'.observanda'));
-  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.storageKind=workspace.catalogue=()=>{throw Error('Research is unavailable');};
+  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>{throw Error('Research is unavailable');};
   const store=new WebsiteFileStore(workspace),fixtures=await mediaFixtures(root);let opened=await store.create({name:'Recordings'}),publication=null;
   server=http.createServer((req,res)=>{void (async()=>{
     const url=new URL(req.url,'http://127.0.0.1'),p=url.pathname,json=value=>{res.setHeader('content-type','application/json');res.end(JSON.stringify(value));};

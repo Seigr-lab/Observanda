@@ -84,19 +84,9 @@
     "other": "A punt per xifrar {count} fitxers ({megabytes} MB). L'original es manté al seu lloc."
   },
   "databaseConnected": "PostgreSQL està connectat.",
-  "locationResearch": "Registres de recerca, projectes, temes i pàgines",
-  "locationRevisions": "Revisions de recerca guardades",
   "locationCatalogue": "Vinculació del catàleg de PostgreSQL",
   "locationArchive": "Arxiu de recerca xifrat portàtil",
   "locationMedia": "Mitjans originals i còpies preparades",
-  "locationResources": "Recursos i planificació",
-  "locationModuleHistory": "Historial de revisions dels mòduls",
-  "locationModuleRecovery": "Punts de recuperació dels mòduls",
-  "locationLaboratory": "Registres de laboratori",
-  "locationLabHistory": "Historial de revisions de laboratori",
-  "locationPublishing": "Destinacions de publicació",
-  "locationReceipts": "Rebuts de publicació",
   "locationGrants": "Autoritzacions d'accés xifrades",
-  "locationDashboard": "Configuració del tauler de l'espai de treball",
   "locationDescriptor": "Descriptor xifrat de l'espai de treball"
 }

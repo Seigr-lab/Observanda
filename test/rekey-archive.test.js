@@ -76,7 +76,7 @@ test('standalone rekey still validates before exporting and does not activate it
  const f=await fixture(t),descriptorText=await f.workspace.readFile(await workspaceFile(f.workspace.root),'utf8'),descriptor=JSON.parse(descriptorText),verify=ResearchCatalogue.prototype.verify;let audits=0;
  async function target(name){
   const root=path.join(f.directory,name),workspace=new Workspace(root,f.freshVault);await mkdir(path.join(root,'.observanda'),{recursive:true});
-  await atomicWrite(path.join(root,'.observanda/access.json'),serialize(f.access));await workspace.writeFile(await workspaceFile(root,{secure:true}),descriptorText);return workspace;
+  await atomicWrite(path.join(root,'.observanda/access.json'),serialize(f.access));await workspace.writeFile(await workspaceFile(root),descriptorText);return workspace;
  }
  const valid=await target('standalone'),invalid=await target('invalid');
  t.mock.method(ResearchCatalogue.prototype,'verify',async function(...args){
@@ -92,7 +92,7 @@ test('standalone rekey still validates before exporting and does not activate it
 test('connected rekey rejects a requested descriptor different from the restored archive before binding publication',async t=>{
  const f=await fixture(t),target=new Workspace(f.destination,f.freshVault),descriptorText=await f.workspace.readFile(await workspaceFile(f.workspace.root),'utf8'),descriptor=JSON.parse(descriptorText);
  await mkdir(path.join(f.destination,'.observanda'),{recursive:true});await atomicWrite(path.join(f.destination,'.observanda/access.json'),serialize(f.access));
- await target.writeFile(await workspaceFile(f.destination,{secure:true}),descriptorText);
+ await target.writeFile(await workspaceFile(f.destination),descriptorText);
  await assert.rejects(rekeyCatalogue(f.workspace,target,{...descriptor,workspaceId:'00000000-0000-4000-8000-000000000001'},{activate:true}),{code:'CATALOGUE_DAMAGED'});
  await absent(path.join(f.destination,CATALOGUE_FILE));await readFile(path.join(f.destination,CATALOGUE_ARCHIVE));await sourceUnchanged(f);
 });

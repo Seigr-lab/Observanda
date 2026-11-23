@@ -143,7 +143,7 @@ test('empty publication analysis scopes need no temporary database and honour ca
 
 test('empty native publication scopes preserve snapshot admission without opening material pages',async()=>{
  const snapshotId='a'.repeat(64),book={id:'native-analysis',entries:[{id:'selected-record',figures:[]},{id:'unselected-record',figures:[{id:'unbound-figure'}]}]},snapshots=[];
- const workspace={root:path.join(os.tmpdir(),'observanda-empty-native-analysis'),storageKind:async()=> 'catalogue',catalogue:operation=>operation({snapshot:async id=>{snapshots.push(id);return {metadata:{id:book.id}};}})},materials=new ResearchMaterials(workspace);let admitted=0;
+ const workspace={root:path.join(os.tmpdir(),'observanda-empty-native-analysis'),catalogue:operation=>operation({snapshot:async id=>{snapshots.push(id);return {metadata:{id:book.id}};}})},materials=new ResearchMaterials(workspace);let admitted=0;
  materials.index.ensure=async()=>{admitted++;};materials.index.page=()=>assert.fail('Empty native scope opened a material page');
  materials.read=()=>assert.fail('Empty native scope opened a retained material');
  assert.deepEqual(await materials.releaseSources(book,['selected-record'],{sourceEtag:snapshotId}),{sources:[],warnings:[]});assert.equal(admitted,1);assert.deepEqual(snapshots,[snapshotId]);

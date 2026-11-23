@@ -25,7 +25,7 @@ import {windowCalculationMetadata} from '../src/dataset-window-format.js';
 const base={website:0,staged:false,owners:0,publication:false,transfers:false};
 const inherited={domainAlgebra:true,nativeDomainValues:true,measurementScalarPolicies:true,datasetResourcePolicies:true};
 function database(format=122){let stored=format;const statements=[],db={all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}};return {db,statements,get format(){return stored;}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 test('frame admission preserves independent owner and numerical features across copy and restoration',async()=>{
  for(const website of [0,1,2,3])for(const owners of [0,1,2])for(const staged of [false,true])for(const publication of [false,true])for(const transfers of [false,true])for(const coordinateFrames of [false,true])for(const segmentedClockSynchronization of [false,true]){
   const flags={...base,website,owners,staged,publication,transfers,...inherited,...(coordinateFrames?{coordinateFrames:true}:{}),...(segmentedClockSynchronization?{segmentedClockSynchronization:true}:{})},format=configurationCatalogueGeneration(flags);

@@ -19,7 +19,6 @@ import {RENAME_MARKER,workspaceRename,renameScope} from './workspace-rename-stat
 import {catalogueBinding} from './postgres-activation.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
-import {databaseConversionState} from './workspace-database-receipt.js';
 import {readMoveReceipt} from './workspace-move.js';
 import {MOVE_RECEIPT} from './workspace-move-state.js';
 import {unseal} from './encryption.js';
@@ -101,12 +100,11 @@ export class WorkspaceRenames{
    }
    const existing=await assertRegular(destination,{directory:true,missing:true});
    if(existing&&await realpath(destination)!==source)throw new AppError('EXISTS');
-   const conversion=await databaseConversionState(workspace),move=await readMoveReceipt(source);
-   if(conversion&&conversion.phase!=='complete'||move&&move.phase!=='complete')throw new AppError('STORAGE_RENAME_BUSY');
+   const move=await readMoveReceipt(source);
+   if(move&&move.phase!=='complete')throw new AppError('STORAGE_RENAME_BUSY');
    if(await this.pending(source))throw new AppError('STORAGE_RENAMING');
-   // Only an unlocked database-backed workspace can be renamed.
+   // Only an unlocked workspace can be renamed.
    if(!workspace.vault)throw new AppError('ACCESS_LOCKED');
-   if(await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
    const value={version:2,id:randomUUID(),source,destination,workspaceId:(await workspace.outline()).metadata.id,identity:await projectMoveDirectory(source),descriptorHash:await fingerprint(await workspaceFile(source)),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),completedMove:move,phase:'preparing'};
    try{const owners=await NativeWorkspaceRename.prepare(this,workspace,value,{withProject,withBook,check,checkpoint});await renameScope(value.id,()=>owners.fence({check,checkpoint}));return await this.finishLocked(value,workspace.vault,{checkpoint,check});}
    catch(error){if(!await workspaceRename(source)&&await assertRegular(this.file(value.id),{missing:true})){try{await this.discard(await this.read(value.id),workspace.vault);}catch{/* The journal retains cleanup authority for the next authenticated resume. */}}throw error;}

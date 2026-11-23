@@ -12,6 +12,6 @@ export function weightedFitMetadata(relative,value){
 }
 export const weightedFitCatalogueRequirements=Object.freeze(['WeightedFit','PairedStatistics','QuantileAggregation','ComputedCells','CalculationPolicies','StructuredCalculator','ApproximateCalculator','MeasurementScalarPolicies','DatasetResourcePolicies','NativeNumericalModels'].map(name=>'catalogueRequires'+name));
 export async function assertWeightedFitFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{const format=await import('./catalogue-format.js'),generation=await format.catalogueFormat(store.catalogueDb??store.db);if(!weightedFitCatalogueRequirements.every(name=>format[name](generation)))throw new AppError('CATALOGUE_DAMAGED');});
 }

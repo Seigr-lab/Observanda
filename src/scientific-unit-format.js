@@ -30,7 +30,7 @@ export function scientificUnitMetadata(relative,value){
 }
 
 export async function assertScientificUnitFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  const {catalogueFormat,catalogueRequiresScientificUnitLibrary,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');
  await workspace.catalogue(async store=>{
   const format=await catalogueFormat(store.catalogueDb??store.db);

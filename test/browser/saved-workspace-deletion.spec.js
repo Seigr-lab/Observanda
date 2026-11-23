@@ -15,16 +15,16 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {rememberLocation,readPreferences} from '../../src/preferences.js';
 import {clearVault} from '../../src/encryption.js';
-import {createWorkspaceAccess,createAccess,takeCreatedVault} from '../../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {initializeLocation} from '../../src/locations.js';
 import {Workspace} from '../../src/storage.js';
 import {preferences} from './preferences-helper.js';
 
-test('every saved workspace has deletion; closed device, password and legacy owners delete in place',async({page})=>{
+test('every saved workspace has deletion; closed device and password owners delete in place',async({page})=>{
  test.setTimeout(240000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-saved-delete-ui-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),f=await encryptedFixture(directory,{...sampleNotebook(),title:'workspace'}),prefs=path.join(directory,'settings.json'),targets=[];
- for(const [title,password,plain] of [['Closed device','',false],['Closed password','a-long-test-password',false],['Closed legacy','',true]]){
-  const root=path.join(directory,title),access=plain?await createAccess():await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);
+ for(const [title,password] of [['Closed device',''],['Closed password','a-long-test-password']]){
+  const root=path.join(directory,title),access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);
   await initializeLocation(root,{...sampleNotebook(),id:randomUUID(),title},access,vault);await rememberLocation(prefs,root,{title:'Saved workspace',label:'Workspace'});targets.push({root,title,password,vault,workspace:new Workspace(root,vault)});
  }
  const target=targets[0],registry=new ProjectRegistry(target.workspace,(await target.workspace.outline()).metadata.id),projectId=randomUUID(),created=await new ProjectCreation(registry,f.deviceStore).create({id:randomUUID(),username:'',password:'Protected project password',project:{id:projectId,title:'Saved private project',description:'',parentId:null,share:false,logoId:null}}),projectVault=await verifyAccess(await readAccess(created.project.root),'','Protected project password',{deviceStore:f.deviceStore});
@@ -34,7 +34,7 @@ test('every saved workspace has deletion; closed device, password and legacy own
  page.on('pageerror',error=>errors.push(error.message));page.on('request',r=>{if(r.url().endsWith('/api/storage/open'))opened.push(r.url());});
  try{
   await page.goto(app.url);await page.evaluate(()=>window.deletionTestMarker='same document');await page.getByRole('button',{name:'Workspaces',exact:true}).click();
-  const dialog=page.locator('#dialog'),management=page.locator('.workspace-management');await expect(management.getByRole('button',{name:'Delete workspace',exact:true})).toHaveCount(4);
+  const dialog=page.locator('#dialog'),management=page.locator('.workspace-management');await expect(management.getByRole('button',{name:'Delete workspace',exact:true})).toHaveCount(3);
   for(const target of targets){
    await management.locator('article').filter({hasText:target.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();
    if(target.password){

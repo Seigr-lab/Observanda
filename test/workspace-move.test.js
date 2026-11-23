@@ -6,9 +6,8 @@ import {syncBuiltinESMExports} from 'node:module';
 import path from 'node:path';
 import os from 'node:os';
 import {Workspace,workspaceFile} from '../src/storage.js';
-import {initializeLocation,inspectLocation,workspaceManifest,copyPlan,copyWorkspace,copyWorkspaceTo} from '../src/locations.js';
+import {inspectLocation,workspaceManifest,copyPlan,copyWorkspace,copyWorkspaceTo} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
-import {createAccess} from '../src/access.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
@@ -18,19 +17,19 @@ import {withOperationProgress} from '../src/operation-progress.js';
 import {planWorkspaceMove,moveWorkspace,moveWorkspaceTo,finishWorkspaceMove,readMoveReceipt} from '../src/workspace-move.js';
 import {WORKSPACE_MOVE_AUTHORIZATION} from '../src/workspace-transfer-controls.js';
 
-async function fixture(t,encrypted=false){
+async function fixture(t){
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'observanda-move-test-'));
  t.after(()=>fs.rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100}));
- const f=encrypted?await encryptedFixture(directory,sampleNotebook()):{workspace:new Workspace(await initializeLocation(path.join(directory,'workspace'),sampleNotebook(),await createAccess()))};
- if(f.vault)t.after(()=>clearVault(f.vault));
+ const f=await encryptedFixture(directory,sampleNotebook());
+ t.after(()=>clearVault(f.vault));
  const source=f.workspace.root,destination=path.join(directory,'destination'),original=path.join(source,'.observanda','evidence.bin');
  await fs.writeFile(original,Buffer.from([0,255,17,42]));
  return {...f,directory,source,destination,original};
 }
-for(const encrypted of [false,true])test(`${encrypted?'encrypted':'plain'} move activates verified data before removing source and preserves identity`,async t=>{
- const f=await fixture(t,encrypted),before=await f.workspace.read(),binding=await catalogueBinding(f.source),plan=await planWorkspaceMove(f.source,f.destination),events=[];
+test('move activates verified data before removing source and preserves identity',async t=>{
+ const f=await fixture(t),before=await f.workspace.read(),binding=await catalogueBinding(f.source),plan=await planWorkspaceMove(f.source,f.destination),events=[];
  const result=await moveWorkspace(plan,{vault:f.vault,onProgress:e=>events.push(e),activate:async destination=>{
-  await fs.access(f.source);if(encrypted)await assert.rejects(f.workspace.read(),{code:'STORAGE_MOVED'});
+  await fs.access(f.source);await assert.rejects(f.workspace.read(),{code:'STORAGE_MOVED'});
   assert.deepEqual(await new Workspace(destination,f.vault).read(),before);
   assert.deepEqual(await fs.readFile(path.join(destination,'.observanda','evidence.bin')),await fs.readFile(f.original));
  }});
@@ -47,7 +46,7 @@ for(const encrypted of [false,true])test(`${encrypted?'encrypted':'plain'} move 
 });
 
 test('copy and use restores and verifies once; portable copies remain independently restorable',async t=>{
- const f=await fixture(t,true),before=await f.workspace.read(),verify=ResearchCatalogue.prototype.verify,measurements=[];
+ const f=await fixture(t),before=await f.workspace.read(),verify=ResearchCatalogue.prototype.verify,measurements=[];
  for(let i=0;i<12;i++){const current=await f.workspace.read();current.book.description='Retained revision '+i;await f.workspace.save(current.book,current.etag);}
  await fs.writeFile(f.original,Buffer.alloc(16*1024*1024,73));
  const original=await f.workspace.read();
@@ -76,7 +75,7 @@ test('copy and use restores and verifies once; portable copies remain independen
 });
 
 for(const reuseCatalogue of [false,true])test(`${reuseCatalogue?'move':'copy and use'} verification failure keeps source and blocks opening incomplete destination`,async t=>{
- const f=await fixture(t,true),before=await f.workspace.read(),verify=ResearchCatalogue.prototype.verify;
+ const f=await fixture(t),before=await f.workspace.read(),verify=ResearchCatalogue.prototype.verify;
  ResearchCatalogue.prototype.verify=async()=>{throw Error('Synthetic transfer verification failure');};
  try{
   await assert.rejects(copyWorkspaceTo(f.source,f.destination,{vault:f.vault,reuseCatalogue,activateCatalogue:!reuseCatalogue}),error=>error.message==='Synthetic transfer verification failure'||error.code==='CATALOGUE_DAMAGED');
@@ -87,7 +86,7 @@ for(const reuseCatalogue of [false,true])test(`${reuseCatalogue?'move':'copy and
  if(!reuseCatalogue)assert.equal(await catalogueBinding(f.destination),null,'A failed independent copy never publishes its database');
 });
 test('a failed activation retains the source and resumes the verified transfer without another copy',async t=>{
- const f=await fixture(t,true),plan=await planWorkspaceMove(f.source,f.destination),before=await f.workspace.read();
+ const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),before=await f.workspace.read();
  await assert.rejects(moveWorkspace(plan,{vault:f.vault,activate:async()=>{throw Error('Activation unavailable');}}),/Activation unavailable/);
  await fs.access(f.source);await assert.rejects(f.workspace.read(),{code:'STORAGE_MOVED'});assert.deepEqual(await new Workspace(f.destination,f.vault).read(),before);assert.equal((await readMoveReceipt(f.destination)).phase,'verified');
  const resume=await planWorkspaceMove(f.source,f.destination),events=[];assert.equal(resume.resume,true);
@@ -96,23 +95,23 @@ test('a failed activation retains the source and resumes the verified transfer w
 });
 test('source changes stop cleanup; restoring reviewed bytes allows cleanup without another transfer',async t=>{
  const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),original=await fs.readFile(f.original);
- const result=await moveWorkspace(plan,{activate:async()=>{await fs.writeFile(f.original,'New source bytes');}});
+ const result=await moveWorkspace(plan,{vault:f.vault,activate:async()=>{await fs.writeFile(f.original,'New source bytes');}});
  assert.equal(result.phase,'cleanup');assert.equal(result.error.code,'CONFLICT');assert.equal(await fs.readFile(f.original,'utf8'),'New source bytes');
  assert.deepEqual(await fs.readFile(path.join(f.destination,'.observanda','evidence.bin')),original);
  await fs.writeFile(f.original,original);const events=[];
- assert.equal((await finishWorkspaceMove(f.destination,{onProgress:e=>events.push(e)})).phase,'complete');assert.equal(events.some(e=>e.stage==='copy-file'),false);
+ assert.equal((await finishWorkspaceMove(f.destination,{vault:f.vault,onProgress:e=>events.push(e)})).phase,'complete');assert.equal(events.some(e=>e.stage==='copy-file'),false);
 });
 test('interrupted removal resumes its own retired folder and never deletes a newly reused source path',async t=>{
  const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),unlink=fs.unlink;let failed=false;
  fs.unlink=async file=>{if(String(file).includes('.observanda-move-')&&String(file).endsWith('evidence.bin')){failed=true;throw Object.assign(Error('Locked file'),{code:'EACCES'});}return unlink(file);};syncBuiltinESMExports();
- let result;try{result=await nativeMutationFailure(async(operation,file)=>{if(operation==='remove'&&file.includes('.observanda-move-')&&file.endsWith('evidence.bin')){failed=true;throw Object.assign(Error('Locked file'),{code:'EACCES'});}},()=>moveWorkspace(plan,{activate:async()=>{}}));}finally{fs.unlink=unlink;syncBuiltinESMExports();}
+ let result;try{result=await nativeMutationFailure(async(operation,file)=>{if(operation==='remove'&&file.includes('.observanda-move-')&&file.endsWith('evidence.bin')){failed=true;throw Object.assign(Error('Locked file'),{code:'EACCES'});}},()=>moveWorkspace(plan,{vault:f.vault,activate:async()=>{}}));}finally{fs.unlink=unlink;syncBuiltinESMExports();}
  assert.equal(failed,true);assert.equal(result.phase,'cleanup');await assert.rejects(fs.access(f.source),{code:'ENOENT'});
  assert.equal((await inspectLocation(f.destination)).kind,'workspace');
  await fs.mkdir(f.source);await fs.writeFile(path.join(f.source,'keep'),'Unrelated new data');
- assert.equal((await finishWorkspaceMove(f.destination)).phase,'complete');assert.equal(await fs.readFile(path.join(f.source,'keep'),'utf8'),'Unrelated new data');
+ assert.equal((await finishWorkspaceMove(f.destination,{vault:f.vault})).phase,'complete');assert.equal(await fs.readFile(path.join(f.source,'keep'),'utf8'),'Unrelated new data');
 });
 test('failed source retirement blocks old writers and cleanup still works after authoring in the destination',async t=>{
- const f=await fixture(t,true),plan=await planWorkspaceMove(f.source,f.destination),rename=fs.rename;let failed=false;
+ const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),rename=fs.rename;let failed=false;
  fs.rename=async(from,to)=>{if(from===f.source){failed=true;throw Object.assign(Error('Folder is in use'),{code:'EACCES'});}return rename(from,to);};syncBuiltinESMExports();
  let result;try{result=await nativeMutationFailure(async(operation,file)=>{if(operation==='rename'&&file===f.source){failed=true;throw Object.assign(Error('Folder is in use'),{code:'EACCES'});}},()=>moveWorkspace(plan,{vault:f.vault,activate:async()=>{}}));}finally{fs.rename=rename;syncBuiltinESMExports();}
  assert.equal(failed,true);assert.equal(result.phase,'cleanup');await fs.access(f.original);
@@ -124,14 +123,14 @@ test('failed source retirement blocks old writers and cleanup still works after 
 test('cleanup retry keeps remaining original bytes if their verified destination was subsequently damaged',async t=>{
  const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),unlink=fs.unlink;
  fs.unlink=async file=>{if(String(file).includes('.observanda-move-')&&String(file).endsWith('evidence.bin'))throw Object.assign(Error('Locked file'),{code:'EACCES'});return unlink(file);};syncBuiltinESMExports();
- try{assert.equal((await nativeMutationFailure(async(operation,file)=>{if(operation==='remove'&&file.includes('.observanda-move-')&&file.endsWith('evidence.bin'))throw Object.assign(Error('Locked file'),{code:'EACCES'});},()=>moveWorkspace(plan,{activate:async()=>{}}))).phase,'cleanup');}finally{fs.unlink=unlink;syncBuiltinESMExports();}
+ try{assert.equal((await nativeMutationFailure(async(operation,file)=>{if(operation==='remove'&&file.includes('.observanda-move-')&&file.endsWith('evidence.bin'))throw Object.assign(Error('Locked file'),{code:'EACCES'});},()=>moveWorkspace(plan,{vault:f.vault,activate:async()=>{}}))).phase,'cleanup');}finally{fs.unlink=unlink;syncBuiltinESMExports();}
  const original=path.join(f.directory,'.observanda-move-'+plan.id,'.observanda','evidence.bin'),copied=path.join(f.destination,'.observanda','evidence.bin'),bytes=await fs.readFile(original);
  await fs.writeFile(copied,'Damaged after verification');
- assert.equal((await finishWorkspaceMove(f.destination)).error.code,'STORAGE_COPY');assert.deepEqual(await fs.readFile(original),bytes);
- await fs.writeFile(copied,bytes);assert.equal((await finishWorkspaceMove(f.destination)).phase,'complete');
+ assert.equal((await finishWorkspaceMove(f.destination,{vault:f.vault})).error.code,'STORAGE_COPY');assert.deepEqual(await fs.readFile(original),bytes);
+ await fs.writeFile(copied,bytes);assert.equal((await finishWorkspaceMove(f.destination,{vault:f.vault})).phase,'complete');
 });
 test('a moved workspace supports subsequent independent backups and moves without carrying old cleanup instructions',async t=>{
- const f=await fixture(t,true),plan=await planWorkspaceMove(f.source,f.destination);
+ const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination);
  await moveWorkspace(plan,{vault:f.vault,activate:async()=>{}});
  const backup=path.join(f.directory,'backup');await copyWorkspace(await copyPlan(f.destination,backup,{vault:f.vault}),{vault:f.vault});
  await assert.rejects(fs.access(path.join(backup,WORKSPACE_MOVE_AUTHORIZATION)),{code:'ENOENT'});
@@ -144,12 +143,12 @@ test('move rejects unrelated root files, changed reviews and nested destinations
  await assert.rejects(planWorkspaceMove(f.source,f.destination),{code:'STORAGE_MOVE_CONTENTS'});await fs.unlink(path.join(f.source,'unrelated'));
  await assert.rejects(planWorkspaceMove(f.source,path.join(f.source,'nested')),{code:'STORAGE_PATH'});
  const plan=await planWorkspaceMove(f.source,f.destination);await fs.writeFile(f.original,'Changed after review');const manifest=await workspaceManifest(f.source);
- await assert.rejects(moveWorkspace(plan,{activate:async()=>assert.fail('Must not activate')}),{code:'CONFLICT'});
+ await assert.rejects(moveWorkspace(plan,{vault:f.vault,activate:async()=>assert.fail('Must not activate')}),{code:'CONFLICT'});
  assert.deepEqual(await workspaceManifest(f.source),manifest);await assert.rejects(fs.access(f.destination),{code:'ENOENT'});
 });
 
 test('direct copy and move inspect and transfer automatically without a separate review inventory',async t=>{
- const f=await fixture(t,true),before=await f.workspace.read(),copied=path.join(f.directory,'copied'),events=[];
+ const f=await fixture(t),before=await f.workspace.read(),copied=path.join(f.directory,'copied'),events=[];
  await copyWorkspaceTo(f.source,copied,{vault:f.vault,activateCatalogue:true,onProgress:event=>events.push(event)});
  assert.deepEqual(await f.workspace.read(),before);assert.deepEqual(await new Workspace(copied,f.vault).read(),before);
  assert.equal(events.some(event=>event.stages.includes('review-workspace')),false);
@@ -167,7 +166,7 @@ test('direct copy and move inspect and transfer automatically without a separate
 
 
 test('archive checks verify an existing binding and reject a different requested identity',async t=>{
- const f=await fixture(t,true),descriptor=JSON.parse(await f.workspace.readFile(await workspaceFile(f.source),'utf8')),verify=ResearchCatalogue.prototype.verify;let calls=0;
+ const f=await fixture(t),descriptor=JSON.parse(await f.workspace.readFile(await workspaceFile(f.source),'utf8')),verify=ResearchCatalogue.prototype.verify;let calls=0;
  ResearchCatalogue.prototype.verify=async function(...args){calls++;return verify.apply(this,args);};
  try{await verifyCatalogueArchive(f.workspace,descriptor);assert.equal(calls,1);}
  finally{ResearchCatalogue.prototype.verify=verify;}

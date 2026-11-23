@@ -11,6 +11,6 @@ export function cusumMetadata(relative,value){
 }
 export const cusumCatalogueRequirements=Object.freeze(['catalogueRequiresDatasetCusum','catalogueRequiresNumericalExecution','catalogueRequiresComputedCells','catalogueRequiresNativeNumericalModels','catalogueRequiresCalculationPolicies','catalogueRequiresStructuredCalculator','catalogueRequiresApproximateCalculator','catalogueRequiresMeasurementScalarPolicies','catalogueRequiresDatasetResourcePolicies']);
 export async function assertCusumFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{const format=await import('./catalogue-format.js'),generation=await format.catalogueFormat(store.catalogueDb??store.db);if(!cusumCatalogueRequirements.every(name=>typeof format[name]==='function'&&format[name](generation)))throw new AppError('CATALOGUE_DAMAGED');});
 }

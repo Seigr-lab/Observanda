@@ -5,7 +5,7 @@ import {statisticalUncertaintyMaterial,statisticalUncertaintyCommand,statistical
 const base={website:0,staged:false,owners:0,publication:false,transfers:false};
 const inherited={nativeNumericalModels:true,measurementScalarPolicies:true,datasetResourcePolicies:true,structuredCalculator:true,approximateCalculator:true};
 function database(format=122){let stored=format;const statements=[],db={all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}};return {db,statements,get format(){return stored;}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 
 test('uncertainty admission preserves prior owners and independent numerical flags across int8 boundaries',async()=>{
  for(const website of [0,1,2,3])for(const staged of [false,true])for(const owners of [0,1,2])for(const publication of [false,true])for(const transfers of [false,true])for(const statisticalUncertainty of [false,true])for(const pairedStatistics of [false,true]){

@@ -10,7 +10,7 @@ export function pairedStatisticsMetadata(relative,value){
  return relative.startsWith('.observanda/materials/tables/')&&Array.isArray(value)&&value.some(row=>Array.isArray(row?.aggregation)&&row.aggregation.some(metric=>metric&&Object.hasOwn(metric,'pairedStatistic')));
 }
 export async function assertPairedStatisticsFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{
   const {catalogueFormat,catalogueRequiresPairedStatistics,catalogueRequiresQuantileAggregation,catalogueRequiresMeasurementScalarPolicies,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js'),format=await catalogueFormat(store.catalogueDb??store.db);
   if(![catalogueRequiresPairedStatistics,catalogueRequiresQuantileAggregation,catalogueRequiresMeasurementScalarPolicies,catalogueRequiresDatasetResourcePolicies].every(required=>required(format)))throw new AppError('CATALOGUE_DAMAGED');

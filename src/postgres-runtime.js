@@ -109,7 +109,7 @@ async function install(directory,{signal,onProgress,env,checkVersion=version}){
 }
 export async function outsideWorkspace(directory){
  for(let current=directory;;current=path.dirname(current)){
-  for(const name of [WORKSPACE_FILE,'observanda.json'])if(await assertRegular(path.join(current,name),{missing:true}))throw new AppError('DATABASE_LOCATION');
+  if(await assertRegular(path.join(current,WORKSPACE_FILE),{missing:true}))throw new AppError('DATABASE_LOCATION');
   if(path.dirname(current)===current)return;
  }
 }

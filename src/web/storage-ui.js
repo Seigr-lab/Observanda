@@ -10,7 +10,7 @@ import './i18n/catalogues/workspaceSecurity.js';
 import sourceMessages from './locales/en/workspaceSecurity.json' with {type:'json'};
 import errorMessages from './locales/en/errors.json' with {type:'json'};
 const tr=(key,args)=>t('workspaceSecurity',key,args);
-const locationKeys=['locationResearch','locationRevisions','locationCatalogue','locationArchive','locationMedia','locationResources','locationModuleHistory','locationModuleRecovery','locationLaboratory','locationLabHistory','locationPublishing','locationReceipts','locationGrants','locationDashboard','locationDescriptor'];
+const locationKeys=['locationDescriptor','locationCatalogue','locationArchive','locationMedia','locationGrants'];
 const sourceLocations=new Map(locationKeys.map(key=>[sourceMessages[key],key]));
 const locationLabel=value=>sourceLocations.has(value)?tr(sourceLocations.get(value)):value;
 const databaseMessage=database=>database?.ready?tr('databaseConnected'):Object.hasOwn(errorMessages,database?.code)?t('errors',database.code):database?.message??'';

@@ -38,7 +38,7 @@ test('document-bound PDF images retain historical rendering through archive and 
  const archive=new ProjectStorage(archiveRoot,f.projectId,f.vault);await verifyCatalogueArchive(archive,JSON.parse(descriptor));assert.equal((await renderInput(new PdfDocuments(archive,f.book.id),id,saved.revision)).html,first.html);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'image-recovery-device')})),vault=takeCreatedVault(access);
  try{
-  const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'image-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+  const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'image-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root),descriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));const reopened=new PdfDocuments(target,f.book.id);
   assert.equal((await renderInput(reopened,id,saved.revision)).html,first.html);assert.deepEqual(await reopened.read('history',{id}),await documents.read('history',{id}));assert.equal((await reopened.read('open',{id})).revision,changed.revision);
  }finally{clearVault(vault);}

@@ -15,7 +15,7 @@ test('folder export reviews human-readable changes and binds keyboard approval t
  const base=await mkdtemp(path.join(os.tmpdir(),'observanda-folder-review-')),root=path.join(base,'workspace'),destination=path.join(base,'Coastal field guide');
  try{
   await mkdir(path.join(root,'.observanda'),{recursive:true});await mkdir(destination);
-  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=workspace.storageKind=()=>{throw Error('Folder publishing attempted to read research');};
+  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>{throw Error('Folder publishing attempted to read research');};
   const store=new WebsiteFileStore(workspace),id=randomUUID(),siteName='Coastal field guide',html=title=>'<!doctype html><html><head><title>'+title+'</title></head><body><main><h1>'+title+'</h1></main></body></html>';
   let saved=await store.importFiles(id,{name:siteName,files:new Map([['index.html',html('Coastal stations')],['old-notes.html',html('Old notes')],['style.css','main{display:block}']])});
   const calls=[];let chosen=0;

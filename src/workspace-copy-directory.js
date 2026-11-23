@@ -37,7 +37,7 @@ export async function visitWorkspaceCopyPlacements(view,source,destination,visit
  return withScratch(async pending=>withScratch(async mapped=>{
   for await(const row of view.entries({index:'parent',prefix:'root:',signal}))if(!await pending.add(row.entry.projectId,row.entry))throw new AppError('STORAGE_PATH');
   let count=0,entry;while((entry=await pending.take())!==undefined){
-   signal?.throwIfAborted();const name=validateStorageName(path.basename(entry.root),{nameError:'STORAGE_PATH'});if(['.observanda','observanda.json'].includes(pathKey(name))||entry.root===source||inside(entry.root,source))throw new AppError('STORAGE_PATH');
+   signal?.throwIfAborted();const name=validateStorageName(path.basename(entry.root),{nameError:'STORAGE_PATH'});if(['.observanda','workspace.observanda'].includes(pathKey(name))||entry.root===source||inside(entry.root,source))throw new AppError('STORAGE_PATH');
    const parent=entry.parentId===null?null:await mapped.get('owner:'+entry.parentId);if(entry.parentId!==null&&(!parent||path.dirname(entry.root)!==parent.source))throw new AppError('STORAGE_PATH');
    let physical=null;for(let root=path.dirname(entry.root);;root=path.dirname(root)){const row=await view.get(projectRegistryLocationKey(root,source),{index:'location'});if(row){physical=row.entry.projectId;break;}if(root===path.dirname(root))break;}if(physical!==entry.parentId)throw new AppError('STORAGE_PATH');
    const target=parent?path.join(parent.destination,name):inside(source,entry.root)?path.join(destination,path.relative(source,entry.root)):path.join(destination,name);

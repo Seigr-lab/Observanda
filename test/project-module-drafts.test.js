@@ -80,7 +80,7 @@ test('force-terminated recovery reopens without a stale lock and survives archiv
  const copied=new ProjectStorage(copyRoot,f.projectId,f.vault);await verifyCatalogueArchive(copied,JSON.parse(originalDescriptor));assert.equal((await new ProjectModuleDrafts(copied,f.book.id).read(scope)).etag,saved.etag);
  const {createWorkspaceAccess,takeCreatedVault}=await import('../src/access.js'),{TestDeviceStore}=await import('./device-fixture.js'),{clearVault}=await import('../src/encryption.js');
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'new-device')})),vault=takeCreatedVault(access);
- try{const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),originalDescriptor);
+ try{const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root),originalDescriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(originalDescriptor));await verifyCatalogueArchive(target,JSON.parse(originalDescriptor));const recovered=await new ProjectModuleDrafts(target,f.book.id).read(scope);assert.equal(recovered.etag,saved.etag);assert.deepEqual(recovered.draft.drafts[0].base,command.payload.data);
  }finally{clearVault(vault);}
  await verify(f);

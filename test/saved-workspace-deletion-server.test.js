@@ -11,7 +11,7 @@ import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {startServer} from '../src/server.js';
 import {Workspace,serialize} from '../src/storage.js';
-import {createWorkspaceAccess,createAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 import {clearVault} from '../src/encryption.js';
@@ -21,7 +21,6 @@ import {rememberLocation,readPreferences} from '../src/preferences.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {WorkspaceDeletions} from '../src/workspace-deletion.js';
-import {workspaceDatabaseLease} from '../src/workspace-database-lease.js';
 import {workspaceDeletion} from '../src/workspace-delete-state.js';
 import {SavedWorkspaceDeletion} from '../src/saved-workspace-deletion.js';
 
@@ -30,8 +29,8 @@ async function fixture(t,{owned=false}={}){
  let owner,detach,app;
  if(owned){owner=new WorkspaceDatabases({directory:path.join(directory,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(owner);}
  t.after(async()=>{await app?.close();await owner?.close();detach?.();await Promise.all(vaults.map(clearVault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const create=async(name,{password='',plain=false}={})=>{
-  const book={...sampleNotebook(),id:randomUUID(),title:name},root=path.join(directory,name),access=plain?await createAccess('',password):await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
+ const create=async(name,{password=''}={})=>{
+  const book={...sampleNotebook(),id:randomUUID(),title:name},root=path.join(directory,name),access=await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
   await initializeLocation(root,book,access,vault);await rememberLocation(prefs,root,{title:name,label:'Workspace'});return new Workspace(root,vault);
  };
  const active=await create('Keep open');
@@ -102,26 +101,12 @@ test('selected owner requires its own credentials and a session-bound, current c
  assert.equal((await session.call('/api/storage')).value.contextId,session.context);
 });
 
-test('offline selections and target writers leave all owners intact; file-only legacy owners are removable',async t=>{
- const f=await fixture(t),target=await f.create('Legacy files',{plain:true}),session=await f.start(),offline=path.join(f.directory,'Disconnected');
+test('offline selections leave all owners intact and a closed workspace is removable',async t=>{
+ const f=await fixture(t),target=await f.create('Closed files'),session=await f.start(),offline=path.join(f.directory,'Disconnected');
  await rememberLocation(f.prefs,offline,{title:'Offline',label:'Workspace'});
  assert.equal((await session.call('/api/workspaces/delete/preview',{path:offline})).value.code,'MISSING');
  const plan=(await session.call('/api/workspaces/delete/preview',{path:target.root})).value;
- const lease=await workspaceDatabaseLease(null,{file:path.join(target.root,'.observanda','write.lock'),busyCode:'LOCKED'});
- try{assert.equal((await session.call('/api/workspaces/delete/confirm',command(plan))).value.code,'LOCKED');await access(target.root);}finally{await lease.close();}
- const next=(await session.call('/api/workspaces/delete/preview',{path:target.root})).value;
- assert.equal((await session.call('/api/workspaces/delete/confirm',command(next))).value.result.complete,true);await access(f.active.root);
-});
-
-for(const phase of ['prepared','frozen','retired'])test('closed-owner deletion resumes after '+phase+' without switching or deleting a reused path',async t=>{
- const f=await fixture(t,{owned:phase==='frozen'}),target=await f.create('Interrupted'),deletions=new WorkspaceDeletions(f.prefs+'.workspace-deletions');
- await assert.rejects(deletions.begin(target,await deletions.review(target),{checkpoint:stage=>{if(stage===phase)throw Error('interrupt');}}),/interrupt/);
- const [receipt]=await deletions.list();if(phase==='retired'){await mkdir(target.root);await writeFile(path.join(target.root,'keep.txt'),'new unrelated data');}
- const session=await f.start(),result=await session.call('/api/workspaces/delete/finish',{id:receipt.id,confirmed:true});assert.equal(result.status,200,JSON.stringify(result.value));
- assert.equal((await session.call('/api/storage')).value.contextId,session.context);assert.deepEqual(await deletions.list(),[]);
- if(phase==='prepared'){assert.equal(result.value.result.cancelled,true);assert.equal((await target.read()).book.title,'Interrupted');}
- else if(phase==='retired')assert.equal(await readFile(path.join(target.root,'keep.txt'),'utf8'),'new unrelated data');
- else await assert.rejects(access(target.root),{code:'ENOENT'});
+ assert.equal((await session.call('/api/workspaces/delete/confirm',command(plan))).value.result.complete,true);await access(f.active.root);
 });
 
 test('deleting a closed owner does not stop active HTTP reads or setting writes',async t=>{
@@ -161,13 +146,13 @@ test('saved workspace deletion authenticates nested owners in its own client-bou
  await assert.rejects(access(target.root),{code:'ENOENT'});assert.deepEqual(await f.active.read(),before);assert.equal((await session.call('/api/storage')).value.contextId,session.context);
 });
 
-test('deletion handles unopened archives and unencrypted workspaces without creating a dedicated database',{timeout:120000},async t=>{
+test('deletion handles unopened archives without creating a dedicated database',{timeout:120000},async t=>{
  const f=await fixture(t,{owned:true}),archived=path.join(f.directory,'Unopened copy');
  await copyWorkspace(await copyPlan(f.active.root,archived,{vault:f.active.vault}),{vault:f.active.vault});
  await rememberLocation(f.prefs,archived,{title:'Unopened copy',label:'Workspace'});
  assert.equal(await catalogueBinding(archived),null);
- const plain=await f.create('Plain workspace',{plain:true}),session=await f.start(),before=await f.active.read();
- for(const root of [archived,plain.root]){
+ const session=await f.start(),before=await f.active.read();
+ for(const root of [archived]){
   const review=await session.call('/api/workspaces/delete/preview',{path:root});assert.equal(review.status,200,JSON.stringify(review.value));assert.equal(review.value.database,'files');
   assert.equal(f.owner.instances.instances.has(root),false);await assert.rejects(access(path.join(root,'.observanda/postgresql/service.observanda')),{code:'ENOENT'});
   const removed=await session.call('/api/workspaces/delete/confirm',command(review.value));assert.equal(removed.status,200,JSON.stringify(removed.value));assert.equal(removed.value.result.complete,true);await assert.rejects(access(root),{code:'ENOENT'});

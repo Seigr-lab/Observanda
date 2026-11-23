@@ -12,7 +12,7 @@ export function computedCellMetadata(relative,value){
  return ['columns','columns-policy'].includes(value?.kind)&&value.items?.some(interpreted)===true||value?.kind==='cells'&&value.items?.some(cell=>Object.hasOwn(cell,'computation'))===true;
 }
 export async function assertComputedCellFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{
   const format=await import('./catalogue-format.js'),generation=await format.catalogueFormat(store.catalogueDb??store.db);
   if(!['catalogueRequiresComputedCells','catalogueRequiresCalculationPolicies','catalogueRequiresStructuredCalculator','catalogueRequiresApproximateCalculator','catalogueRequiresMeasurementScalarPolicies','catalogueRequiresDatasetResourcePolicies'].every(name=>format[name](generation)))throw new AppError('CATALOGUE_DAMAGED');

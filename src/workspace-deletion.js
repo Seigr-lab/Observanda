@@ -15,15 +15,14 @@ import {OwnedStorageDeletions,ownedDeletionDirectory} from './owned-storage-dele
 import {catalogueBinding,validWorkspaceCatalogueBinding} from './postgres-activation.js';
 import {openCatalogue} from './postgres.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {databaseConversionState} from './workspace-database-receipt.js';
 import {readMoveReceipt} from './workspace-move.js';
 import {Workspace,assertRegular,digest,serialize} from './storage.js';
 import {unseal} from './encryption.js';
 import {AppError} from './errors.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
 async function readyForDeletion(workspace,binding){
- const conversion=await databaseConversionState(workspace),move=await readMoveReceipt(workspace.root);
- if(conversion&&conversion.phase!=='complete'||move&&move.phase!=='complete'||binding?.placement!=='workspace'&&await assertRegular(path.join(workspace.root,'.observanda/postgresql/service.observanda'),{missing:true}))throw new AppError('STORAGE_DELETE_BUSY');
+ const move=await readMoveReceipt(workspace.root);
+ if(move&&move.phase!=='complete'||binding?.placement!=='workspace'&&await assertRegular(path.join(workspace.root,'.observanda/postgresql/service.observanda'),{missing:true}))throw new AppError('STORAGE_DELETE_BUSY');
 }
 export class WorkspaceDeletions extends OwnedStorageDeletions{
  constructor(directory,{command=false}={}){super(directory);this.command=command;this.receiptLimit=16*1024*1024;}

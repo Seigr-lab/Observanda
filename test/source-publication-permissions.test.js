@@ -108,7 +108,7 @@ test('paged website source admission rolls back atomically and survives portable
  async function rekey(source,name){
   const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.directory,name+'-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
   const destination=new Workspace(path.join(f.directory,name),vault);await mkdir(path.join(destination.root,'.observanda'),{recursive:true});
-  await atomicWrite(path.join(destination.root,'.observanda/access.json'),serialize(access));await destination.writeFile(await workspaceFile(destination.root,{secure:true}),descriptorText);
+  await atomicWrite(path.join(destination.root,'.observanda/access.json'),serialize(access));await destination.writeFile(await workspaceFile(destination.root),descriptorText);
   await rekeyCatalogue(source,destination,descriptor);await check(destination);
  }
  await rekey(f.workspace,'Recovered live source choices');await rekey(await archive('Source choices for recovery'),'Recovered archived source choices');

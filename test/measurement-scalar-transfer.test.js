@@ -16,7 +16,7 @@ import {retainDomainValue,domainValuePage,verifyDomainValue} from '../src/measur
 
 const scalar=spelling=>({spelling,representation:'integer',radix:10});
 function policy(){const value=defaultDatasetResourcePolicy();value.resources.maxScalarCharacters=12000;value.resources.maxOperations=200000;return value;}
-function fixture(){const values=new Map(),workspace=new Workspace('scalar-transfer-memory');workspace.storageKind=undefined;workspace.readMetadata=async key=>values.get(key)??null;workspace.writeMetadata=async(key,text)=>{values.set(key,text);};return {values,workspace,materials:{workspace,sequences:new MaterialSequence(workspace)}};}
+function fixture(){const values=new Map(),workspace=new Workspace('scalar-transfer-memory');workspace.catalogue=undefined;workspace.readMetadata=async key=>values.get(key)??null;workspace.writeMetadata=async(key,text)=>{values.set(key,text);};return {values,workspace,materials:{workspace,sequences:new MaterialSequence(workspace)}};}
 async function sequence(f,kind,items){const builder=f.materials.sequences.builder(kind,fn=>fn());for(const value of items)await builder.append(value);return builder.finish();}
 async function declarations(f){
  const spelling='0'.repeat(9000)+'1',unit=await retainScalarDefinitions(f.materials,{...blankUnitDefinition(),version:2,resourcePolicy:policy(),scale:scalar(spelling)},fn=>fn());

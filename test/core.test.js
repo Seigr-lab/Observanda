@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, symlink, readdir } from 'node:fs/promises';
+import { mkdtemp, symlink, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { encryptedFixture } from './browser/encrypted-fixture.js';
 import { createNotebook, validateNotebook, MAX_BYTES } from '../src/model.js';
 import { Workspace, serialize } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
@@ -44,45 +45,20 @@ test('size limits include on-disk formatting and malformed collections report va
 });
 
 test('saved changes survive reopening; stale writers cannot replace newer content', async () => {
-  const root = await temp(), ws = new Workspace(root);
-  const initial = await ws.create(sampleNotebook());
+  const f = await encryptedFixture(await temp(), sampleNotebook()), ws = f.workspace;
+  const initial = await ws.read();
   const changed = structuredClone(initial.book); changed.entries[0].body = 'A new observation.';
   const saved = await ws.save(changed, initial.etag);
-  assert.equal(saved.book.revision, 1);
-  assert.equal((await new Workspace(root).read()).book.entries[0].body, 'A new observation.');
+  assert.equal(saved.book.revision, initial.book.revision + 1);
+  assert.equal((await new Workspace(ws.root, f.vault).read()).book.entries[0].body, 'A new observation.');
   await assert.rejects(ws.save(initial.book, initial.etag), code('CONFLICT'));
   assert.equal((await ws.read()).etag, saved.etag);
 });
 
-test('external edits and unknown formats are preserved without rewriting', async () => {
-  const root = await temp(), ws = new Workspace(root), current = await ws.create(sampleNotebook());
-  const external = structuredClone(current.book); external.description = 'Edited outside the app.';
-  await writeFile(path.join(root, 'observanda.json'), serialize(external));
-  await assert.rejects(ws.save(current.book, current.etag), code('CONFLICT'));
-  external.formatVersion = 99;
-  const bytes = serialize(external); await writeFile(path.join(root, 'observanda.json'), bytes);
-  await assert.rejects(ws.read(), code('FORMAT'));
-  assert.equal(await readFile(path.join(root, 'observanda.json'), 'utf8'), bytes);
-});
-
-test('old revisions stay readable after a save; tampering is rejected', async () => {
-  const root = await temp(), ws = new Workspace(root), initial = await ws.create(sampleNotebook());
-  const next = structuredClone(initial.book); next.title = 'Another title';
-  await ws.save(next, initial.etag);const history = [];for await (const {id} of ws.revisionSnapshots()) history.push({id});
-  assert.equal(history.length, 1);
-  assert.equal((await ws.readRevision(history[0].id)).title, initial.book.title);
-  await writeFile(path.join(root, '.observanda', 'revisions', `${history[0].id}.json`), serialize(next));
-  await assert.rejects(ws.readRevision(history[0].id), code('FORMAT'));
-});
-
-test('a held writer lock and symlinked internal directory fail closed', async () => {
-  const root = await temp(), ws = new Workspace(root), current = await ws.create(sampleNotebook());
-  const {workspaceDatabaseLease}=await import('../src/workspace-database-lease.js');
-  const lease=await workspaceDatabaseLease(null,{file:path.join(root,'.observanda','write.lock')});
-  try{await assert.rejects(ws.save(current.book,current.etag),code('LOCKED'));}finally{await lease.close();}
+test('a symlinked internal directory fails closed', async () => {
   const linked = await temp(), outside = await temp();
   await symlink(outside, path.join(linked, '.observanda'), process.platform === 'win32' ? 'junction' : 'dir');
-  await assert.rejects(new Workspace(linked).create(createNotebook()), code('UNSAFE'));
+  await assert.rejects(new Workspace(linked, {id: randomUUID(), key: randomBytes(32)}).create(createNotebook()), code('UNSAFE'));
   assert.deepEqual(await readdir(outside), []);
 });
 

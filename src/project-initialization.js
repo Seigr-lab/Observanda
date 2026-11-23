@@ -70,7 +70,7 @@ export async function initializeProjectLocation(input,projectId,book,access,vaul
     await store.verify(descriptor);
    }));
    await db.run('COMMIT');
-   const file=await workspaceFile(root,{secure:true});
+   const file=await workspaceFile(root);
    if(await assertRegular(file,{missing:true})){if(await storage.readFile(file,'utf8')!==serialize(descriptor))throw new AppError('CATALOGUE_DAMAGED');}
    else await storage.writeFile(file,serialize(descriptor));
    for(const operation of afterCommit)await operation();

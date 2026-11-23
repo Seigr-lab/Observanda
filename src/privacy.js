@@ -35,7 +35,7 @@ export async function admitRetainedPublicFile(name,file,{type,blockedValues=[]})
   if(type==='text'&&publicTextFile(name)){
     const vault=file.workspace.vault;
     if(await hasPrivateTextStream(()=>file.stream(),blockedValues))throw new AppError('PRIVACY',[{field:'generated output'}]);
-    await file.workspace.requireStorageKey();if(vault?.id&&(file.workspace.vault!==vault||!vault.key))throw new AppError('ACCESS_LOCKED');
+    await file.workspace.requireStorageKey();if(file.workspace.vault!==vault||!vault?.key)throw new AppError('ACCESS_LOCKED');
   }else assertPublicFileBytes(name,await contentBuffer(file),{type,blockedValues});
   retainedChecks.set(file,{workspace:file.workspace,identity:retainedIdentity(name,file,blockedValues)});
   return file;

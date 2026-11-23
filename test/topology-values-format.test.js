@@ -14,7 +14,7 @@ const base={website:0,staged:false,owners:0,publication:false,transfers:false};
 const required=['topologyValues','sequenceValues','nativeDomainValues','nativeNumericalModels','tensorValues','computedCells','calculationPolicies','structuredCalculator','approximateCalculator','measurementScalarPolicies','datasetResourcePolicies'];
 const names=required.map(name=>'catalogueRequires'+name[0].toUpperCase()+name.slice(1));
 function database(version=122){let current=version;return {get version(){return current;},db:{all:async()=>[{version:String(current)}],get:async()=>null,run:async(sql,...values)=>{if(sql.startsWith('UPDATE catalogue_format'))current=values[0];}}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 const column=(version=4,codec='observanda.topology')=>({representation:'domain',domain:{version,codec,codecVersion:1,namespace:'Literal authored graph'}});
 const envelope=(version=5,definitionVersion=4,codec='observanda.topology')=>({format:'domain-value',version,definition:column(definitionVersion,codec).domain});
 const object='.observanda/materials/objects/id/revision.json',chunk='.observanda/materials/sequences/chunks/hash.json',job='.observanda/jobs/id.json';

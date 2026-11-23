@@ -1,6 +1,4 @@
-import {Workspace} from '../../src/storage.js';
-import {sampleNotebook} from '../../src/sample.js';
-import {navigate,preferences} from './preferences-helper.js';
+import {preferences} from './preferences-helper.js';
 import {test,expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -46,19 +44,4 @@ test('a project is created at the top level with its own database and directory,
   await expect(page.locator('.app-activity [data-toggle]')).toHaveText('Activity');
   await page.screenshot({path:test.info().outputPath('project-directory.png'),fullPage:true});expect(errors).toEqual([]);
  }finally{await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-directory-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
-});
-
-
-test('document workspace navigation keeps embedded projects without polling catalogue recovery',async({page})=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-document-directory-ui-')),book=sampleNotebook(),root=path.join(directory,book.title),requests=[],failures=[];let app;
- try{
-  await new Workspace(root).create(book);app=await testServer({root,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
-  page.on('request',request=>{const route=new URL(request.url()).pathname;if(route==='/api/projects/list'||/^\/api\/projects\/(?:open|create|delete|move)\/pending$/.test(route))requests.push(route);});
-  page.on('pageerror',error=>failures.push(error.message));page.on('response',response=>{if(response.status()>=400)failures.push(response.url()+': '+response.status());});
-  await page.goto(app.url);await navigate(page,'Projects');await expect(page.locator('.project-grid')).toContainText(book.projects[0].title);
-  await page.locator('main').getByRole('button',{name:book.projects[0].title,exact:true}).click();await expect(page.locator('main h1')).toHaveText(book.projects[0].title);
-  await preferences(page,'App appearance');await expect(page.getByRole('heading',{name:'App appearance',exact:true})).toBeVisible();
-  await page.reload();await expect(page.getByRole('heading',{name:'App appearance',exact:true})).toBeVisible();await navigate(page,'Projects');await expect(page.locator('.project-grid')).toContainText(book.projects[0].title);
-  await page.getByRole('button',{name:'Dashboard',exact:true}).click();await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(requests).toEqual([]);expect(failures).toEqual([]);
- }finally{await page.close();await app?.close();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-document-directory-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

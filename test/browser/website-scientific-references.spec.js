@@ -14,7 +14,7 @@ test('captions, descriptive links and a bibliography survive native file save, r
  const dir=await mkdtemp(path.join(os.tmpdir(),'scientific-site-'));
  try{
   await mkdir(path.join(dir,'.observanda'));const vault=new Workspace(dir,{id:randomUUID(),key:randomBytes(32)});
-  vault.catalogue=vault.storageKind=()=>{throw Error('Research storage unavailable');};
+  vault.catalogue=()=>{throw Error('Research storage unavailable');};
   const store=new WebsiteFileStore(vault),site=await store.create({name:'Field study',html:'<!doctype html><html><head><title>Counts</title></head><body><main><h1>Counts</h1><p id="writing">Results. </p><div data-image-gallery><figure><figcaption>Pond photograph</figcaption></figure></div><table><caption>Baseline</caption><tbody><tr><td>22</td></tr></tbody></table><div id="ambiguous"></div><figure id="ambiguous"><figcaption>Collision</figcaption></figure></main></body></html>'});
   const id=site.site.id,sourceId='1'.repeat(64);
   await store.putSource({sourceId,title:'Released field sample',html:'<section data-observanda-part="body"><figure><figcaption>Released sample figure</figcaption></figure><p>Released sample prose</p></section>'},{token:await store.beginSourceUpdate({sourceId})});

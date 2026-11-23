@@ -10,7 +10,7 @@ export function coordinateFrameMetadata(relative,value){
  return value?.kind==='coordinate-frame-axes'||['columns','columns-policy'].includes(value?.kind)&&value.items?.some(column)===true||value?.kind==='calculation-nodes'&&value.items?.some(node=>node.kind==='coordinate-transform')===true||value?.kind==='calculation-lineage'&&value.items?.some(leaf=>leaf.coordinateTransform!==undefined||leaf.coordinateComponent!==undefined)===true;
 }
 export async function assertCoordinateFrameFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{
   const format=await import('./catalogue-format.js'),generation=await format.catalogueFormat(store.catalogueDb??store.db);
   if(!['catalogueRequiresCoordinateFrames','catalogueRequiresDomainAlgebra','catalogueRequiresNativeDomainValues','catalogueRequiresMeasurementScalarPolicies','catalogueRequiresDatasetResourcePolicies'].every(name=>typeof format[name]==='function'&&format[name](generation)))throw new AppError('CATALOGUE_DAMAGED');

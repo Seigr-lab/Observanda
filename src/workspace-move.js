@@ -98,7 +98,7 @@ async function removeRetired(receipt,{verifyDestination=false,signal}={}){
   }else{
    // A retry can happen long after the verified transfer. Keep any remaining
    // original whose destination bytes have since been lost or changed.
-   const databaseInternal=receipt.ownedDatabase&&(relative.startsWith('.observanda/postgresql/')||relative.startsWith('.observanda/database-transition/')||['.observanda/research.observanda','.observanda/database-conversion.observanda'].includes(relative));
+   const databaseInternal=receipt.ownedDatabase&&(relative.startsWith('.observanda/postgresql/')||relative.startsWith('.observanda/database-transition/')||relative==='.observanda/research.observanda');
    if(verifyDestination&&!databaseInternal&&!workspaceTransferControl(relative)&&relative!==MOVE_RECEIPT&&!ownedStorageLeaseFile(relative)&&!ownerNativeControl(relative)&&!websiteUpgradeControlFile(relative)&&!isStorageTemporary(path.basename(relative))){
     if(await hashWorkspaceFile(file)!==await hashWorkspaceFile(path.join(receipt.destination,relative)))throw new AppError('STORAGE_COPY');
    }

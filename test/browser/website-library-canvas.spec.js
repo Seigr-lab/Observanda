@@ -16,7 +16,7 @@ test('dock the library and drop a permitted entry between authored sections in t
  try{
   await mkdir(path.join(root,'.observanda'));
   const vault=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});
-  vault.catalogue=vault.storageKind=()=>{throw Error('Unexpected research read');};
+  vault.catalogue=()=>{throw Error('Unexpected research read');};
   const store=new WebsiteFileStore(vault);
   await seedWebsitePickerCorpus(store,{count:6});
   const first=await store.create({name:'Survey atlas'}),id=first.site.id;

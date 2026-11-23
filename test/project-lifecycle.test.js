@@ -1,12 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rm,writeFile} from 'node:fs/promises';
-import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
+import path from 'node:path';import os from 'node:os';import {randomBytes,randomUUID} from 'node:crypto';
 import {withProjectLifecycle} from '../src/project-lifecycle.js';
 import {holdImportSource} from '../src/import-source-hold.js';
 import {Workspace} from '../src/storage.js';
 import {setTimeout as delay} from 'node:timers/promises';
-async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-lifecycle-'));await mkdir(path.join(root,'.observanda'));t.after(async()=>{assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-lifecycle-'));await rm(root,{recursive:true,force:true});});const entries=new Map();return {workspace:new Workspace(root),entries,state:async id=>entries.has(id)?{state:'active',entry:entries.get(id)}:{state:'missing'}};}
+async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-lifecycle-'));await mkdir(path.join(root,'.observanda'));t.after(async()=>{assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-lifecycle-'));await rm(root,{recursive:true,force:true});});const entries=new Map();return {workspace:new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),entries,state:async id=>entries.has(id)?{state:'active',entry:entries.get(id)}:{state:'missing'}};}
 test('same-project lifecycle commands serialize while another project proceeds',async t=>{
  const registry=await fixture(t),a=randomUUID(),b=randomUUID();let release,started,second=false;const held=new Promise(resolve=>release=resolve),entered=new Promise(resolve=>started=resolve);
  const first=withProjectLifecycle(registry,a,'copy',async()=>{started();await held;});t.after(()=>{release();return first.catch(()=>{});});await entered;
@@ -15,11 +15,11 @@ test('same-project lifecycle commands serialize while another project proceeds',
 });
 test('interrupted ownership command blocks other lifecycle kinds until its receipt completes',async t=>{
  const registry=await fixture(t),id=randomUUID(),file=path.join(registry.workspace.root,'.observanda/project-copies',id+'.obsv');await mkdir(path.dirname(file));
- await writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'copying'}));
+ await registry.workspace.writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'copying'}));
  await assert.rejects(withProjectLifecycle(registry,id,'delete',async()=>assert.fail('Must not start')),{code:'STORAGE_PROJECT_BUSY'});
  assert.equal(await withProjectLifecycle(registry,id,'copy',async()=>true),true);
- await writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'complete'}));assert.equal(await withProjectLifecycle(registry,id,'delete',async()=>true),true);
- await writeFile(file,JSON.stringify({version:1,projectId:randomUUID(),id:randomUUID(),phase:'complete'}));await assert.rejects(withProjectLifecycle(registry,id,'delete',async()=>true),{code:'STORAGE_PROJECT_BUSY'});
+ await registry.workspace.writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'complete'}));assert.equal(await withProjectLifecycle(registry,id,'delete',async()=>true),true);
+ await registry.workspace.writeFile(file,JSON.stringify({version:1,projectId:randomUUID(),id:randomUUID(),phase:'complete'}));await assert.rejects(withProjectLifecycle(registry,id,'delete',async()=>true),{code:'STORAGE_PROJECT_BUSY'});
 });
 test('a project held by a paused import cannot be renamed, moved or deleted, but can still be opened and copied',async t=>{
  const registry=await fixture(t),id=randomUUID(),root=path.join(registry.workspace.root,'Project'),record=path.join(registry.workspace.root,'pending.obsv');

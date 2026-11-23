@@ -40,7 +40,6 @@ async function revisions(workspace){
 test('new encrypted workspaces start with transactional records and backups preserve their history',async t=>{
  const f=await fixture(t),actual=await f.ws.read(),original=await f.sourceWorkspace.read();
  assert.deepEqual(actual,original);
- assert.equal(await f.ws.storageKind(),'catalogue');
  assert.deepEqual(await workspaceManifest(f.source),f.before);
  assert.deepEqual(await revisions(f.ws),await revisions(f.sourceWorkspace));
  for(const version of await revisions(f.sourceWorkspace))assert.deepEqual(await f.ws.readRevision(version.id),await f.sourceWorkspace.readRevision(version.id));
@@ -274,7 +273,6 @@ test('initializing transactional storage cannot overwrite an existing workspace'
  const {sourceWorkspace,source,before}=await fixture(t);
  await assert.rejects(sourceWorkspace.initializeResearch(upgradeNotebook(sampleNotebook())),{code:'EXISTS'});
  assert.deepEqual(await workspaceManifest(source),before);
- assert.equal(await sourceWorkspace.storageKind(),'catalogue');
 });
 
 test('failed creation is never exposed as a usable workspace',async t=>{
@@ -286,17 +284,4 @@ test('failed creation is never exposed as a usable workspace',async t=>{
  await assert.rejects(new Workspace(destination,vault).read(),{code:'STORAGE_INCOMPLETE'});
  const {inspectLocation}=await import('../src/locations.js');
  await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});
-});
-
-test('storage detection rejects oversized or malformed workspace documents before command processing',async t=>{
- const {writeFile}=await import('node:fs/promises');
- const {MAX_BYTES}=await import('../src/model.js');
- const {root}=await fixture(t),plain=path.join(root,'invalid');
- const {mkdir}=await import('node:fs/promises');
- await mkdir(plain);
- const file=path.join(plain,'observanda.json'),workspace=new Workspace(plain);
- await writeFile(file,Buffer.alloc(MAX_BYTES+100,32));
- await assert.rejects(workspace.storageKind(),{code:'LIMIT'});
- await writeFile(file,'broken json');
- await assert.rejects(workspace.storageKind(),{code:'FORMAT'});
 });

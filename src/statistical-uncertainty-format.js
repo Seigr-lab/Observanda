@@ -10,7 +10,7 @@ export function statisticalUncertaintyMetadata(relative,value){
  return relative.startsWith('.observanda/materials/sequences/chunks/')&&(['uncertainty-inputs','uncertainty-covariance'].includes(value?.kind)||['columns','columns-policy'].includes(value?.kind)&&value.items?.some(column)===true);
 }
 export async function assertStatisticalUncertaintyFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{
   const {catalogueFormat,catalogueRequiresStatisticalUncertainty,catalogueRequiresNativeNumericalModels,catalogueRequiresMeasurementScalarPolicies,catalogueRequiresDatasetResourcePolicies,catalogueRequiresStructuredCalculator,catalogueRequiresApproximateCalculator}=await import('./catalogue-format.js'),format=await catalogueFormat(store.catalogueDb??store.db);
   if(![catalogueRequiresStatisticalUncertainty,catalogueRequiresNativeNumericalModels,catalogueRequiresMeasurementScalarPolicies,catalogueRequiresDatasetResourcePolicies,catalogueRequiresStructuredCalculator,catalogueRequiresApproximateCalculator].every(required=>required(format)))throw new AppError('CATALOGUE_DAMAGED');

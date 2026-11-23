@@ -84,19 +84,9 @@
     "other": "Ready to encrypt {count} files ({megabytes} MB). The original stays in place."
   },
   "databaseConnected": "PostgreSQL is connected.",
-  "locationResearch": "Research records, projects, themes and pages",
-  "locationRevisions": "Saved research revisions",
   "locationCatalogue": "PostgreSQL catalogue binding",
   "locationArchive": "Portable encrypted research archive",
   "locationMedia": "Original media and prepared copies",
-  "locationResources": "Resources and planning",
-  "locationModuleHistory": "Module revision history",
-  "locationModuleRecovery": "Module recovery checkpoints",
-  "locationLaboratory": "Laboratory records",
-  "locationLabHistory": "Laboratory revision history",
-  "locationPublishing": "Publishing destinations",
-  "locationReceipts": "Publishing receipts",
   "locationGrants": "Encrypted access grants",
-  "locationDashboard": "Workspace dashboard settings",
   "locationDescriptor": "Encrypted workspace descriptor"
 }

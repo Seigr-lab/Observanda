@@ -115,7 +115,6 @@ test('default transactional workspace saves, reopens in the same folder and rest
  }
  try{
   await unlock();
-  expect(await workspace.storageKind()).toBe('catalogue');
   const initial=await manifest(root);
   await preferences(page,'Storage & access');
   await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();

@@ -13,7 +13,7 @@ test('change-detection storage preserves independent capabilities in either upgr
  const lock=database();lock.db.run=async()=>{throw Object.assign(Error('busy'),{code:'55P03'});};await assert.rejects(requireDatasetCusum(lock.db),{code:'LOCKED'});assert.equal(lock.format,122);
 });
 test('every change-detection requirement is independently enforced on reads',async()=>{
- const flags=Object.fromEntries(requirements.map(key=>[key,true])),workspace=value=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...value})).db})});assert.equal(cusumCatalogueRequirements.length,requirements.length);await assertCusumFormat(workspace(flags));for(const key of requirements){const partial={...flags};delete partial[key];await assert.rejects(assertCusumFormat(workspace(partial)),{code:'CATALOGUE_DAMAGED'},key);}
+ const flags=Object.fromEntries(requirements.map(key=>[key,true])),workspace=value=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...value})).db})});assert.equal(cusumCatalogueRequirements.length,requirements.length);await assertCusumFormat(workspace(flags));for(const key of requirements){const partial={...flags};delete partial[key];await assert.rejects(assertCusumFormat(workspace(partial)),{code:'CATALOGUE_DAMAGED'},key);}
 });
 test('change-detection recipes, result context, copied columns and pending work require admission',()=>{
  for(const [relative,value] of [

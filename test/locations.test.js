@@ -8,7 +8,11 @@ import {sampleNotebook} from '../src/sample.js';
 import {createAccess,createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {TestDeviceStore} from './device-fixture.js';
+import {CATALOGUE_FILE,CATALOGUE_ARCHIVE} from '../src/research-catalogue.js';
 import {browseFolders,createFolder,initializeLocation,inspectLocation,probeLocation,copyPlan,copyWorkspace,workspaceManifest,readPreference,rememberLocation} from '../src/locations.js';
+// The database travels as its own archive; every other file is copied byte for byte.
+const copiedOnly=files=>files.filter(file=>![CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path));
+const copiedFiles=async root=>copiedOnly(await workspaceManifest(root));
 // Current access with a device store in its own temporary folder, outside the folders a test inspects.
 async function currentAccess(){
   const deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-location-device-')),'device.key')}),access=await createWorkspaceAccess('','',deviceStore);
@@ -29,19 +33,21 @@ test('storage checks leave no probes, reject occupied destinations and never inv
 
 test('verified workspace copies include private originals and history byte for byte and leave the source intact',async()=>{
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-copy-')),source=path.join(parent,'source'),destination=path.join(parent,'copy');
-  await initializeLocation(source,sampleNotebook(),await createAccess('Local researcher'));
-  const ws=new Workspace(source),current=await ws.read();current.book.description='A new revision';await ws.save(current.book,current.etag);
+  const {access,vault}=await currentAccess();
+  try{
+  await initializeLocation(source,sampleNotebook(),access,vault);
+  const ws=new Workspace(source,vault),current=await ws.read();current.book.description='A new revision';await ws.save(current.book,current.etag);
   await mkdir(path.join(source,'.observanda','media','fixture'),{recursive:true});
   await writeFile(path.join(source,'.observanda','media','fixture','original'),Buffer.from([1,255,0,99]));
-  await writeFile(path.join(source,'.observanda','laboratory.json'),'private laboratory fixture\n');
-  const before=await workspaceManifest(source),plan=await copyPlan(source,destination);
-  await copyWorkspace(plan);assert.deepEqual(await workspaceManifest(source),before);assert.deepEqual(await workspaceManifest(destination),before);
+  const before=await workspaceManifest(source),plan=await copyPlan(source,destination,{vault});
+  await copyWorkspace(plan,{vault});assert.deepEqual(await workspaceManifest(source),before);assert.deepEqual(await copiedFiles(destination),copiedOnly(before));
   assert.equal((await inspectLocation(destination)).kind,'workspace');
   await writeFile(path.join(destination,'.observanda','copy-in-progress'),'incomplete');
-  await assert.rejects(new Workspace(destination).read(),{code:'STORAGE_INCOMPLETE'});
+  await assert.rejects(new Workspace(destination,vault).read(),{code:'STORAGE_INCOMPLETE'});
   await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});
-  await assert.rejects(copyPlan(source,path.join(source,'nested')),{code:'STORAGE_PATH'});
-  await assert.rejects(copyPlan(source,destination),{code:'EXISTS'});
+  await assert.rejects(copyPlan(source,path.join(source,'nested'),{vault}),{code:'STORAGE_PATH'});
+  await assert.rejects(copyPlan(source,destination,{vault}),{code:'EXISTS'});
+  }finally{clearVault(vault);}
   const preference=path.join(parent,'local-settings','preferences.json');await rememberLocation(preference,destination);assert.equal(await readPreference(preference),destination);
 });
 

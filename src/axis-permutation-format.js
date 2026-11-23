@@ -7,4 +7,4 @@ export function axisPermutationMetadata(relative,value){
  if(!relative.startsWith('.observanda/materials/'))return false;
  return axisPermutationMaterial(value)||relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='calculation-nodes'&&value.items?.some(node=>node.kind==='domain-permute')===true;
 }
-export async function assertAxisPermutationFormat(workspace){if(typeof workspace.storageKind!=='function')return;await workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresAxisPermutation}=await import('./catalogue-format.js');if(!catalogueRequiresAxisPermutation(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}
+export async function assertAxisPermutationFormat(workspace){if(typeof workspace.catalogue!=='function')return;await workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresAxisPermutation}=await import('./catalogue-format.js');if(!catalogueRequiresAxisPermutation(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}

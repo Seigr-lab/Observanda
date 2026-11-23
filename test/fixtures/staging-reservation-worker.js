@@ -4,7 +4,7 @@ import {temporaryStreamName} from '../../src/storage-temporary.js';
 import {writeFilePart} from '../../src/segmented-file-io.js';
 
 const chunks=[];for await(const chunk of process.stdin)chunks.push(chunk);const {root,id,key,request}=JSON.parse(Buffer.concat(chunks));
-const workspace={root,vault:{id,key:Buffer.from(key,'base64')},readMetadata:async()=>null,storageKind:async()=>'catalogue',metadataPage:async()=>({items:[]})};
+const workspace={root,vault:{id,key:Buffer.from(key,'base64')},readMetadata:async()=>null,metadataPage:async()=>({items:[]})};
 await withStagingAuthority(workspace,async authority=>{
  const claim=await authority.reserve(request),bytes=Buffer.from('interrupted registered payload');
  await authority.scope.member(path.join(root,'.observanda/collaboration/staging',claim.id,'0.blob'),async(directory,name)=>{

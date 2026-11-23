@@ -29,7 +29,7 @@ function fixture(count){
  const membership=tree(SnapshotIndex,members.map(row=>({id:'record:'+row.id,revision:digest(serialize(row))})));
  const reading=tree(RecordReadingIndex,members.flatMap(row=>['date','position'].map(order=>({id:order+':'+row.notebookId+':'+readingKey(row,order),revision:digest(serialize(row))}))));
  const facets=tree(RecordFacetIndex,members.flatMap(row=>{const value=documents.get(row.id),kind=value.type==='experiment'&&!value.template?'experiments':'other';return [row.notebookId+':count:'+kind+':'+row.id,row.notebookId+':domain:'+encodeURIComponent(row.template?.profileId??'')+':'+row.id].map(id=>({id,revision:digest(serialize(row))}));}));
- const snapshot={indexVersion:1,metadata:book,count,membership,readingIndex:{version:1,root:reading},facetIndex:{version:1,root:facets}},workspace={storageKind:async()=>'catalogue',catalogue:operation=>operation(store)},query={workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()}};
+ const snapshot={indexVersion:1,metadata:book,count,membership,readingIndex:{version:1,root:reading},facetIndex:{version:1,root:facets}},workspace={catalogue:operation=>operation(store)},query={workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()}};
  return {reader:new RecordQuery(workspace),workspace,query,calls,rows,snapshot,store};
 }
 for(const count of [1000,10000])for(const sort of ['date-desc','date-asc'])test('indexed '+sort+' record pages read a bounded summary window at '+count+' records',async t=>{

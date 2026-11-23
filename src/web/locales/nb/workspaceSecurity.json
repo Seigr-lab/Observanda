@@ -84,19 +84,9 @@
     "other": "Klar til å kryptere {count} filer ({megabytes} MB). Originalen blir på sin plass."
   },
   "databaseConnected": "PostgreSQL er tilkoblet.",
-  "locationResearch": "Forskningsoppføringer, prosjekter, temaer og sider",
-  "locationRevisions": "Lagrede forskningsrevisjoner",
   "locationCatalogue": "PostgreSQL-katalogtilknytning",
   "locationArchive": "Portabelt kryptert forskningsarkiv",
   "locationMedia": "Originalmedier og klargjorte kopier",
-  "locationResources": "Ressurser og planlegging",
-  "locationModuleHistory": "Modulenes revisjonshistorikk",
-  "locationModuleRecovery": "Modulenes gjenopprettingspunkter",
-  "locationLaboratory": "Laboratorieoppføringer",
-  "locationLabHistory": "Laboratoriets revisjonshistorikk",
-  "locationPublishing": "Publiseringsmål",
-  "locationReceipts": "Publiseringskvitteringer",
   "locationGrants": "Krypterte tilgangstildelinger",
-  "locationDashboard": "Innstillinger for arbeidsområdeoversikten",
   "locationDescriptor": "Kryptert arbeidsområdebeskrivelse"
 }

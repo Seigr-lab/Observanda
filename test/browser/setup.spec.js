@@ -9,8 +9,6 @@ import path from 'node:path';
 import os from 'node:os';
 import {testServer as startServer} from '../device-fixture.js';
 import {Workspace} from '../../src/storage.js';
-import {sampleNotebook} from '../../src/sample.js';
-import {workspaceManifest} from '../../src/locations.js';
 import {encrypted} from '../../src/encryption.js';
 import {WorkspaceDatabases} from '../../src/workspace-databases.js';
 import {installDatabaseProvider} from '../../src/workspace-database-context.js';
@@ -49,20 +47,6 @@ test('encrypted setup retains fields after a failed request, writes no readable 
  await app.close();app=await startServer({root,port:0,headless:true,preferencesFile:path.join(parent,'preferences.json')});await page.goto(app.url);await expect(page.getByRole('heading',{name:'Unlock workspace'})).toBeVisible();
  await page.getByLabel('Password',{exact:true}).fill('synthetic private password');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Private research marker');
 });
-
-test('encrypted-copy review protects all existing files and retains the original byte for byte',async({page})=>{
- test.setTimeout(90000);
- const ws=new Workspace(root),initial=await ws.create({...sampleNotebook(),title:path.basename(root)});initial.book.description='A retained revision';await ws.save(initial.book,initial.etag);const before=await workspaceManifest(root),destination=path.join(parent,'encrypted-copy');
- await page.goto(app.url);await preferences(page,'Storage & access');await page.getByRole('button',{name:'Create encrypted copy',exact:true}).click();
- await page.getByLabel('Workspace folder').fill(destination);await page.getByLabel('Workspace password',{exact:true}).fill('converted private password');await page.getByLabel('Confirm password',{exact:true}).fill('converted private password');
- await page.getByRole('button',{name:'Review encrypted copy',exact:true}).click();await expect(page.locator('[data-encryption-review]')).toContainText('Ready to encrypt');
- await page.getByRole('button',{name:'Encrypt and use this copy',exact:true}).click();await expect(page.locator('#dialog')).not.toBeVisible({timeout:30000});await preferences(page,'Storage & access');await expect(page.getByRole('heading',{name:'Encrypted workspace',exact:true})).toBeVisible();
- expect(await workspaceManifest(root)).toEqual(before);
- // Operating-system lock and lease files are empty: they hold no bytes to encrypt. Every file with content must be encrypted.
- for(const file of await workspaceManifest(destination)){if(file.path==='.observanda/access.json')continue;const bytes=await readFile(path.join(destination,file.path));if(!bytes.length&&/(?:\.lock|\/admission|\/writer)$/.test(file.path))continue;expect(encrypted(bytes),file.path).toBe(true);}
- await page.locator('main').getByRole('button',{name:'Lock workspace',exact:true}).click();await page.getByLabel('Password',{exact:true}).fill('converted private password');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
-});
-
 
 test('headless server folder navigation creates a folder and retains setup details',async({page})=>{
  await mkdir(root);await mkdir(path.join(root,'Experiments'));await mkdir(path.join(root,'Field notes'));

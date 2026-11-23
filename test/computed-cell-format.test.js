@@ -5,7 +5,7 @@ import {computedCellMetadata,assertComputedCellFormat} from '../src/computed-cel
 const base={website:0,staged:false,owners:0,publication:false,transfers:false};
 const required={computedCells:true,calculationPolicies:true,structuredCalculator:true,approximateCalculator:true,measurementScalarPolicies:true,datasetResourcePolicies:true};
 function database(format=122){let stored=format;const statements=[],db={all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}};return {db,statements,get format(){return stored;}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 test('computed value formats retain earlier capabilities and restore the new interpretation exactly',async()=>{
  for(const owners of [0,1,2])for(const website of [0,1,2,3])for(const coordinateFrames of [false,true]){
   const source=database(configurationCatalogueGeneration({...base,owners,website}));if(coordinateFrames)await requireCoordinateFrames(source.db);await requireComputedCells(source.db);const flags=configurationCatalogueFeatures(source.format);for(const [name,value]of Object.entries(required))assert.equal(flags[name],value);assert.equal(flags.coordinateFrames===true,coordinateFrames);

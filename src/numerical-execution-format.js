@@ -10,6 +10,6 @@ export function numericalExecutionMetadata(relative,value){
 }
 export const numericalExecutionCatalogueRequirements=Object.freeze(['catalogueRequiresNumericalExecution','catalogueRequiresDatasetResourcePolicies']);
 export async function assertNumericalExecutionFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{const format=await import('./catalogue-format.js'),generation=await format.catalogueFormat(store.catalogueDb??store.db);if(!numericalExecutionCatalogueRequirements.every(name=>typeof format[name]==='function'&&format[name](generation)))throw new AppError('CATALOGUE_DAMAGED');});
 }

@@ -84,19 +84,9 @@
     "other": "Listo para cifrar {count} archivos ({megabytes} MB). El original se mantiene en su ubicación."
   },
   "databaseConnected": "PostgreSQL está conectado.",
-  "locationResearch": "Registros de investigación, proyectos, temas y páginas",
-  "locationRevisions": "Revisiones de investigación guardadas",
   "locationCatalogue": "Vinculación del catálogo de PostgreSQL",
   "locationArchive": "Archivo de investigación cifrado portátil",
   "locationMedia": "Medios originales y copias preparadas",
-  "locationResources": "Recursos y planificación",
-  "locationModuleHistory": "Historial de revisiones de los módulos",
-  "locationModuleRecovery": "Puntos de recuperación de los módulos",
-  "locationLaboratory": "Registros de laboratorio",
-  "locationLabHistory": "Historial de revisiones de laboratorio",
-  "locationPublishing": "Destinos de publicación",
-  "locationReceipts": "Recibos de publicación",
   "locationGrants": "Autorizaciones de acceso cifradas",
-  "locationDashboard": "Configuración del panel del espacio de trabajo",
   "locationDescriptor": "Descriptor cifrado del espacio de trabajo"
 }

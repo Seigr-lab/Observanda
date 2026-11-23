@@ -20,7 +20,7 @@ function database(format=122){
  const db={all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}};
  return {db,statements,get format(){return stored;}};
 }
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 const column=(version=4,codec='observanda.sequence')=>({representation:'domain',domain:{version,codec,codecVersion:1,namespace:'Synthetic ordered values'}});
 const envelope=(version=5,definitionVersion=4,codec='observanda.sequence')=>({format:'domain-value',version,definition:column(definitionVersion,codec).domain});
 const object='.observanda/materials/objects/id/revision.json',chunk='.observanda/materials/sequences/chunks/hash.json',job='.observanda/jobs/id.json';

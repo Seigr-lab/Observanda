@@ -55,7 +55,7 @@ test('direct retained figure verification requires approximation admission for r
  const ordinary=await documents.retain(exact),single=await documents.retain(approximate),composition=await documents.retain(createComposition([exact,approximate]));
  // Figures hold member runs, so their catalogue records member runs; approximation is the feature under test.
  const withRuns=configurationCatalogueGeneration({...configurationCatalogueFeatures(122),memberRuns:true}),withApproximation=configurationCatalogueGeneration({...configurationCatalogueFeatures(withRuns),approximateCalculator:true});
- let generation=withRuns;workspace.storageKind=async()=> 'catalogue';workspace.catalogue=async operation=>operation({catalogueDb:{all:async sql=>{assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:String(generation)}];}},db:{all:async()=>{throw new Error('Figure admission must use the parent catalogue');}}});
+ let generation=withRuns;workspace.catalogue=async operation=>operation({catalogueDb:{all:async sql=>{assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:String(generation)}];}},db:{all:async()=>{throw new Error('Figure admission must use the parent catalogue');}}});
  await (await documents.open(ordinary)).verify();
  for(const retained of [single,composition]){
   generation=withRuns;await assert.rejects((await documents.open(retained)).verify(),{code:'CATALOGUE_DAMAGED'});

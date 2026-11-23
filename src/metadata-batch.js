@@ -13,6 +13,8 @@ export const withoutMetadataBatch=operation=>batches.exit(operation);
 // Call inside the workspace's writer lock.
 export async function withWorkspaceMetadataBatch(workspace,operation,{prefetchIds=[],signal}={}){
  if(workspace.withPublicationMetadataBatch)return workspace.withPublicationMetadataBatch(operation);
+ // Stand-in metadata stores without a catalogue have no shared index branches to coalesce.
+ if(typeof workspace.catalogue!=='function')return operation();
  return workspace.catalogue(store=>withMetadataBatch(store,operation,{prefetchIds,signal}));
 }
 // One write contract for retained data: up to 128 objects share a single

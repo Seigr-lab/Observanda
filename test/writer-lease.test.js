@@ -13,17 +13,18 @@ import {withWriterLease,releaseWriterLease} from '../src/writer-lease.js';
 import {reviewWriterRecovery,recoverWriter} from '../src/writer-recovery.js';
 
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-writer-'));t.after(()=>rm(root,{recursive:true,force:true}));return root;}
+// A folder whose workspace is still being created has no database yet; its
+// writers are excluded by the kernel-held file lease.
 test('kernel writer ownership excludes live processes and releases after abrupt application termination',async t=>{
- const root=await fixture(t),ws=new Workspace(root),initial=await ws.create(sampleNotebook());
+ const root=await fixture(t),ws=new Workspace(root);
  const source=`import {Workspace} from ${JSON.stringify(new URL('../src/storage.js',import.meta.url).href)}; await new Workspace(process.argv[1]).withLock(async()=>{process.stdout.write('held\\n');await new Promise(()=>{});});`;
  const child=spawn(process.execPath,['--input-type=module','-e',source,root],{windowsHide:true,stdio:['ignore','pipe','pipe']});
  const ended=new Promise(resolve=>child.once('exit',resolve));let errors='';child.stderr.on('data',data=>errors+=data);t.after(()=>child.kill());
  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Writer did not acquire lease: '+errors)),15000);child.stdout.once('data',()=>{clearTimeout(timer);resolve();});child.once('error',reject);});
- await assert.rejects(ws.save(initial.book,initial.etag),{code:'LOCKED'});
+ await assert.rejects(ws.withLock(async()=>{}),{code:'LOCKED'});
  child.kill('SIGKILL');await ended;
- const next=structuredClone(initial.book);next.title='After interruption';
- const deadline=Date.now()+5000;for(;;)try{await ws.save(next,initial.etag);break;}catch(error){if(error.code!=='LOCKED'||Date.now()>deadline)throw error;await delay(50);}
- assert.equal((await new Workspace(root).read()).book.title,next.title);
+ const deadline=Date.now()+5000;let entered=false;for(;;)try{await ws.withLock(async()=>{entered=true;});break;}catch(error){if(error.code!=='LOCKED'||Date.now()>deadline)throw error;await delay(50);}
+ assert.equal(entered,true);
  assert.equal((await lstat(path.join(root,'.observanda','write.lock'))).isFile(),true);
 });
 test('queued local writers serialize, retain revision checks and release after failure',async t=>{

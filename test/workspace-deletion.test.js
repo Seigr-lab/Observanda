@@ -14,8 +14,6 @@ import {Workspace} from '../src/storage.js';
 import {catalogueBinding,publishCatalogueBinding} from '../src/postgres-activation.js';
 import {openCatalogue} from '../src/postgres.js';
 import {workspaceDeletion,DELETE_MARKER} from '../src/workspace-delete-state.js';
-import {initializeLocation} from '../src/locations.js';
-import {createAccess} from '../src/access.js';
 
 async function fixture(t,{owned=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-delete-test-'));
@@ -49,12 +47,6 @@ test('a frozen owned workspace can finish after its database owner has restarted
  const [receipt]=await f.deletions.list();await f.owner.closeWorkspace(f.workspace.root);
  await assert.rejects(f.owner.instances.open(f.workspace.root,f.vault),{code:'STORAGE_DELETING'});
  assert.equal((await new WorkspaceDeletions(f.deletions.directory).finish(receipt.id,{vault:f.vault})).complete,true);
-});
-test('deletion refuses an unfinished conversion even when it started after the review',async t=>{
- const f=await fixture(t),plan=await f.deletions.review(f.workspace);
- await f.workspace.writeFile(path.join(f.workspace.root,'.observanda/database-conversion.observanda'),JSON.stringify({version:1,sourceId:plan.binding.id,targetId:randomUUID(),archiveSha256:'0'.repeat(64),phase:'prepared'}));
- await assert.rejects(f.deletions.begin(f.workspace,plan),{code:'STORAGE_DELETE_BUSY'});assert.equal(await workspaceDeletion(f.workspace.root),null);
- await assert.rejects(f.deletions.review(f.workspace),{code:'STORAGE_DELETE_BUSY'});await access(f.workspace.root);
 });
 test('a live deletion excludes the same owner while another workspace can be deleted',async t=>{
  const f=await fixture(t),other=await encryptedFixture(path.join(f.directory,'independent'),sampleNotebook());t.after(()=>clearVault(other.vault));
@@ -109,12 +101,6 @@ test('refuses stale reviews, unrelated files, linked files, shared aliases and p
 test('a prepared-only interruption can be cleared without deleting anything',async t=>{
  const f=await fixture(t),before=await f.workspace.read();await assert.rejects(f.deletions.begin(f.workspace,await f.deletions.review(f.workspace),{checkpoint:interrupt('prepared')}),/interrupted prepared/);
  const receipt=(await f.deletions.list())[0];assert.equal((await f.deletions.finish(receipt.id)).cancelled,true);assert.deepEqual(await f.workspace.read(),before);assert.deepEqual(await f.deletions.list(),[]);
-});
-test('legacy document workspace without a database is removed without creating one',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-delete-document-'));t.after(()=>rm(directory,{recursive:true,force:true}));
- const root=path.join(directory,'workspace');await initializeLocation(root,sampleNotebook(),await createAccess('',''));
- const workspace=new Workspace(root),deletions=new WorkspaceDeletions(path.join(directory,'deletions'));
- assert.equal((await deletions.begin(workspace,await deletions.review(workspace))).complete,true);await assert.rejects(access(root),{code:'ENOENT'});
 });
 test('final-marker interruption only removes empty directories, never new files',async t=>{
  const f=await fixture(t);await assert.rejects(f.deletions.begin(f.workspace,await f.deletions.review(f.workspace),{checkpoint:interrupt('files')}),/interrupted files/);

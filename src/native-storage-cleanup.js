@@ -36,7 +36,7 @@ export async function removeNativeMove(directory,receipt,{verifyDestination=fals
    if(verifyDestination){destination=await context.service.open(receipt.destination);cursor=nativeMemberCursor(destination);}
    await removeNativeTree(root,context,MOVE_SOURCE,{identity:marker.identity,beforeFile:async(parent,name,relative,stat)=>{
     signal?.throwIfAborted();
-    const databaseInternal=receipt.ownedDatabase&&(relative.startsWith('.observanda/postgresql/')||relative.startsWith('.observanda/database-transition/')||['.observanda/research.observanda','.observanda/database-conversion.observanda'].includes(relative));
+    const databaseInternal=receipt.ownedDatabase&&(relative.startsWith('.observanda/postgresql/')||relative.startsWith('.observanda/database-transition/')||relative==='.observanda/research.observanda');
     if(verifyDestination&&!databaseInternal&&!workspaceTransferControl(relative)&&relative!==MOVE_RECEIPT&&!ownedStorageLeaseFile(relative)&&!ownerNativeControl(relative)&&!websiteUpgradeControlFile(relative)&&!isStorageTemporary(name)){
      const source=await parent.hash(name),target=await cursor.member(relative),copy=await target.directory.hash(target.name);
      if(source.identity!==stat.identity||source.bytes!==copy.bytes||source.sha256!==copy.sha256)throw new AppError('STORAGE_COPY');

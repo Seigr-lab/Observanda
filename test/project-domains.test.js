@@ -145,7 +145,7 @@ test('independent module schemas survive archived and rekeyed project copies wit
  const {initializeLocation}=await import('../src/locations.js'),{createNotebook}=await import('../src/model.js'),{Workspace}=await import('../src/storage.js'),receiverAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'fresh-device')})),receiverVault=takeCreatedVault(receiverAccess),receiverRoot=path.join(f.root,'Receiving workspace');
  await initializeLocation(receiverRoot,createNotebook('Receiving workspace',''),receiverAccess,receiverVault);await new Workspace(receiverRoot,receiverVault).outline();
  try{
-  const target=new ProjectStorage(path.join(receiverRoot,'rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+  const target=new ProjectStorage(path.join(receiverRoot,'rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root),descriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));assert.deepEqual(await target.read(),before);
   const context={...f,storage:target,domains:new ProjectDomains(target,f.book.id)};assert.equal((await command(context,'calculator',saved)).replayed,true);
   const updated={...saved,commandId:randomUUID(),payload:{...saved.payload,expectedRevision:1,data:{...saved.payload.data,expression:'7*8'}}};await command(context,'calculator',updated);

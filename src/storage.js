@@ -4,7 +4,7 @@ import {assertStagingHandoff,withStagingHandoff} from './staging-reservations.js
 import {persistDirectoryCreation,createPersistentDirectory} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {assertNotRenaming} from './workspace-rename-state.js';
-import {digest,serialize} from './storage-format.js';
+import {serialize} from './storage-format.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {constants as bufferConstants} from 'node:buffer';
 import {requireDatabase} from './postgres.js';
@@ -14,8 +14,8 @@ import {withCatalogueFormatRead} from './catalogue-format-read.js';
 import {withCatalogueConnections,catalogueConnection} from './catalogue-connections.js';
 import {atomicReplace} from './atomic-replace.js';
 import {temporaryWriteName} from './storage-temporary.js';
-import {seal,unseal,encrypted,ENCRYPTION_OVERHEAD} from './encryption.js';
-import { mkdir, lstat, readFile, open, rename, unlink, rmdir, realpath, readdir, opendir } from 'node:fs/promises';
+import {seal,unseal,ENCRYPTION_OVERHEAD} from './encryption.js';
+import { mkdir, lstat, readFile, open, rename, unlink, rmdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { AppError } from './errors.js';
 import {assertNotMoving} from './workspace-move-state.js';
@@ -49,11 +49,10 @@ function inspectOwnedCatalogue(workspace,store,operation){
 }
 
 export const WORKSPACE_FILE='workspace.observanda';
-export async function workspaceFile(root,{secure=false}={}){
- const native=path.join(root,WORKSPACE_FILE),legacy=path.join(root,'observanda.json');
- const a=await assertRegular(native,{missing:true}),b=await assertRegular(legacy,{missing:true});
- if(a&&b)throw new AppError('ACCESS_FORMAT');
- return a?native:b?legacy:secure?native:legacy;
+export async function workspaceFile(root){
+ const file=path.join(root,WORKSPACE_FILE);
+ await assertRegular(file,{missing:true});
+ return file;
 }
 export {digest,serialize} from './storage-format.js';
 
@@ -107,17 +106,9 @@ export class Workspace {
   async requireStorageKey(){
     await assertNotRenaming(this.root);
     if(this.vault?.id){if(!this.vault.key)throw new AppError('ACCESS_LOCKED');return;}
-    const data=await workspaceFile(this.root);
-    const dataStat=await assertRegular(data,{missing:true});
-    if(dataStat){
-     const admitted=nativeDestination(data);const handle=admitted?.directory?await admitted.member(data,(parent,name)=>parent.file(name)):await open(data,'r');try{const header=Buffer.alloc(8);await handle.read(header,0,8,0);if(encrypted(header))throw new AppError('ACCESS_LOCKED');}finally{await handle.close();}
-    }
-    const file=path.join(this.root,'.observanda','access.json');
-    const stat=await assertRegular(file,{missing:true});if(!stat)return;
-    if(stat.size>262144)throw new AppError('ACCESS_FORMAT');
-    let header;try{header=JSON.parse(await readStorageFile(file,'utf8',262144));}catch{throw new AppError('ACCESS_FORMAT');}
-    if([2,3].includes(header?.formatVersion))throw new AppError('ACCESS_LOCKED');
-    if(header?.formatVersion!==1)throw new AppError('ACCESS_FORMAT');
+    // Every workspace is encrypted. Without its key, only a folder that holds
+    // no workspace yet (one being created) may be prepared.
+    if(await assertRegular(path.join(this.root,'.observanda','access.json'),{missing:true})||await assertRegular(await workspaceFile(this.root),{missing:true}))throw new AppError('ACCESS_LOCKED');
   }
   async requireCatalogueKey(){
     // Admission checked the location fences before opening this transaction.
@@ -129,33 +120,32 @@ export class Workspace {
     }
     await this.requireStorageKey();
   }
-  async readFile(file,encoding,limit=bufferConstants.MAX_LENGTH){await this.requireStorageKey();const stored=await readStorageFile(file,undefined,limit);let bytes=stored;if(encrypted(stored)||this.vault?.id){if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');bytes=unseal(stored,this.vault.key,this.fileAAD(file));}return encoding?bytes.toString(encoding):bytes;}
-  async writeFile(file,content){await this.requireStorageKey();const bytes=Buffer.from(content);await atomicWrite(file,this.vault?.id?seal(bytes,this.vault.key,this.fileAAD(file)):bytes);}
+  async readFile(file,encoding,limit=bufferConstants.MAX_LENGTH){await this.requireStorageKey();if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');const bytes=unseal(await readStorageFile(file,undefined,limit),this.vault.key,this.fileAAD(file));return encoding?bytes.toString(encoding):bytes;}
+  async writeFile(file,content){await this.requireStorageKey();if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');await atomicWrite(file,seal(Buffer.from(content),this.vault.key,this.fileAAD(file)));}
   metadataPath(relative){
     if(typeof relative!=='string'||!/^\.observanda\/[a-zA-Z0-9./-]+$/.test(relative)||relative.split('/').some(part=>!part||part==='.'||part==='..'))throw new AppError('UNSAFE');
     return path.join(this.root,...relative.split('/'));
   }
   async readMetadata(relative,limit){
-    const file=this.metadataPath(relative);await this.requireCatalogueKey();
+    this.metadataPath(relative);await this.requireCatalogueKey();
     if(activeCatalogue(this)||await hasCatalogue(this.root))return this.catalogue(async store=>{
       const value=await store.object('metadata:'+relative);if(value===null)return null;
       if(typeof value.text!=='string')throw new AppError('FORMAT');if(Buffer.byteLength(value.text)>limit)throw new AppError('LIMIT');return value.text;
     });
-    await assertRegular(path.dirname(file),{directory:true,missing:true});const stat=await assertRegular(file,{missing:true});
-    if(!stat)return null;if(stat.size>limit+ENCRYPTION_OVERHEAD)throw new AppError('LIMIT');return this.readFile(file,'utf8');
+    throw new AppError('FORMAT');
   }
   // Batched reads of up to 32 small metadata files, as readMetadata reads each.
   async readMetadataMany(relatives,limit){
     if(!Array.isArray(relatives)||relatives.length>32||new Set(relatives).size!==relatives.length)throw new AppError('INVALID');
     for(const relative of relatives)this.metadataPath(relative);await this.requireCatalogueKey();
-    if(!(activeCatalogue(this)||await hasCatalogue(this.root))){const texts=[];for(const relative of relatives)texts.push(await this.readMetadata(relative,limit));return texts;}
+    if(!activeCatalogue(this)&&!await hasCatalogue(this.root))throw new AppError('FORMAT');
     return this.catalogue(async store=>{
       const values=await store.objects(relatives.map(relative=>'metadata:'+relative));
       return relatives.map(relative=>{const value=values.get('metadata:'+relative);if(value===null)return null;if(typeof value.text!=='string')throw new AppError('FORMAT');if(Buffer.byteLength(value.text)>limit)throw new AppError('LIMIT');return value.text;});
     });
   }
   async writeMetadata(relative,text){
-    const file=this.metadataPath(relative);
+    this.metadataPath(relative);
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
       if(catalogueContext.getStore()?.root!==this.root)throw new AppError('LOCKED');
       return this.catalogue(async store=>{
@@ -164,10 +154,10 @@ export class Workspace {
         return store.putObject('metadata:'+relative,{text});
       });
     }
-    await privateDirectory(this.root,relative.slice(0,relative.lastIndexOf('/')));return this.writeFile(file,text);
+    throw new AppError('FORMAT');
   }
   async *metadataNames(relative,{signal}={}){
-    const directory=this.metadataPath(relative);await this.requireCatalogueKey();signal?.throwIfAborted();
+    this.metadataPath(relative);await this.requireCatalogueKey();signal?.throwIfAborted();
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
       const prefix='metadata:'+relative+'/';let after=null,previous=null;
       do{
@@ -184,8 +174,7 @@ export class Workspace {
       }while(after!==null);
       return;
     }
-    if(!await assertRegular(directory,{directory:true,missing:true}))return;
-    for await(const entry of await opendir(directory)){signal?.throwIfAborted();yield entry.name;}
+    throw new AppError('FORMAT');
   }
   async listMetadata(relative){const names=[];for await(const name of this.metadataNames(relative))names.push(name);return names;}
   async metadataPage(relative,{after=null,limit=20}={}){
@@ -197,12 +186,12 @@ export class Workspace {
     });
   }
   async removeMetadata(relative){
-    const file=this.metadataPath(relative);
+    this.metadataPath(relative);
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
       if(catalogueContext.getStore()?.root!==this.root)throw new AppError('LOCKED');
       return this.catalogue(store=>store.deleteObject('metadata:'+relative));
     }
-    await assertRegular(file);return unlink(file);
+    throw new AppError('FORMAT');
   }
   async read() {return this.readWorkspace(false);}
   // An outline cannot be mistaken for a complete editable book.
@@ -219,24 +208,20 @@ export class Workspace {
       const raw = await this.readFile(file, 'utf8');
       let book;
       try { book = JSON.parse(raw); } catch { throw new AppError('FORMAT'); }
-      if(isCatalogue(book)){
-        if(book.version!==2||Object.keys(book).sort().join()!=='format,version,workspaceId')throw new AppError('CATALOGUE_DAMAGED');
-        return this.catalogue(async store=>{
-          if(metadataOnly){
-            const etag=await store.head(),snapshot=await store.snapshot(etag);
-            if(snapshot.metadata.id!==book.workspaceId)throw new AppError('CATALOGUE_DAMAGED');
-            const {entries,...metadata}=snapshot.metadata;void entries;
-            return {metadata,etag,recordCount:snapshot.count};
-          }
-          const result=await store.read();
-          if(result.book.id!==book.workspaceId)throw new AppError('CATALOGUE_DAMAGED');
-          validateNotebook(result.book);
-          return result;
-        });
-      }
-      validateNotebook(book);
-      if(metadataOnly){const {entries,...metadata}=book;return {metadata,etag:digest(raw),recordCount:entries.length};}
-      return { book, etag: digest(raw) };
+      if(!isCatalogue(book))throw new AppError('FORMAT');
+      if(book.version!==2||Object.keys(book).sort().join()!=='format,version,workspaceId')throw new AppError('CATALOGUE_DAMAGED');
+      return await this.catalogue(async store=>{
+        if(metadataOnly){
+          const etag=await store.head(),snapshot=await store.snapshot(etag);
+          if(snapshot.metadata.id!==book.workspaceId)throw new AppError('CATALOGUE_DAMAGED');
+          const {entries,...metadata}=snapshot.metadata;void entries;
+          return {metadata,etag,recordCount:snapshot.count};
+        }
+        const result=await store.read();
+        if(result.book.id!==book.workspaceId)throw new AppError('CATALOGUE_DAMAGED');
+        validateNotebook(result.book);
+        return result;
+      });
     } catch (error) { if (error.code === 'ENOENT') throw new AppError('MISSING'); throw error; }
   }
   catalogueStore(db,options){return new ResearchCatalogue(this,db,options);}
@@ -273,22 +258,12 @@ export class Workspace {
   async updateRecords(command,apply,options){
     return this.withLock(()=>this.catalogue(store=>store.updateRecords(command,apply,options)));
   }
-  async storageKind(){
-    // The active transaction has already checked its workspace binding. Do not
-    // reopen the descriptor for every metadata operation in that transaction.
-    if(activeCatalogue(this))return 'catalogue';
-    const file=await workspaceFile(this.root);
-    if((await assertRegular(file)).size>MAX_BYTES+ENCRYPTION_OVERHEAD)throw new AppError('LIMIT');
-    let value;
-    try{value=JSON.parse(await this.readFile(file,'utf8'));}catch(error){if(error instanceof SyntaxError)throw new AppError('FORMAT');throw error;}
-    return isCatalogue(value)?'catalogue':'document';
-  }
   // Called only while creating a new workspace. Application updates never copy
   // or replace a workspace to select a different storage engine.
   async initializeResearch(book,metadata={},populate=null) {
     if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');
     validateNotebook(book);
-    const file=await workspaceFile(this.root,{secure:true});
+    const file=await workspaceFile(this.root);
     if(await assertRegular(file,{missing:true}))throw new AppError('EXISTS');
     const db=await this.openCatalogue({create:true});
     try{
@@ -329,25 +304,25 @@ export class Workspace {
         await db.run('COMMIT');for(const cleanup of afterCommit)await cleanup();return result;
       }));
     }
+    // A folder without a database is still being created. Creation holds the
+    // file lease until its database exists; later writers use the database.
     return withWriterLease(lock,async()=>{
       await assertWorkspaceAvailable(this.root,{moveId});
-      // Creation or encryption may have completed while this writer waited.
+      // Creation may have completed while this writer waited.
       if(await hasCatalogue(this.root))return this.withLock(operation,{detached,moveId,existing:true});
       return operation(internal);
     });
   }
   async create(book) {
     validateNotebook(book);
-    if(this.vault?.id)await requireDatabase();
+    if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');
+    await requireDatabase();
     return this.withLock(async () => {
-      const file = await workspaceFile(this.root);
-      if (await assertRegular(file, { missing: true })) throw new AppError('EXISTS');
-      if(this.vault?.id){
-        const marker=path.join(this.root,'.observanda','copy-in-progress');
-        await atomicWrite(marker,'initializing\n');
-        await this.initializeResearch(book);
-        await unlink(marker);
-      }else await this.writeFile(file, serialize(book));
+      if (await assertRegular(await workspaceFile(this.root), { missing: true })) throw new AppError('EXISTS');
+      const marker=path.join(this.root,'.observanda','copy-in-progress');
+      await atomicWrite(marker,'initializing\n');
+      await this.initializeResearch(book);
+      await unlink(marker);
       return this.read();
     });
   }
@@ -383,47 +358,17 @@ export class Workspace {
       entry.updatedAt = previous && JSON.stringify(previous) === JSON.stringify(entry) ? previous.updatedAt : next.updatedAt;
     }
     validateNotebook(next);
-    if(await this.storageKind()==='catalogue')return this.catalogue(async store=>{
+    return this.catalogue(async store=>{
       if(await store.head()!==current.etag)throw new AppError('CONFLICT');
-      const saved=await store.put(next);
-      return saved;
+      return store.put(next);
     });
-    const revisions = await privateDirectory(this.root, '.observanda/revisions');
-    const originalBytes = await this.readFile(await workspaceFile(this.root), 'utf8');
-    if (digest(originalBytes) !== current.etag) throw new AppError('CONFLICT');
-    const revision = path.join(revisions, `${digest(originalBytes)}.json`);
-    if (!(await assertRegular(revision, { missing: true }))) await this.writeFile(revision, originalBytes);
-    if ((await this.read()).etag !== current.etag) throw new AppError('CONFLICT');
-    await this.writeFile(await workspaceFile(this.root), serialize(next));
-    return this.read();
   }
   async *revisionSnapshots() {
-    if(await this.storageKind()==='catalogue'){
-      const ids=await this.catalogue(async store=>{const head=await store.head();return (await store.snapshots()).filter(id=>id!==head);});
-      for(const id of ids)yield {id,book:(await this.catalogue(store=>store.read(id))).book};
-      return;
-    }
-    let names;
-    try {
-      await assertRegular(path.join(this.root, '.observanda'), { directory: true });
-      const directory = path.join(this.root, '.observanda', 'revisions');
-      await assertRegular(directory, { directory: true });
-      names = await readdir(directory);
-    } catch (error) { if (error.code === 'ENOENT') return; throw error; }
-    for (const name of names.filter(name => /^[a-f0-9]{64}\.json$/.test(name))) {
-      yield {id:name.slice(0,-5),book:await this.readRevision(name.slice(0,-5))};
-    }
+    const ids=await this.catalogue(async store=>{const head=await store.head();return (await store.snapshots()).filter(id=>id!==head);});
+    for(const id of ids)yield {id,book:(await this.catalogue(store=>store.read(id))).book};
   }
   async readRevision(revisionId) {
-    if(await this.storageKind()==='catalogue')return (await this.catalogue(store=>store.read(revisionId))).book;
-    if (!/^[a-f0-9]{64}$/.test(revisionId)) throw new AppError('INVALID');
-    await assertRegular(path.join(this.root, '.observanda'), { directory: true });
-    await assertRegular(path.join(this.root, '.observanda', 'revisions'), { directory: true });
-    const file = path.join(this.root, '.observanda', 'revisions', `${revisionId}.json`);
-    const stat = await assertRegular(file);
-    if (stat.size > MAX_BYTES + ENCRYPTION_OVERHEAD) throw new AppError('LIMIT');
-    const content = await this.readFile(file, 'utf8');
-    if (digest(content) !== revisionId) throw new AppError('FORMAT');
-    return validateNotebook(JSON.parse(content));
+    if(typeof revisionId!=='string')throw new AppError('INVALID');
+    return (await this.catalogue(store=>store.read(revisionId))).book;
   }
 }

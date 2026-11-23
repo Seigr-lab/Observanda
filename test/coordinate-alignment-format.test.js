@@ -9,7 +9,7 @@ const bit=105553116266496,first=105553116266618,maximum=211106232533113;
 const object='.observanda/materials/objects/id/revision.json',chunk='.observanda/materials/sequences/chunks/hash.json',table='.observanda/materials/tables/hash.json',job='.observanda/jobs/id.json';
 const index=kind=>({format:1,kind,root:null,count:0,chunkSize:1}),column={coordinateAlignment:{version:1,contextsIndex:index('coordinate-alignment-contexts')}},cell={coordinateAlignment:{version:1,decisionsIndex:index('coordinate-alignment-decisions')}},axis={coordinateAxis:{version:1,frame:{kind:'analysis',id:'frame',revision:'revision'},axis:0}};
 function database(format=122){let stored=format;const statements=[];return {db:{all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{statements.push(sql);if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}},statements,get format(){return stored;}};}
-const workspace=flags=>({storageKind:()=> 'catalogue',catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
+const workspace=flags=>({catalogue:operation=>operation({catalogueDb:database(configurationCatalogueGeneration({...base,...flags})).db})});
 
 test('alignment upgrades commute with spectral and topology upgrades and restore the exact feature set',async()=>{
  for(const [other,flag]of [[requireSpectralMethods,'spectralMethods'],[requireTopologyValues,'topologyValues']])for(const order of [[other,requireCoordinateAlignment],[requireCoordinateAlignment,other]])for(const owners of [0,2])for(const website of [0,3]){

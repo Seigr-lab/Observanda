@@ -10,6 +10,6 @@ export function spectrumMetadata(relative,value){
 }
 export const spectrumCatalogueRequirements=Object.freeze(['catalogueRequiresDatasetSpectra','catalogueRequiresComputedCells','catalogueRequiresNativeDomainValues','catalogueRequiresNativeNumericalModels','catalogueRequiresCalculationPolicies','catalogueRequiresStructuredCalculator','catalogueRequiresApproximateCalculator','catalogueRequiresMeasurementScalarPolicies','catalogueRequiresDatasetResourcePolicies']);
 export async function assertSpectrumFormat(workspace){
- if(typeof workspace.storageKind!=='function')return;
+ if(typeof workspace.catalogue!=='function')return;
  await workspace.catalogue(async store=>{const format=await import('./catalogue-format.js'),generation=await format.catalogueFormat(store.catalogueDb??store.db);if(!spectrumCatalogueRequirements.every(name=>typeof format[name]==='function'&&format[name](generation)))throw new AppError('CATALOGUE_DAMAGED');});
 }

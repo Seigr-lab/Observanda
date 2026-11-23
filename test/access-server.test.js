@@ -126,7 +126,7 @@ test('missing remembered locations never turn into a replacement workspace',asyn
   const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
   const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
   const response=await fetch(app.origin+'/api/notebook/create',{method:'POST',headers,body:JSON.stringify({title:'Replacement'})});assert.equal((await response.json()).code,'STORAGE_UNAVAILABLE');
-  await assert.rejects(readFile(path.join(root,'observanda.json')),{code:'ENOENT'});
+  await assert.rejects(readFile(path.join(root,'workspace.observanda')),{code:'ENOENT'});
 });
 
 
@@ -186,7 +186,7 @@ test('a missing previous workspace permits explicit creation elsewhere while blo
  assert.equal((await (await create({title:'Occupied',createNew:true,storagePath:occupied})).json()).code,'EXISTS');
  assert.deepEqual(await readdir(occupied),['keep.txt']);assert.equal(await readFile(preferencesFile,'utf8'),initial);
  const response=await create({title:'Independent work',createNew:true,storagePath:destination});assert.equal(response.status,201);const created=await response.json();assert.equal(created.storage.available,true);assert.equal(created.book.title,'Independent work');assert.equal(created.book.projects.length,0);
- assert.equal(await readPreference(preferencesFile),destination);await assert.rejects(readFile(path.join(missing,'observanda.json')),{code:'ENOENT'});await assert.rejects(readdir(missing),{code:'ENOENT'});
+ assert.equal(await readPreference(preferencesFile),destination);await assert.rejects(readFile(path.join(missing,'workspace.observanda')),{code:'ENOENT'});await assert.rejects(readdir(missing),{code:'ENOENT'});
 });
 
 test('setup validates template selection before creation and keeps it in each encrypted workspace',async t=>{
