@@ -15,12 +15,6 @@ import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
 
-function legacyDashboard(version){
- const value=defaultDashboard();value.formatVersion=version;delete value.shortcuts;delete value.enabledModules;value.enabledTools=['records','projects','media','website'];
- for(const view of value.views)for(const p of view.panels){for(const key of ['moduleId','column','hidden','source','fields','presentation','options'])delete p[key];if(version<3)delete p.height;if(version<2)delete p.config;}
- return value;
-}
-
 const temp=async()=>mkdtemp(path.join(os.tmpdir(),'observanda-dashboard-'));
 
 test('dashboard schema rejects ambiguous layouts and preserves unknown tool identities for forward compatibility',()=>{
@@ -82,12 +76,11 @@ test('dashboard API enforces session, origin and conflict checks, survives resta
 });
 
 
-test('version 1 dashboard layouts upgrade in memory and preserve IDs, unknown tools and original bytes',async()=>{
- const root=await temp(),file=path.join(root,'preferences.json'),legacy=legacyDashboard(1);legacy.views[0].name='Sound studies';legacy.views[0].panels[0].tool='future-tool';legacy.views.forEach(v=>v.panels.forEach(p=>{delete p.config;delete p.height;}));
- const raw=JSON.stringify({formatVersion:1,workspace:null,dashboard:legacy});await writeFile(file,raw);
- const next=(await readPreferences(file)).dashboard;assert.equal(next.formatVersion,5);assert.equal(next.views[0].panels[0].id,'recent');assert.equal(next.views[0].panels[0].tool,'future-tool');assert.equal(next.views[0].panels[0].config.recordType,'all');assert.equal(await readFile(file,'utf8'),raw);
- const snapshot=dashboardSnapshot(next);await saveDashboard(file,next,snapshot.etag);assert.deepEqual((await readPreferences(file)).dashboard,next);
- const future={...next,formatVersion:99};assert.equal(upgradeDashboard(future),null);
+test('dashboard layouts from earlier or later versions are refused without changing preferences',async()=>{
+ const root=await temp(),file=path.join(root,'preferences.json'),earlier={...defaultDashboard(),formatVersion:4};
+ const raw=JSON.stringify({formatVersion:1,workspace:null,dashboard:earlier});await writeFile(file,raw);
+ await assert.rejects(readPreferences(file),{code:'PREFERENCES_FORMAT'});assert.equal(await readFile(file,'utf8'),raw);
+ assert.equal(upgradeDashboard({...defaultDashboard(),formatVersion:99}),null);assert.equal(validDashboard(earlier),false);
 });
 
 test('panel queries combine stable project/notebook scope, record type, status and exact tag without changing research',()=>{
@@ -115,8 +108,8 @@ test('largest supported layout can be saved and reopened within the preferences 
 });
 
 
-test('version 2 dashboards retain their order and filters when gaining resizable panels',()=>{
- const legacy=legacyDashboard(2);legacy.views[0].panels.forEach(p=>delete p.height);legacy.views[0].panels[0].config.tag='acoustics';const raw=JSON.stringify(legacy),next=upgradeDashboard(legacy);assert.equal(JSON.stringify(legacy),raw);assert.equal(next.formatVersion,5);assert.equal(next.views[0].panels[0].config.tag,'acoustics');assert.equal(next.views[0].panels[0].height,0);
+test('panel heights stay within the supported range',()=>{
+ const next=defaultDashboard();
  for(const height of [-1,10001,NaN,2.5]){const invalid=structuredClone(next);invalid.views[0].panels[0].height=height;assert.equal(validDashboard(invalid),false);}
  next.views[0].panels[0].height=480;next.views[0].panels[0].width='half';assert.equal(validDashboard(next),true);
 });

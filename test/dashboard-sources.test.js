@@ -143,8 +143,6 @@ test('format 5 persists array selections while format 4 upgrades losslessly and 
  for(const bad of [{projectIds:s.a.id},{projectIds:[s.a.id,s.a.id]},{projectIds:['missing']},{scopeMode:'nope'},{includeWorkspace:'yes'},{nested:[{}]}]){
   const invalid=structuredClone(value);Object.assign(invalid.views[0].panels[0].options,bad);assert.equal(validDashboard(invalid),false);
  }
- const old=defaultDashboard();old.formatVersion=4;old.views[0].panels[0].options={projectId:s.a.id};const before=JSON.stringify(old);
- assert.equal(upgradeDashboard(old).formatVersion,5);assert.deepEqual(upgradeDashboard(old).views,old.views);assert.equal(JSON.stringify(old),before);
 });
 
 test('duplicate project names do not merge plotted holdings and individual assets follow placement',async()=>{

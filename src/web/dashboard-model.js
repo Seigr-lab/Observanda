@@ -18,11 +18,6 @@ export function validPanelConfig(c){
   (!(c.projectId||c.notebookId)||Boolean(c.workspaceId))&&(!c.notebookId||Boolean(c.projectId))&&
   (c.recordType==='all'||RECORD_TYPES.some(t=>t.id===c.recordType)||typeof c.recordType==='string'&&c.recordType.startsWith('template:')&&uuid(c.recordType.slice(9)))&&(c.status==='all'||STATUSES.includes(c.status));
 }
-function validVersion(v,version){
- if(!keys(v,['formatVersion','defaultId','enabledTools','views'])||v.formatVersion!==version||!id(v.defaultId)||!Array.isArray(v.enabledTools)||v.enabledTools.length>64||!v.enabledTools.every(id)||!unique(v.enabledTools)||!Array.isArray(v.views)||v.views.length<1||v.views.length>20)return false;
- if(!unique(v.views.map(view=>view?.id))||!v.views.some(view=>view?.id===v.defaultId))return false;
- return v.views.every(view=>keys(view,['id','name','panels'])&&id(view.id)&&text(view.name,80)&&view.name.trim().length>0&&Array.isArray(view.panels)&&view.panels.length<=32&&unique(view.panels.map(p=>p?.id))&&view.panels.every(p=>keys(p,['id','tool','width','count',...(version>=2?['config']:[]),...(version>=3?['height']:[])])&&id(p.id)&&id(p.tool)&&(version>=3?['quarter','standard','half','wide','full']:['standard','wide','full']).includes(p.width)&&Number.isInteger(p.count)&&p.count>=1&&p.count<=20&&(version<2||validPanelConfig(p.config))&&(version<3||Number.isInteger(p.height)&&(p.height===0||p.height>=240&&p.height<=1200))));
-}
 const validScopeOptions=v=>Object.entries(v).every(([key,value])=>{
  if(key==='resourceIds')return Array.isArray(value)&&value.every(item=>uuid(dashboardSourceIdentity(item)?.key));
  if(['projectIds','notebookIds'].includes(key))return Array.isArray(value)&&value.every(uuid);
@@ -30,28 +25,24 @@ const validScopeOptions=v=>Object.entries(v).every(([key,value])=>{
  if(['includeWorkspace','includeDescendants'].includes(key))return typeof value==='boolean';
  return true;
 });
-const validOptions=(v,version)=>object(v)&&(version<5||validScopeOptions(v))&&Object.entries(v).every(([key,value])=>id(key)&&(value===null||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value)||text(value,512)||version>=5&&Array.isArray(value)&&value.length<=4096&&value.every(item=>text(item,256))&&unique(value)));
+const validOptions=v=>object(v)&&validScopeOptions(v)&&Object.entries(v).every(([key,value])=>id(key)&&(value===null||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value)||text(value,512)||Array.isArray(value)&&value.length<=4096&&value.every(item=>text(item,256))&&unique(value)));
 const validSource=s=>keys(s,['provider','key'])&&id(s.provider)&&(s.key===null||text(s.key,512));
 const validShortcut=s=>keys(s,['id','moduleId','source','workspaceId'])&&id(s.id)&&(s.moduleId===null||id(s.moduleId))&&validSource(s.source)&&(s.workspaceId===null||uuid(s.workspaceId));
 export function validDashboard(v){
- if(!keys(v,['formatVersion','enabledModules','defaultId','shortcuts','views'])||!Array.isArray(v.enabledModules)||!v.enabledModules.every(id)||!unique(v.enabledModules)||!Array.isArray(v.shortcuts)||!v.shortcuts.every(validShortcut)||!unique(v.shortcuts.map(s=>s.id))||![4,5].includes(v.formatVersion)||!id(v.defaultId)||!Array.isArray(v.views)||!v.views.length||!unique(v.views.map(view=>view?.id))||!v.views.some(view=>view?.id===v.defaultId))return false;
+ if(!keys(v,['formatVersion','enabledModules','defaultId','shortcuts','views'])||!Array.isArray(v.enabledModules)||!v.enabledModules.every(id)||!unique(v.enabledModules)||!Array.isArray(v.shortcuts)||!v.shortcuts.every(validShortcut)||!unique(v.shortcuts.map(s=>s.id))||v.formatVersion!==5||!id(v.defaultId)||!Array.isArray(v.views)||!v.views.length||!unique(v.views.map(view=>view?.id))||!v.views.some(view=>view?.id===v.defaultId))return false;
  return v.views.every(view=>keys(view,['id','name','panels'])&&id(view.id)&&text(view.name,80)&&view.name.trim()&&Array.isArray(view.panels)&&unique(view.panels.map(p=>p?.id))&&view.panels.every(p=>
   keys(p,['id','tool','moduleId','width','height','column','hidden','source','fields','presentation','options','count','config'])&&id(p.id)&&id(p.tool)&&(p.moduleId===null||id(p.moduleId))&&
   (['quarter','standard','half','wide','full'].includes(p.width)||Number.isInteger(p.width)&&p.width>=3&&p.width<=12)&&
   Number.isSafeInteger(p.height)&&p.height>=0&&p.height<=10000&&
   (p.column===null||Number.isInteger(p.column)&&p.column>=0&&p.column+panelSpan(p.width)<=12)&&
-  (p.source===null||validSource(p.source))&&(p.fields===null||Array.isArray(p.fields)&&p.fields.every(f=>text(f,256))&&unique(p.fields))&&id(p.presentation)&&validOptions(p.options,v.formatVersion)&&typeof p.hidden==='boolean'&&Number.isSafeInteger(p.count)&&p.count>0&&validPanelConfig(p.config)));
+  (p.source===null||validSource(p.source))&&(p.fields===null||Array.isArray(p.fields)&&p.fields.every(f=>text(f,256))&&unique(p.fields))&&id(p.presentation)&&validOptions(p.options)&&typeof p.hidden==='boolean'&&Number.isSafeInteger(p.count)&&p.count>0&&validPanelConfig(p.config)));
 }
-// Read old layouts without rewriting them. Explicit preference saves write the upgraded form.
+// Dashboards are stored at version 5. Reading normalizes earlier project module ids without rewriting them.
 export function upgradeDashboard(v){
- if(validDashboard(v)){
-  const next={...structuredClone(v),formatVersion:5};
-  for(const item of [...next.shortcuts,...next.views.flatMap(view=>view.panels)])if(['projects','workspace'].includes(item.tool??item.source?.provider)&&['research',null].includes(item.moduleId))item.moduleId='projects';
-  return next;
- }
- if(![1,2,3].some(version=>validVersion(v,version)))return null;
- const next=structuredClone(v);next.formatVersion=5;next.shortcuts=defaultShortcuts();next.enabledModules=['research',...(next.enabledTools.includes('website')?['publishing']:[]),...(next.enabledTools.includes('laboratory')?['laboratory']:[])];
- next.views.forEach(view=>view.panels.forEach(panel=>{panel.config??=defaultPanelConfig();panel.height??=0;panel.moduleId=legacyModule(panel.tool);panel.column=null;panel.hidden=!next.enabledTools.includes(panel.tool);panel.source=null;panel.fields=null;panel.presentation=panel.tool==='projects'?'overview':panel.tool==='figures'?'chart':['media','files'].includes(panel.tool)?'media':'summary';panel.options={};}));delete next.enabledTools;return next;
+ if(!validDashboard(v))return null;
+ const next=structuredClone(v);
+ for(const item of [...next.shortcuts,...next.views.flatMap(view=>view.panels)])if(['projects','workspace'].includes(item.tool??item.source?.provider)&&['research',null].includes(item.moduleId))item.moduleId='projects';
+ return next;
 }
 export function moveItem(items,from,to){
  if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||from>=items.length||to>=items.length)return items;
