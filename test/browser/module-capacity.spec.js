@@ -27,18 +27,21 @@ test('maximum Unicode sheet saves and recovers through the actual app after a lo
   const headers=(await itemRequest).headers(),post=(route,body)=>sessionRequest(page,'post',app.origin+route,{data:body,headers:{Origin:app.origin,'x-observanda-workspace':headers['x-observanda-workspace']}});
   // Creation also has to cross the real HTTP boundary at this accepted size.
   const create={workspaceId:book.id,commandId:randomUUID(),action:'sheet.save',payload:{id,expectedRevision:null,data}},response=await post('/api/modules/command?compact=1',create);
-  expect(response.ok()).toBe(true);expect((await response.json()).modulePatch.entities[0].data).toEqual(data);
+  expect(response.ok()).toBe(true);expect((await response.json()).entities[0].data).toEqual(data);
   const newDraft=await post('/api/modules/drafts/write',{workspaceId:book.id,id:randomUUID(),moduleId:'spreadsheet',etag:null,drafts:[{id:randomUUID(),type:'sheet',expectedRevision:null,baseRevision:null,data:{...data,name:'New maximum sheet'}}]});expect(newDraft.ok()).toBe(true);expect((await newDraft.body()).length).toBeLessThan(200);
   await page.reload();const main=page.locator('main');await main.getByRole('button',{name:'Open spreadsheet',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue(data.name);await measure();
   await expect(main.getByLabel('Cell A1',{exact:true})).toHaveValue(data.cells[0][0]);
   await main.getByRole('button',{name:'Next rows',exact:true}).click();await expect(main.getByLabel('Cell A26',{exact:true})).toHaveValue(data.cells[25][0]);
   let checkpoint;await page.context().route('**/api/modules/drafts/write',async route=>{checkpoint=route.request().postDataJSON();const response=await route.fetch();expect(response.ok()).toBe(true);await route.fulfill({status:503,json:{message:'Synthetic lost reply'}});},{times:1});
   await main.getByLabel('Name',{exact:true}).fill('Unfinished large sheet');await main.getByRole('button',{name:'Back to Spreadsheets',exact:true}).click();
-  await expect(main.getByRole('alert')).toContainText('Synthetic lost reply');await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished large sheet');
+  // Leaving never waits for a checkpoint: the editor closes, reports the failed checkpoint and keeps the work recoverable.
+  await expect(main.getByRole('status').filter({hasText:'Recovery checkpoint could not save.'})).toBeVisible();await expect(main.locator('[data-module-form]')).not.toBeVisible();
   expect(checkpoint.drafts[0].baseRevision).toBe(1);expect(checkpoint.drafts[0].base).toBeUndefined();expect(Buffer.byteLength(JSON.stringify(checkpoint))).toBeLessThan(3*1024*1024);
-  await main.getByRole('button',{name:'Back to Spreadsheets',exact:true}).click();await expect(main.locator('[data-module-form]')).not.toBeVisible();await measure();
-  const recovery=main.locator('[data-recovery-item]').filter({hasText:'Unfinished large sheet'});await expect(recovery).toHaveCount(1);
-  await page.reload();await recovery.getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished large sheet');await expect(main.getByLabel('Cell A1',{exact:true})).toHaveValue(data.cells[0][0]);await measure();
+  await measure();
+  // The unsaved sheet stays open as a draft; after a reload its server checkpoint is offered for recovery.
+  await expect(main.getByRole('button',{name:'Unfinished large sheet',exact:true})).toBeVisible();
+  const recovery=main.locator('[data-recovery-item]').filter({hasText:'Unfinished large sheet'});
+  await page.reload();await expect(recovery).toHaveCount(1);await recovery.getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished large sheet');await expect(main.getByLabel('Cell A1',{exact:true})).toHaveValue(data.cells[0][0]);await measure();
   await main.getByRole('button',{name:'Save spreadsheet',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
   const saved=await new ModuleReader(f.workspace).selected({workspaceId:book.id,id});expect(saved.entity.data).toEqual({...data,name:'Unfinished large sheet'});
   expect(checkpointBodies.filter(b=>b.drafts.length).every(b=>b.drafts.length===1&&b.drafts[0].base===undefined)).toBe(true);expect(Math.max(...checkpointReplies)).toBeLessThan(200);

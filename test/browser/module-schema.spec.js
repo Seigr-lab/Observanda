@@ -40,9 +40,9 @@ for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resour
   await main.getByLabel('Find fields',{exact:true}).fill('Part');await expect(main.getByLabel('Field label',{exact:true})).toHaveCount(1);
   await main.getByLabel('Find choices',{exact:true}).fill(String(data.fields[0].choices.length-1).padStart(10,'0'));await expect(main.locator('[data-schema-choice]')).toHaveCount(1);
   await main.locator('[data-schema-choice]').fill('Changed last choice');
-  await main.getByRole('button',{name:'Back to categories',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Lost large checkpoint reply',{timeout:60000});
+  // Leaving never waits for a checkpoint: the editor closes, reports the lost checkpoint and keeps the work recoverable.
+  await main.getByRole('button',{name:'Back to Categories',exact:true}).click();await expect(main.getByRole('status').filter({hasText:'Recovery checkpoint could not save.'})).toBeVisible({timeout:60000});await expect(main.locator('[data-module-form]')).toHaveCount(0);
   loseAcknowledgements=false;
-  await main.getByRole('button',{name:'Back to categories',exact:true}).click();await expect(main.locator('[data-module-form]')).toHaveCount(0,{timeout:60000});
   await page.reload();await main.locator('[data-recovery-item]').getByRole('button',{name:'Restore draft',exact:true}).click();
   await expect(main.getByLabel('Field label',{exact:true})).toHaveCount(10,{timeout:30000});
   await main.getByRole('button',{name:'Save category',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved',{timeout:60000});

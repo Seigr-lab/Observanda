@@ -49,8 +49,9 @@ test('project creation has independent keys and serializes only registry attachm
   try{second=await f.creation.create(b);}finally{continueFirst();}
   const first=await firstRequest,one=await f.open(first.project),two=await f.open(second.project);
   assert.notEqual(one.vault.id,two.vault.id);assert.notEqual(one.vault.id,f.vault.id);assert.ok(!one.vault.key.equals(two.vault.key));
-  const child=f.command('child');child.project.parentId=first.project.projectId;const created=await f.creation.create(child);assert.equal(created.project.parentId,first.project.projectId);assert.equal(created.project.root,path.join(first.project.root,child.project.title));assert.equal((await(await f.open(created.project)).outline()).metadata.projects[0].parentId,null);
-  const wrong={...f.command('nested'),path:path.join(one.root,'other')};await assert.rejects(f.creation.create(wrong),{code:'INVALID'});await assert.rejects(access(wrong.path),{code:'ENOENT'});assert.equal((await f.registry.read()).value.projects.length,3);
+  // Projects stay at the top level: a child project request is refused and leaves no folder.
+  const child=f.command('child');child.project.parentId=first.project.projectId;await assert.rejects(f.creation.create(child),{code:'PROJECT_NESTING'});await assert.rejects(access(path.join(first.project.root,child.project.title)),{code:'ENOENT'});
+  const wrong={...f.command('nested'),path:path.join(one.root,'other')};await assert.rejects(f.creation.create(wrong),{code:'INVALID'});await assert.rejects(access(wrong.path),{code:'ENOENT'});assert.equal((await f.registry.read()).value.projects.length,2);
  }finally{release();await busy;}
 });
 
@@ -134,13 +135,13 @@ test('project creation names its folder after the title and rejects invalid lite
 });
 
 
-test('project creation derives literal child folders and accepts no other location',async t=>{
+test('project creation uses the literal folder at the top level and accepts no other location',async t=>{
  const f=await fixture(t),parent=f.command('Field Project 1');
  const first=await f.creation.create(parent);assert.equal(first.project.root,path.join(f.workspace.root,parent.project.title));
  const child=f.command('Measurement notes 2');child.project.parentId=first.project.projectId;
- const second=await f.creation.create(child);assert.equal(second.project.root,path.join(first.project.root,child.project.title));
- await f.owner.closeProject(second.project.root);
- const opened=await new ProjectOpening(f.registry,f.deviceStore).open({id:randomUUID(),path:second.project.root,username:'',password:'',recovery:''});assert.equal(opened.project.parentId,first.project.projectId);
+ await assert.rejects(f.creation.create(child),{code:'PROJECT_NESTING'});await assert.rejects(access(path.join(first.project.root,child.project.title)),{code:'ENOENT'});
+ await f.owner.closeProject(first.project.root);
+ const opened=await new ProjectOpening(f.registry,f.deviceStore).open({id:randomUUID(),path:first.project.root,username:'',password:'',recovery:''});assert.equal(opened.project.parentId,null);
  const rejected={...f.command('Elsewhere'),path:path.join(f.directory,'Elsewhere')};await assert.rejects(f.creation.create(rejected),{code:'INVALID'});await assert.rejects(access(rejected.path),{code:'ENOENT'});
 });
 
