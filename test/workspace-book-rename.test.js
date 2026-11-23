@@ -1,7 +1,7 @@
 import {LabBookRenames} from '../src/lab-book-rename.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,readFile,stat,readdir} from 'node:fs/promises';
+import {mkdtemp,rm,stat,readdir} from 'node:fs/promises';
 import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {createNotebook} from '../src/model.js';
@@ -50,7 +50,7 @@ test('parent rename recovers nested dedicated books without replacing their data
   }
   const restart=new WorkspaceRenames(path.join(f.directory,'rename-journals')),located=await restart.resolvedRoot(source);
   if(boundary==='complete')await restart.clearCompleted(target,f.vault);else await restart.resume(located,f.vault);
-  const moved=await assertBooks(f,target);assert.equal(await workspaceRename(target),null);assert.equal(await workspaceRename(moved.root),null);await assert.rejects(readdir(source),{code:'ENOENT'});await assert.rejects(readFile(path.join(moved.root,'.observanda/rename-project-keys.observanda')),{code:'ENOENT'});source=target;
+  const moved=await assertBooks(f,target);assert.equal(await workspaceRename(target),null);assert.equal(await workspaceRename(moved.root),null);await assert.rejects(readdir(source),{code:'ENOENT'});source=target;
  }
 });
 async function client(app){

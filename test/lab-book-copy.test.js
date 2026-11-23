@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {ProjectBookOwners} from '../src/project-book-owners.js';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rm,rename,stat,readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +17,6 @@ import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {LabBookCopies} from '../src/lab-book-copy.js';
 import {LabBookRenames} from '../src/lab-book-rename.js';
-import {ProjectBookRename} from '../src/project-book-rename.js';
 import {ResearchRecords} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {RecordWriting} from '../src/record-writing.js';
@@ -53,11 +53,11 @@ test('selected book commands recover independently and serialize only intersecti
  assert.deepEqual((await copied.read()).book.entries,(await first.storage.read()).book.entries);assert.notEqual((await catalogueBinding(copied.root)).id,(await catalogueBinding(first.storage.root)).id);
  // The parent already passed preflight. Keep the command alive after its
  // source writer is released, before its completion receipt is published.
- const owner=new ProjectBookRename(project);await owner.prepare((bookId,use)=>use(books.find(book=>book.storage.labBookId===bookId).storage));
+ const owner=new ProjectBookOwners(project);await owner.prepare((bookId,use)=>use(books.find(book=>book.storage.labBookId===bookId).storage));
  const save=archive.state.save.bind(archive.state);let entered,parentEntered=false;const ready=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve);
  archive.state.save=async value=>{if(value.phase==='complete'){entered();await held;}return save(value);};
  copyTask=archive.run(first.storage,{id:randomUUID(),parent:exports});await ready;
- parentTask=owner.withStorageHandoff(async()=>{parentEntered=true;await owner.persist(randomUUID(),{});});
+ parentTask=owner.withStorageHandoff(async()=>{parentEntered=true;await owner.ready();});
  const siblingWriting=new RecordWriting(sibling.storage),old=await siblingWriting.read(sibling.target);await siblingWriting.save({...sibling.target,expectedRevision:old.revision,value:{body:'Sibling stayed writable'}});
  assert.equal(parentEntered,false);assert.equal((await archive.status()).running,true);release();await copyTask;await parentTask;owner.close();assert.equal(parentEntered,true);
  const cancelledParent=path.join(directory,'Cancelled');await mkdir(cancelledParent);const cancelId=randomUUID();await assert.rejects(command.run(first.storage,{id:cancelId,parent:cancelledParent,checkpoint:stage=>{if(stage==='files')throw Error('Interrupted transfer');}}),/Interrupted transfer/);await assert.rejects(command.cancel(first.storage,{id:randomUUID()}),{code:'NOT_FOUND'});await command.cancel(first.storage,{id:cancelId});assert.equal((await command.status()).phase,'cancelled');assert.ok(await stat(path.join(cancelledParent,first.entry.directory)));

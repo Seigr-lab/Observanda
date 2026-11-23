@@ -1,12 +1,7 @@
 import {withSeparateScratchConnections} from './scratch-connection.js';
-import {folderIdentity} from './folder-identity.js';
 import {projectMoveDirectory} from './project-move-boundaries.js';
 import {NativeWorkspaceRename,validNativeWorkspaceRename} from './workspace-native-rename.js';
-import {clearRenamedBooks} from './project-book-rename.js';
-import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {ProjectRegistry} from './project-registry.js';
-import {WorkspaceProjectRename,validateRenameProjects,clearRenamedProjects} from './workspace-project-rename.js';
-import {RENAME_KEYS_FILE} from './workspace-rename-keys.js';
 import {operationStage} from './operation-progress.js';
 // A rename moves the existing directory; it never copies its database or media.
 // The device journal locates the workspace after a crash on either side of the
@@ -34,18 +29,17 @@ const inside=(parent,child)=>{const relative=path.relative(parent,child);return 
 // Strictly below: a case-only rename on a case-insensitive volume is not nested.
 const below=(parent,child)=>{const relative=path.relative(parent,child);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 const fingerprint=async file=>digest(await readFile(file));
-const identity=folderIdentity;
 const sameIdentity=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
-const receiptIdentity=(root,value)=>value.version===2?projectMoveDirectory(root):identity(root);
 export class WorkspaceRenames{
  constructor(directory,{relocate=async()=>{}}={}){this.directory=path.resolve(directory);this.relocate=relocate;}
  file(id){if(!uuid(id))throw new AppError('STORAGE_RENAME_STATE');return path.join(this.directory,id+'.json');}
  async read(id){
   const file=this.file(id),stat=await assertRegular(file);if(stat.size>16*1024*1024)throw new AppError('STORAGE_RENAME_STATE');
   let value;try{value=JSON.parse(await readFile(file,'utf8'));}catch{throw new AppError('STORAGE_RENAME_STATE');}
-  if(![1,2].includes(value?.version)||value.id!==id||!['preparing','prepared','frozen','moved','complete'].includes(value.phase)||![value.source,value.destination].every(root=>typeof root==='string'&&path.isAbsolute(root)&&path.resolve(root)===root&&root!==path.parse(root).root)||value.source===value.destination||below(value.source,value.destination)||below(value.destination,value.source)||!uuid(value.workspaceId)||!value.identity||!['dev','ino'].every(key=>typeof value.identity[key]==='string')||!['accessHash','descriptorHash'].every(key=>/^[a-f0-9]{64}$/.test(value[key])))throw new AppError('STORAGE_RENAME_STATE');
-  if(value.version===2){if(stat.size>32768||!validNativeWorkspaceRename(value))throw new AppError('STORAGE_RENAME_STATE');}else if(value.phase==='preparing')throw new AppError('STORAGE_RENAME_STATE');
-  if(value.projects!==undefined){validateRenameProjects(value.projects);if(!/^[a-f0-9]{64}$/.test(value.projectKeysHash??'')||!/^[a-f0-9]{64}$/.test(value.projectRegistryRevision??''))throw new AppError('STORAGE_RENAME_STATE');}
+  if(value?.version!==2||value.id!==id||!['preparing','prepared','frozen','moved','complete'].includes(value.phase)||![value.source,value.destination].every(root=>typeof root==='string'&&path.isAbsolute(root)&&path.resolve(root)===root&&root!==path.parse(root).root)||value.source===value.destination||below(value.source,value.destination)||below(value.destination,value.source)||!uuid(value.workspaceId)||!value.identity||!['dev','ino'].every(key=>typeof value.identity[key]==='string')||!['accessHash','descriptorHash'].every(key=>/^[a-f0-9]{64}$/.test(value[key])))throw new AppError('STORAGE_RENAME_STATE');
+  if(stat.size>32768||!validNativeWorkspaceRename(value))throw new AppError('STORAGE_RENAME_STATE');
+  // Rename journals record owners in the workspace database, never as nested project lists.
+  if(value.projects!==undefined)throw new AppError('STORAGE_RENAME_STATE');
   return value;
  }
  async save(value){
@@ -59,7 +53,7 @@ export class WorkspaceRenames{
   const value=await this.read(await readFile(file,'utf8'));if(![value.source,value.destination].includes(root))throw new AppError('STORAGE_RENAME_STATE');
   return value;
  }
- async pending(root){const value=await this.journal(root);return value?.phase==='complete'&&!(value.version===2&&await workspaceRename(value.destination))?null:value;}
+ async pending(root){const value=await this.journal(root);return value?.phase==='complete'&&!await workspaceRename(value.destination)?null:value;}
  async recovery(root){
   const value=await this.journal(root);if(!value)return null;
   if(value.phase==='complete'){
@@ -69,27 +63,19 @@ export class WorkspaceRenames{
   }
   if(['preparing','prepared'].includes(value.phase)&&!await workspaceRename(value.source)){
    const stat=await assertRegular(value.source,{directory:true});
-   if(await realpath(value.source)!==value.source||!sameIdentity(await receiptIdentity(value.source,value,stat),value.identity)||await fingerprint(path.join(value.source,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_RENAME_STATE');
+   if(await realpath(value.source)!==value.source||!sameIdentity(await projectMoveDirectory(value.source),value.identity)||await fingerprint(path.join(value.source,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_RENAME_STATE');
    return {value,root:value.source};
   }
   return {value,root:await this.locate(value)};
  }
  async discard(value,vault){
-  if(value.version===2)return new NativeWorkspaceRename(this,new Workspace(value.source,vault),value).clear({prepared:true});
-  // No parent fence was published, so none of the projects was frozen.
-  if(value.projects?.length){
-   const root=value.source,stat=await assertRegular(root,{directory:true});
-   if(!sameIdentity(await receiptIdentity(root,value,stat),value.identity)||await fingerprint(path.join(root,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_RENAME_STATE');
-   for(const item of value.projects)await clearRenamedBooks(path.resolve(root,...item.relative.split('/')),item,value);
-   const file=path.join(root,RENAME_KEYS_FILE);if(await assertRegular(file,{missing:true})){if(await fingerprint(file)!==value.projectKeysHash)throw new AppError('STORAGE_RENAME_STATE');await unlink(file);}
-  }
-  // Keep a completed receipt so its existing path pointers remain valid.
-  value.phase='complete';await this.save(value);
+  // Clearing keeps a completed receipt so its existing path pointers remain valid.
+  return new NativeWorkspaceRename(this,new Workspace(value.source,vault),value).clear({prepared:true});
  }
  async locate(value){
   for(const root of [value.destination,value.source]){
    const stat=await assertRegular(root,{directory:true,missing:true});if(!stat)continue;
-   if(await realpath(root)!==root||!sameIdentity(await receiptIdentity(root,value,stat),value.identity))continue;
+   if(await realpath(root)!==root||!sameIdentity(await projectMoveDirectory(root),value.identity))continue;
    const marker=await workspaceRename(root);
    if(marker?.id===value.id&&marker.source===value.source&&marker.destination===value.destination&&await fingerprint(path.join(root,'.observanda/access.json'))===value.accessHash)return root;
   }
@@ -118,25 +104,12 @@ export class WorkspaceRenames{
    const conversion=await databaseConversionState(workspace),move=await readMoveReceipt(source);
    if(conversion&&conversion.phase!=='complete'||move&&move.phase!=='complete')throw new AppError('STORAGE_RENAME_BUSY');
    if(await this.pending(source))throw new AppError('STORAGE_RENAMING');
-   if(workspace.vault&&await workspace.storageKind()==='catalogue'){
-    const value={version:2,id:randomUUID(),source,destination,workspaceId:(await workspace.outline()).metadata.id,identity:await projectMoveDirectory(source),descriptorHash:await fingerprint(await workspaceFile(source)),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),completedMove:move,phase:'preparing'};
-    try{const owners=await NativeWorkspaceRename.prepare(this,workspace,value,{withProject,withBook,check,checkpoint});await renameScope(value.id,()=>owners.fence({check,checkpoint}));return await this.finishLocked(value,workspace.vault,{checkpoint,check});}
-    catch(error){if(!await workspaceRename(source)&&await assertRegular(this.file(value.id),{missing:true})){try{await this.discard(await this.read(value.id),workspace.vault);}catch{/* The journal retains cleanup authority for the next authenticated resume. */}}throw error;}
-   }
-   const projects=new WorkspaceProjectRename(workspace);
-   try{
-   await projects.prepare(withProject,withBook);
-   await assertRenameDatabaseOwners(source,projects.projects.flatMap(item=>{const root=path.resolve(source,...item.relative.split('/'));return [root,...(projects.bookOwners.get(item.projectId)?.books??[]).map(book=>path.join(root,book.directory))];}));
-   const id=randomUUID();let value;
-   await projects.withStorageHandoff(()=>projects.withDirectoryHandoff(()=>withWriterLease(path.join(source,'.observanda/project-registry.lock'),()=>workspace.withStorageHandoff(async()=>{
-    const outline=await workspace.outline();
-    value={version:1,id,source,destination,workspaceId:outline.metadata.id,identity:(await assertRegular(source,{directory:true}),await identity(source)),descriptorHash:await fingerprint(await workspaceFile(source)),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),completedMove:move,phase:'prepared'};
-    await projects.persist(value);await this.save(value);await checkpoint('prepared',value);
-    await atomicWrite(path.join(source,RENAME_MARKER),serialize({version:1,...(path.dirname(source)!==path.dirname(destination)?{placement:true}:{}),id,source,destination}));
-   },{existing:true}))));
-   value.phase='frozen';await this.save(value);await checkpoint('frozen',value);
-   return await this.finishLocked(value,workspace.vault,{checkpoint});
-   }finally{projects.close();}
+   // Only an unlocked database-backed workspace can be renamed.
+   if(!workspace.vault)throw new AppError('ACCESS_LOCKED');
+   if(await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
+   const value={version:2,id:randomUUID(),source,destination,workspaceId:(await workspace.outline()).metadata.id,identity:await projectMoveDirectory(source),descriptorHash:await fingerprint(await workspaceFile(source)),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),completedMove:move,phase:'preparing'};
+   try{const owners=await NativeWorkspaceRename.prepare(this,workspace,value,{withProject,withBook,check,checkpoint});await renameScope(value.id,()=>owners.fence({check,checkpoint}));return await this.finishLocked(value,workspace.vault,{checkpoint,check});}
+   catch(error){if(!await workspaceRename(source)&&await assertRegular(this.file(value.id),{missing:true})){try{await this.discard(await this.read(value.id),workspace.vault);}catch{/* The journal retains cleanup authority for the next authenticated resume. */}}throw error;}
   });
  }
  async resumeUnscoped(root,vault,options={}){
@@ -151,8 +124,7 @@ export class WorkspaceRenames{
    if(value.phase==='complete'){await this.clearCompleted(root,vault,{checkpoint});return {id:value.id,source:value.source,destination:root,complete:true};}
    if(root===value.destination&&['prepared','frozen'].includes(value.phase))await persistRename(value.source,value.destination);
    if(root===value.source){
-    if(value.version===2)await new NativeWorkspaceRename(this,new Workspace(root,vault),value).freeze({checkpoint,check});
-    else{const projects=new WorkspaceProjectRename(new Workspace(root,vault));try{await projects.load(value);await projects.freezeAndStop(value,{checkpoint});}finally{projects.close();}}
+    await new NativeWorkspaceRename(this,new Workspace(root,vault),value).freeze({checkpoint,check});
     if(await fingerprint(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');
     const binding=await catalogueBinding(root);let lease;
     try{
@@ -176,8 +148,7 @@ export class WorkspaceRenames{
    }
    if(value.completedMove){if(value.completedMove.phase!=='complete'||value.completedMove.destination!==value.source)throw new AppError('STORAGE_RENAME_STATE');await atomicWrite(path.join(root,MOVE_RECEIPT),serialize({...value.completedMove,destination:root}));}
    const workspace=new Workspace(root,vault);
-   if(value.version===2)await new NativeWorkspaceRename(this,workspace,value).verify();
-   else{const projects=new WorkspaceProjectRename(workspace);try{await projects.load(value);await projects.verify();}finally{projects.close();}}
+   await new NativeWorkspaceRename(this,workspace,value).verify();
    await checkpoint('projects-verified',value);
    const outline=await workspace.outline();
    if(outline.metadata.id!==value.workspaceId)throw new AppError('STORAGE_RENAME_STATE');
@@ -186,7 +157,7 @@ export class WorkspaceRenames{
    // Persist completion before removing the fence. Recovery at this boundary
    // may remove only its own marker, never change a reused original path.
    value.phase='complete';await this.save(value);await checkpoint('complete',value);
-   if(value.version===2)await new NativeWorkspaceRename(this,workspace,value).clear({checkpoint});else await clearRenamedProjects(root,value);await unlink(path.join(root,RENAME_MARKER));return {id:value.id,source:value.source,destination:root,complete:true};
+   await new NativeWorkspaceRename(this,workspace,value).clear({checkpoint});await unlink(path.join(root,RENAME_MARKER));return {id:value.id,source:value.source,destination:root,complete:true};
   });
  }
  async completedSource(root){
@@ -194,7 +165,7 @@ export class WorkspaceRenames{
   if(stat.size!==36)throw new AppError('STORAGE_RENAME_STATE');
   const value=await this.read(await readFile(pointer,'utf8'));if(value.phase!=='complete'||value.destination!==root)return null;
   const destination=await assertRegular(root,{directory:true,missing:true});
-  if(!destination||!sameIdentity(await receiptIdentity(root,value,destination),value.identity)||await fingerprint(path.join(root,'.observanda/access.json'))!==value.accessHash)return null;
+  if(!destination||!sameIdentity(await projectMoveDirectory(root),value.identity)||await fingerprint(path.join(root,'.observanda/access.json'))!==value.accessHash)return null;
   // Directory registration follows the physical rename. Recover that last
   // boundary too, but retain an original path reused by a different folder.
   const source=await realpath(value.source).catch(error=>{if(error.code==='ENOENT')return null;throw error;});
@@ -203,6 +174,6 @@ export class WorkspaceRenames{
  async clearCompleted(root,vault,{checkpoint=async()=>{}}={}){
   const marker=await workspaceRename(root);if(!marker)return;
   const value=await this.read(marker.id);if(value.phase!=='complete'||await this.locate(value)!==root)throw new AppError('STORAGE_RENAME_STATE');
-  if(value.version===2){if(!vault&&!value.keysReleased)return;await renameScope(value.id,()=>new NativeWorkspaceRename(this,new Workspace(root,vault),value).clear({checkpoint}));}else await clearRenamedProjects(root,value);await unlink(path.join(root,RENAME_MARKER));
+  if(!vault&&!value.keysReleased)return;await renameScope(value.id,()=>new NativeWorkspaceRename(this,new Workspace(root,vault),value).clear({checkpoint}));await unlink(path.join(root,RENAME_MARKER));
  }
 }

@@ -15,15 +15,6 @@ import {AppError} from './errors.js';
 // verified parent rename. Recovery capabilities remain separate from grants.
 export class LabBookLocationAccess{
  constructor(application,client){this.application=application;this.client=client;this.owners=new Map();this.grants=new Map();}
- captureRename(project,receipt,parent){
-  const session=this.application.session(this.client);
-  for(const item of project.books??[]){
-   const id='book:'+project.projectId+':'+item.labBookId,saved=session.get(id),source=path.resolve(receipt.source,...project.relative.split('/'),item.directory),destination=path.resolve(receipt.destination,...project.relative.split('/'),item.directory);
-   if(!saved?.vault||saved.locked||saved.expires<=Date.now()||saved.vault.id!==item.vaultId||![source,destination].includes(saved.root))continue;
-   const access=new LabBookAccessSession(this.application,this.client,project,item.labBookId,()=>parent.check());
-   this.owners.set(id,{projectId:project.projectId,id:item.labBookId,parent,entry:{root:source,namespaceId:item.namespaceId,vaultId:item.vaultId},access,etag:saved.etag,vault:cloneVault(saved.vault)});
-  }
- }
  async use(project,id,parent,operation,{retain=true,onOwner}={}){
   return this.application.tracked(async()=>{
    const access=new LabBookAccessSession(this.application,this.client,project,id,()=>parent.check()),registry=new LabBookRegistry(project),renames=new LabBookRenames(project);let entry=await registry.locate(id),vault;
@@ -45,7 +36,7 @@ export class LabBookLocationAccess{
  }
  async renamed(receipt,source,destination){
   for(const [id,owner] of this.owners){
-   if(!this.valid(owner))continue;const project=receipt.nativeOwners?await receipt.nativeOwners.find('project',owner.projectId):receipt.projects?.find(item=>item.projectId===owner.projectId),selected=receipt.nativeOwners?await receipt.nativeOwners.find('identity',owner.id):null,book=receipt.nativeOwners?(selected?.kind==='lab-book'&&selected.projectId===owner.projectId?{...selected,directory:path.posix.basename(selected.relative)}:null):project?.books?.find(item=>item.labBookId===owner.id);
+   if(!this.valid(owner))continue;const project=await receipt.nativeOwners.find('project',owner.projectId),selected=await receipt.nativeOwners.find('identity',owner.id),book=selected?.kind==='lab-book'&&selected.projectId===owner.projectId?{...selected,directory:path.posix.basename(selected.relative)}:null;
    if(!book||book.vaultId!==owner.vault.id||book.namespaceId!==owner.entry.namespaceId||path.resolve(source,...project.relative.split('/'),book.directory)!==owner.entry.root)throw new AppError('STORAGE_RENAME_STATE');
    const root=path.resolve(destination,...project.relative.split('/'),book.directory),access=await readAccess(root);if(access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);
    const storage=new LabBookStorage(root,owner.id,owner.vault);if((await storage.outline()).metadata.id!==book.namespaceId)throw new AppError('DATABASE_LOCATION');

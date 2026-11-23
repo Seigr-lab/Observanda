@@ -21,20 +21,6 @@ const inside=(parent,child)=>{const relative=path.relative(parent,child);return 
 export class ProjectLocationAccess {
   #moveRegistry=null;#owners=new Map();#grants=new Map();#destination=null;#installed=false;#closed=false;#rename=false;
   constructor(application,client,{check=async()=>{},recoverRenames=true,skipRenameId=null}={}){this.application=application;this.client=client;this.check=check;this.recoverRenames=recoverRenames;this.skipRenameId=skipRenameId;this.books=new LabBookLocationAccess(application,client);}
-  captureRename(receipt){
-    if(this.#closed||this.#destination||this.#owners.size||![receipt.source,receipt.destination].includes(this.application.workspace.root))throw new AppError('ACCESS_LOCKED');
-    const session=this.application.session(this.client);
-    for(const item of receipt.projects??[]){
-      const source=path.resolve(receipt.source,...item.relative.split('/')),destination=path.resolve(receipt.destination,...item.relative.split('/')),saved=session.get(item.projectId);
-      if(saved?.locked||saved?.vault&&saved.expires<=Date.now())continue;
-      const explicit=saved?.vault&&saved.vault.id===item.vaultId&&[source,destination].includes(saved.root);
-      if(saved?.vault&&!explicit)continue;
-      const owner=new ProjectSessionOwner(this.application,this.client,item.projectId,{check:this.check});
-      owner.entry={projectId:item.projectId,root:source,namespaceId:item.namespaceId,vaultId:item.vaultId};
-      if(explicit){owner.vault=cloneVault(saved.vault);owner.etag=saved.etag;}
-      this.#owners.set(item.projectId,owner);this.books.captureRename(item,receipt,owner);
-    }
-  }
   withScopedAccess(operation){return ScopedLocationAccess.run(this.application,this.client,{check:this.check,parent:id=>this.#owners.get(id),recoverRenames:this.recoverRenames,skipRenameId:this.skipRenameId},async scoped=>{for(const [id,owner] of this.#owners)await scoped.remember(id,owner.sessionEntry);return operation(scoped);});}
   async withProject(id,operation) {
     if(this.#closed||this.#destination)throw new AppError('ACCESS_LOCKED');
@@ -62,7 +48,7 @@ export class ProjectLocationAccess {
       // Revocation cannot undo a completed physical rename. Omit that grant;
       // normal project access will require authentication in the new context.
       if(owner.session.get(projectId)!==owner.sessionEntry||owner.sessionEntry?.locked||owner.sessionEntry?.vault&&owner.sessionEntry.expires<=Date.now())continue;
-      const entry=receipt.nativeOwners?await receipt.nativeOwners.find('project',projectId):receipt.projects?.find(entry=>entry.projectId===projectId);
+      const entry=await receipt.nativeOwners.find('project',projectId);
       if(!entry||entry.namespaceId!==owner.entry.namespaceId||entry.vaultId!==owner.vault.id||path.resolve(source,...entry.relative.split('/'))!==owner.entry.root)throw new AppError('STORAGE_RENAME_STATE');
       const root=path.resolve(destination,...entry.relative.split('/')),access=await readAccess(root);
       if(!(inside(destination,root)||includeRoot&&root===destination)||access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);

@@ -6,7 +6,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {readFile,realpath} from 'node:fs/promises';
 import {ProjectRenames} from './project-rename.js';
-import {WorkspaceProjectRename} from './workspace-project-rename.js';
+import {WorkspaceProjectOwners} from './workspace-project-owners.js';
 import {ProjectBookOwners} from './project-book-owners.js';
 import {directoryIdentity,sameDirectory} from './project-rename-receipt.js';
 import {assertRegular,digest} from './storage.js';
@@ -48,7 +48,7 @@ export class ProjectChildPreservation{
      const completed=await new ProjectRenames(this.registry,child.projectId).read();if(completed?.id!==child.id||completed.phase!=='complete')throw new AppError('CONFLICT');return;
     }
     if(await assertRegular(target,{directory:true,missing:true}))throw new AppError('EXISTS');
-    const projects=new WorkspaceProjectRename(storage,{registry:this.registry}),books=new ProjectBookOwners(storage);
+    const projects=new WorkspaceProjectOwners(storage,{registry:this.registry}),books=new ProjectBookOwners(storage);
     try{await projects.prepare(withProject,withBook);await books.prepare(typeof withBook==='function'?(id,use)=>withBook(storage,id,use):undefined);}finally{projects.close();books.close();}
     child.identity=identity;child.accessHash=accessHash;
    });

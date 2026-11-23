@@ -5,17 +5,17 @@ import {readFile} from 'node:fs/promises';
 import {seal,unseal,clearVault} from './encryption.js';
 import {assertRegular,atomicWrite,digest} from './storage.js';
 import {AppError} from './errors.js';
-export const RENAME_KEYS_FILE='.observanda/rename-project-keys.observanda';
 export const DELETE_PROJECT_KEYS_FILE='.observanda/delete-project-keys.observanda';
 export const DELETE_BOOK_KEYS_FILE='.observanda/delete-book-keys.observanda';
-function keyFile(workspace,file){if(![RENAME_KEYS_FILE,DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE].includes(file))throw new AppError('INVALID');return path.join(workspace.root,file);}
+function keyFile(workspace,file){if(![DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE].includes(file))throw new AppError('INVALID');return path.join(workspace.root,file);}
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const width=104,limit=50000;
 function authority(workspace,id,file){
  if(!uuid(id)||!uuid(workspace.vault?.id)||!Buffer.isBuffer(workspace.vault?.key)||workspace.vault.key.length!==32)throw new AppError('ACCESS_LOCKED');
- return (file===DELETE_PROJECT_KEYS_FILE?'Observanda/workspace-project-deletion/v1/':file===DELETE_BOOK_KEYS_FILE?'Observanda/project-book-deletion/v1/':'Observanda/workspace-project-rename/v1/')+workspace.vault.id+'/'+id;
+ if(![DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE].includes(file))throw new AppError('INVALID');
+ return (file===DELETE_PROJECT_KEYS_FILE?'Observanda/workspace-project-deletion/v1/':'Observanda/project-book-deletion/v1/')+workspace.vault.id+'/'+id;
 }
-export async function saveOwnerKeys(workspace,id,keys,file=RENAME_KEYS_FILE){
+export async function saveOwnerKeys(workspace,id,keys,file){
  const aad=authority(workspace,id,file);if(!(keys instanceof Map)||!keys.size||keys.size>limit)throw new AppError('INVALID');
  const plain=Buffer.alloc(4+keys.size*width);plain.writeUInt32BE(keys.size);let offset=4;
  try{
@@ -27,7 +27,7 @@ export async function saveOwnerKeys(workspace,id,keys,file=RENAME_KEYS_FILE){
   await atomicWrite(keyFile(workspace,file),encrypted);return digest(encrypted);
  }finally{plain.fill(0);}
 }
-export async function loadOwnerKeys(workspace,id,expected,selectedFile=RENAME_KEYS_FILE){
+export async function loadOwnerKeys(workspace,id,expected,selectedFile){
  const aad=authority(workspace,id,selectedFile),file=keyFile(workspace,selectedFile),stat=await assertRegular(file);
  if(stat.size>4+limit*width+36||!/^([a-f0-9]{64})$/.test(expected??''))throw new AppError('STORAGE_RENAME_STATE');
  const encrypted=await readFile(file);if(digest(encrypted)!==expected)throw new AppError('STORAGE_RENAME_STATE');

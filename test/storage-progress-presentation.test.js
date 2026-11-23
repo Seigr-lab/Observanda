@@ -45,7 +45,7 @@ test('workspace bundle progress identifies the project and returns to the comple
 
 test('nested rename progress labels folders and books without losing the completion stream',async()=>{
  const {readProgressStream}=await import('../src/web/progress-stream.js');
- const events=[{progress:{stage:'rename-check-owners',unit:'folders',completed:3}},{progress:{stage:'rename-book-databases',unit:'books',completed:1,total:2}},{progress:{stage:'future-stage',unit:'future-unit',completed:1,total:3}},{result:{complete:true}}];
+ const events=[{progress:{stage:'rename-check-owners',unit:'folders',completed:3}},{progress:{stage:'delete-book-databases',unit:'books',completed:1,total:2}},{progress:{stage:'future-stage',unit:'future-unit',completed:1,total:3}},{result:{complete:true}}];
  const response=new Response(events.map(value=>JSON.stringify(value)+'\n').join(''),{headers:{'Content-Type':'application/x-ndjson'}}),shown=[];
  assert.deepEqual(await readProgressStream(response,value=>shown.push(storageProgressPresentation(value))),{complete:true});
  assert.match(shown[0].count,/3 folders/);assert.match(shown[1].count,/1 of 2 lab books/);assert.match(shown[2].count,/1 of 3 items/);
