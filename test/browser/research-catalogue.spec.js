@@ -184,7 +184,8 @@ test('encrypted PostgreSQL copies are verified, opened and edited independently 
   await expect(page.getByRole('dialog')).toContainText('The original stays in its current folder');
   const copiedResponse=page.waitForResponse(response=>response.url().endsWith('/api/storage/copy')&&response.request().method()==='POST');
   await page.getByRole('button',{name:'Copy and use this folder',exact:true}).click();
-  expect((await copiedResponse).ok()).toBe(true);await expect(page.getByRole('dialog')).not.toBeVisible();
+  // The response streams while the copy backs up, restores and verifies its own database.
+  expect((await copiedResponse).ok()).toBe(true);await expect(page.getByRole('dialog')).not.toBeVisible({timeout:60000});
   await expect(page.locator('.notice')).toContainText('Verified copy opened');
   // The opened copy takes its folder's name as a new metadata revision; its records and content are the original's.
   const copied=new Workspace(destination,vault),copy=await copied.read(),content=({title,revision,updatedAt,...rest})=>rest;
