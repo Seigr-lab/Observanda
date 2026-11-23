@@ -6,7 +6,7 @@ export const laboratoryModules=laboratoryProfiles.map(profile=>({
  id:laboratoryModuleId(profile.id),labBookType:profile,parentId:'research',defaultPage:'projects',label:profile.label,
  entityTypes:[],metadataOnly:true,
  description:profile.description,settingsLabel:'Record types',pages:[],
- createSettings:services=>import('./record-type-settings.js').then(m=>m.recordTypeSettings(services,profile)),
+ createSettings:services=>import('../configuration-type-settings.js').then(m=>m.configurationTypeSettings(services,profile)),
  navigation:[],
  load:()=>import('./workspace-data.js').then(m=>registry=>m.registerLabWorkspaceData(registry,{profile}))
 }));

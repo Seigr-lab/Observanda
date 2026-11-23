@@ -40,11 +40,7 @@ export async function readBookWindow(api,command,{signal,onCommand=()=>{}}={}){
 }
 export async function readBookPage({state,api,page,signal}){
  const ids=page.records.map(r=>r.id);if(!ids.length)return [];
- if(state.storage?.researchStorage==='catalogue'){
-  const records=[];for(const recordId of ids)records.push(await readBookWindow(api,{workspaceId:page.workspaceId,recordId,snapshotId:page.snapshotId,offset:0,pagedHeader:true},{signal}));return records;
- }
- if(state.etag!==page.snapshotId)throw Error(text('changed'));
- const byId=new Map(state.book.entries.map(r=>[r.id,r]));if(ids.some(id=>!byId.has(id)))throw Error(text('incomplete'));return ids.map(id=>byId.get(id));
+ const records=[];for(const recordId of ids)records.push(await readBookWindow(api,{workspaceId:page.workspaceId,recordId,snapshotId:page.snapshotId,offset:0,pagedHeader:true},{signal}));return records;
 }
 const windowButton=(key,action,esc,disabled=false,attributes='')=>'<button type="button" class="button" data-action="record-list-content-'+action+'" '+attributes+(disabled?' disabled':'')+'>'+esc(contentText(key))+'</button>';
 function sectionControls(page,esc,busy){

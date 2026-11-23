@@ -45,9 +45,6 @@ import {markerControls,markerMapping} from './figure-marker-area-ui.js';
 import {defaultMarkerArea} from './figure-marker-area.js';
 import {intervalMappingControls,readIntervalMapping} from './figure-intervals-ui.js';
 import {mountHeatmap} from './figure-heatmap-ui.js';
-import {recordRevisionView,recordRevisionComparison} from './record-revision-view.js';
-import {selectorAnchor} from './book-selectors.js';
-import {t as bookTranslate} from './i18n/index.js';
 import {evidenceUploadUI,uploadText} from './evidence-upload-ui.js';
 import {figurePreviews} from './figure-preview.js';
 import {createFigure,FIGURE_TYPES} from './figure-model.js';
@@ -107,7 +104,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const option=(v,label,selected)=>`<option value="${esc(v)}"${String(v)===String(selected)?' selected':''}>${esc(label)}</option>`;
  const value=id=>document.getElementById('material-'+id)?.value??'';
  let calculatorIntent=null;
- let items=[],catalog=[],imports=[],opened=null,selectedRef=null,page=0,controller=null,uploading=false,repeating=false,owner=null,workspaceContext=null,schemaRows=[],historical=null;
+ let items=[],catalog=[],imports=[],opened=null,selectedRef=null,page=0,controller=null,uploading=false,repeating=false,owner=null,workspaceContext=null,schemaRows=[];
  let heatmapSettings=null,plotIntent=null,plotBase=null,plotDraft=null,datasetIntent=null,previewController=null,jobTimer=null,jobView=0,datasetJobCursor=null,datasetJobPage={items:[],next:null};
  let columnOffset=0,schemaOffset=0,schemaTotal=0,schemaOriginal=[],schemaDraft=new Map(),schemaExclusions=[],schemaInitialExclusions='[]';
  let referenceIntent=null,referenceDraft=null,draftCursor=null,draftPage={items:[],next:null};
@@ -149,7 +146,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  profiles=datasetInterpretationProfileUI({call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob});
  document.getElementById('dialog')?.addEventListener('close',()=>profiles.clean());
  async function authorizeSource(reference){
-  if(state.storage?.researchStorage!=='catalogue'||!reference?.workspaceId)return;
+  if(!reference?.workspaceId)return;
   const generation=jobView;await sources.resolve(reference,{unlock:true});currentView(generation);
  }
  const table=datasetTableControls({call,esc,guard,notify,readOnly:()=>referenceContext,refresh:datasetView});
@@ -608,12 +605,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  }
  async function openRevision(target,options){
   owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceContext=true;
-  if(state.storage?.researchStorage==='catalogue')return retainedRecords.open(target,options);
-  const generation=jobView,context=state.storage?.contextId,recordId=state.selected,{selector,...ref}=target,snapshot=await call('read',{ref});
-  if(generation!==jobView||context!==state.storage?.contextId||recordId!==state.selected)return;
-  historical={target,snapshot};
-  frame(snapshot.title,`<p>${esc(mt("retainedRevision",{revision:target.revision}))}</p>${recordRevisionView(snapshot,esc,{anchors:true,figureReference:target,assetUrl:id=>route('/api/media/'+id)})}`,button(esc(mt("compareRecord")),'compare-record')+button(esc(t("recordReferences","close")),'close'));
-  if(selector){const el=document.getElementById('dialog').querySelector('[id="'+selectorAnchor(selector)+'"]');if(el){el.tabIndex=-1;el.focus();el.scrollIntoView({block:'start'});}else notify(bookTranslate('book','unavailable'),true);}
+  return retainedRecords.open(target,options);
  }
  async function action(control){
   const name=control.dataset.action;if(!name?.startsWith('material-'))return false;const act=name.slice(9);
@@ -656,13 +648,6 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act.startsWith('reuse-original-')){guard();return reuse.action(act,control);}
   if(reuse.isBusy())return true;
   if(uploading||uploader.isBusy()||intake.isBusy()){notify(mt("pauseImport"),true);return true;}
-  if(act==='compare-record'){
-   const generation=jobView,context=state.storage?.contextId,recordId=state.selected,revision=historical;
-   const {record:current}=await call('current-record',{id:revision.target.id});
-   if(generation!==jobView||context!==state.storage?.contextId||recordId!==state.selected||historical!==revision)return true;
-   if(!current){notify(mt("currentUnavailable"),true);return true;}
-   frame(mt("compareVersions"),recordRevisionComparison(historical.snapshot,current,esc,{previousFigureReference:historical.target,assetUrl:id=>route('/api/media/'+id)}),button(esc(t("recordReferences","close")),'close'));return true;
-  }
   if(act==='close'){stopWatching();document.getElementById('dialog').close();return true;}
   if(act==='open'){referenceOrigin=control.dataset.readonly==='true';referenceContext=referenceOrigin;readingOverview=referenceOrigin;readNamespace=state.book?.id;referenceTrail=[];if(!saved()){notify(mt("saveBeforeEvidence"),true);return true;}if(owner!==record().id||workspaceContext!==state.storage?.contextId||!sameResearchOwner(projectOwner,researchOwner(state))){referenceIntent=null;referenceDraft=null;draftCursor=null;datasetJobCursor=null;materialCursor=null;importCursor=null;}owner=record().id;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);await home();return true;}
   if(act==='repeat'){
@@ -705,7 +690,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    try{
     if(act==='job-retry'){
      const result=await call('job',{id},{adopt:false});currentView(generation);
-     if(result.job.type==='analysis.compare'&&state.storage?.researchStorage==='catalogue')for(const source of result.job.sources??[]){await sources.resolve(inheritMaterialNamespace(source,state.book.id),{unlock:true});currentView(generation);}
+     if(result.job.type==='analysis.compare')for(const source of result.job.sources??[]){await sources.resolve(inheritMaterialNamespace(source,state.book.id),{unlock:true});currentView(generation);}
     }
     const run=async()=>{currentView(generation);try{const result=await call(act==='job-cancel'?'cancel-job':'retry-job',{id});currentView(generation);return result;}catch(error){currentView(generation);throw error;}};
     const result=await(act==='job-retry'?access(run):run());await watchJob(result.job);

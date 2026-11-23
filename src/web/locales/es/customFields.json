@@ -11,7 +11,6 @@
   "typeName": "Nombre del tipo de registro",
   "guidance": "Finalidad / orientación",
   "fields": "Campos para registros nuevos",
-  "savedFields": "Los registros existentes conservan sus campos y valores guardados.",
   "addField": "Añadir campo",
   "label": "Etiqueta del campo",
   "type": "Tipo de valor",

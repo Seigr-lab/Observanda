@@ -14,12 +14,25 @@ import {openRecordActions,setRecordTitle} from './record-editing-helper.js';
 import {readProgressStream} from '../../src/web/progress-stream.js';
 import {Workspace} from '../../src/storage.js';
 import {workspaceCreationPath} from '../../src/workspace-names.js';
+import {websiteDefaults,emptyHomepage,siteLayoutDefaults} from '../../src/web/website-model.js';
+import {presentationDefaults} from '../../src/web/media-presentation.js';
 
 const click=(scope,name)=>scope.getByRole('button',{name,exact:true}).click();
-async function fixture(page,{formatVersion=21}={}){
+// The previous release stored format 21 workspace metadata, which still carried the earlier
+// website settings, pages and branding. Saving now writes the current format, so such a head
+// is placed directly, as that release left it, before the application opens the workspace.
+async function storePreviousReleaseFormat(ws){
+ const website={...websiteDefaults(),home:emptyHomepage(),design:siteLayoutDefaults(),assets:[],layouts:[],templates:[],typography:{},presentation:presentationDefaults(),palette:{},logoId:null,logoAlt:'',footer:'',navigation:[]};
+ await ws.withLock(()=>ws.catalogue(async store=>{
+  const id=await store.head(),snapshot=structuredClone(await store.snapshot(id));
+  snapshot.metadata={...snapshot.metadata,formatVersion:21,website,pages:[],branding:[]};
+  await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',id,snapshot),id);
+ }));
+}
+async function fixture(page,{previousRelease=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-authoring-ui-')),book=sampleNotebook();
- book.formatVersion=formatVersion;
  const {workspace:ws,vault,deviceStore}=await encryptedFixture(directory,book);
+ if(previousRelease)await storePreviousReleaseFormat(ws);
  const app=await startServer({root:ws.root,deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  const errors=[],requests=[],designs=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.method()==='POST'&&['/api/workspace/save','/api/notebook/save'].some(p=>r.url().endsWith(p)))requests.push({url:r.url(),data:r.postDataJSON()});if(r.method()==='POST'&&r.url().endsWith('/websites/editor/change'))designs.push(r.postDataJSON());});
@@ -114,19 +127,21 @@ test('creating and reopening a record retains a bounded selection across record-
  }finally{await f.close();}
 });
 
-test('an older catalogue saves its upgrade in place before using sparse authoring commands',async({page})=>{
- test.setTimeout(60000);const f=await fixture(page,{formatVersion:20});
+test('a workspace from the previous release saves in the current format in place, then uses changes-only saves',async({page})=>{
+ test.setTimeout(60000);const f=await fixture(page,{previousRelease:true});
  try{
-  const initial=await f.ws.outline();expect(initial.metadata.formatVersion).toBe(20);
+  const initial=await f.ws.outline();expect(initial.metadata.formatVersion).toBe(21);expect(initial.metadata.website).toBeTruthy();
   await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('Existing research studio');await page.getByLabel('Workspace introduction',{exact:true}).fill('Upgraded in place');
-  const waiting=page.waitForResponse(r=>r.url().endsWith('/api/notebook/save')),renaming=page.waitForResponse(r=>r.url().endsWith('/api/storage/rename')&&r.request().method()==='POST');
+  const waiting=page.waitForResponse(r=>r.url().endsWith('/api/workspace/save')&&r.request().method()==='POST'),renaming=page.waitForResponse(r=>r.url().endsWith('/api/storage/rename')&&r.request().method()==='POST');
   await click(page,'Save workspace');expect((await waiting).ok()).toBe(true);expect((await renaming).ok()).toBe(true);
   await expect(page.locator('.workspace-name')).toHaveText('Existing research studio',{timeout:30000});await expect(page.locator('#workspace-name-form')).toBeVisible();const ws=f.renamed('Existing research studio');
-  expect((await ws.outline()).metadata.formatVersion).toBe(21);
-  expect((await ws.catalogue(s=>s.read(initial.etag))).book.formatVersion).toBe(20);
+  const upgraded=(await ws.outline()).metadata;expect(upgraded.formatVersion).toBe(22);
+  for(const key of ['website','pages','branding'])expect(Object.hasOwn(upgraded,key)).toBe(false);
+  expect(upgraded.description).toBe('Upgraded in place');
+  expect((await ws.catalogue(s=>s.read(initial.etag))).book.formatVersion).toBe(21);
   await page.getByLabel('Workspace introduction',{exact:true}).fill('Now using changes-only saves');
   const saved=await save(page,'Save workspace');expect(saved.outline?saved.book.entries:saved.recordPatch.records).toEqual([]);
-  expect(f.requests).toHaveLength(2);expect(f.requests[0].url).toContain('/api/notebook/save');expect(f.requests[1].url).toContain('/api/workspace/save');
+  expect(f.requests).toHaveLength(2);expect(f.requests.every(request=>request.url.endsWith('/api/workspace/save'))).toBe(true);
   expect((await ws.read()).book.description).toBe('Now using changes-only saves');
   await page.reload();await expect(page.getByLabel('Workspace introduction',{exact:true})).toHaveValue('Now using changes-only saves');
   expect(f.errors).toEqual([]);

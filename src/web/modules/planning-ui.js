@@ -11,8 +11,8 @@ const taskStatuses=()=>['todo','doing','done','cancelled'].map(id=>[id,statusLab
 const bookingStatuses=()=>['confirmed','cancelled'].map(id=>[id,statusLabel(id)]);
 const zone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
 const localValue=value=>{if(!value)return '';const d=new Date(value);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;};
-export async function createPlanningUI(services){let prerequisites;const addressed=services.state.storage?.researchStorage==='catalogue';const editor=await moduleEditor(services,{
- setup(c){if(addressed)prerequisites=taskPrerequisitesUI(services,c);},bind(){prerequisites?.bind();},deactivate(){prerequisites?.stop();},dispose(){prerequisites?.stop();},
+export async function createPlanningUI(services){let prerequisites;const editor=await moduleEditor(services,{
+ setup(c){prerequisites=taskPrerequisitesUI(services,c);},bind(){prerequisites?.bind();},deactivate(){prerequisites?.stop();},dispose(){prerequisites?.stop();},
  commandRequest:(run,command)=>prerequisites?prerequisites.commandRequest(run,command):run(),
  saveCommand(d){const data={...d.data};if(d.type==='task')delete data.prerequisiteObservations;return {action:d.type+'.save',payload:{id:d.id,expectedRevision:d.expectedRevision,data}};},
  id:'planning',scoped:true,paged:true,get label(){return m('planning')},

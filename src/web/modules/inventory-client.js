@@ -3,7 +3,6 @@ import {localBOMResource} from './bom-model.js';
 import {validModuleRevision} from './revision.js';
 import {decimal} from './quantities.js';
 import {inventoryScope} from './inventory-model.js';
-import {moduleItemPages} from './item-pages.js';
 import {connectedReferencePages} from '../module-connected-references.js';
 import {moduleForEntity,enabledModule} from '../feature-modules.js';
 import {t} from '../i18n/index.js';
@@ -17,9 +16,8 @@ export function inventoryClient(c,{card,stock,bom}){
  const connectedActive=()=>active()&&c.current?.type==='resource'&&c.current.expectedRevision!==null&&c.section==='connections'&&!state.access?.locked&&!state.storageUnavailable;
  const connectedIdentity=()=>JSON.stringify([state.modulePath,c.current?.id,c.section]);
  const connectedKey=()=>JSON.stringify([state.storage?.contextId,state.book.id,state.projectOwner,connectedIdentity()]);
- const aggregate=state.storage?.researchStorage==='catalogue';
  const drawConnections=()=>{const node=document.querySelector('[data-inventory-links]');if(node&&connectedActive())node.innerHTML=connectionView();};
- const connections=aggregate?connectedReferencePages({state,api,esc:c.esc,prefix:'inventory-links',action:'module-command',active:connectedActive,identity:connectedIdentity,draw:drawConnections}):moduleItemPages({api,workspaceId:state.book.id,esc:c.esc,prefix:'inventory-links',draw:drawConnections});
+ const connections=connectedReferencePages({state,api,esc:c.esc,prefix:'inventory-links',action:'module-command',active:connectedActive,identity:connectedIdentity,draw:drawConnections});
  function connectionView(){return c.button(t('moduleConnected','refresh'),'inventory-links-refresh',!connectedActive()||connections.busy?'disabled':'')+connections.view(item=>{
   const module=moduleForEntity({type:item.type,data:{}},[]),enabled=module&&enabledModule(state.dashboardSettings,module.id),owner=item.owner&&[item.owner.projectTitle,item.owner.notebookTitle].filter(Boolean).join(' / ');
   const target=item.reference?'data-action="module-reference-open" data-reference-workspace="'+c.esc(item.reference.workspaceId)+'" data-reference-type="'+c.esc(item.reference.type)+'" data-reference-id="'+c.esc(item.reference.id)+'"':'data-action="module-open" data-module-id="'+c.esc(module?.id??'')+'" data-module-path="'+c.esc(item.openType+'/'+item.openId)+'"';

@@ -63,7 +63,7 @@ export function laboratoryUI({state,api,esc,field,option,showDialog,render,notif
   const form=document.querySelector('#dialog[open] form[id^="lab-"]'),context=scope();
   const current=()=>scope()===context&&form?.isConnected&&form.closest('dialog')?.open;
   const signature=JSON.stringify([context,data]);
-  if(!pending||pending.signature!==signature)pending={signature,command:{...data,etag:data.id?selected.etag:form.dataset.etag,...(data.id?{expectedRecordRevision:selected.revision}:{}),...(state.storage?.researchStorage==='catalogue'?{commandId:crypto.randomUUID()}:{})}};
+  if(!pending||pending.signature!==signature)pending={signature,command:{...data,etag:data.id?selected.etag:form.dataset.etag,...(data.id?{expectedRecordRevision:selected.revision}:{}),commandId:crypto.randomUUID()}};
   let saved;
   try { saved=await api('/api/laboratory/change?compact=1',pending.command); }
   catch(error) {

@@ -19,8 +19,9 @@ import {transferWorkspace} from './workspace-transfer.js';
 import {workspacePortabilityUI} from './workspace-portability-ui.js';
 import {workspaceTransferUI} from './workspace-transfer-ui.js';
 import {workspaceDatabaseUI} from './workspace-database-ui.js';
+import {workspaceAvailable} from './workspace-availability.js';
 export function storageUI({state,api,activity,writerRecovery,esc,field,save,render,showDialog,notify,reload,resetInterface,isUploading,accessOwners=operation=>operation()}){
-  const maintenance=inventoryMaintenanceUI({state,api,esc,actions:'storage-maintenance',owner:()=>state.storage?.researchStorage==='catalogue'&&!state.access?.locked?{id:state.storage.contextId,prefix:'/api'}:null});
+  const maintenance=inventoryMaintenanceUI({state,api,esc,actions:'storage-maintenance',owner:()=>workspaceAvailable(state)&&!state.access?.locked?{id:state.storage.contextId,prefix:'/api'}:null});
   const collaboration=collaborationIdentityUI({state,api,esc,field,showDialog,notify,lock:async()=>{if(!state.access?.locked&&!await ready())return false;await api('/api/access/lock',{});state.access.locked=true;render();return true;}});
   const folders=folderPickerUI({api,esc,field,showDialog,capabilities:()=>state.storage?.folderPicker});
   const {locationFields,preferencesPanel,lockView,unavailable,chooseDialog,resetDialog}=workspaceAccessViews({state,esc,field,showDialog});

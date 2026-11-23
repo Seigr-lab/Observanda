@@ -5,7 +5,7 @@ import {laboratoryProfiles,profileById,enableProfile} from '../src/web/laborator
 import {laboratoryModules} from '../src/web/laboratory/modules.js';
 import {validConfiguration,templateFrom,validTemplate} from '../src/web/notebook-schema.js';
 import {fieldValueErrors} from '../src/web/custom-fields.js';
-import {activityContext,activitySubjects} from '../src/web/record-activity.js';
+import {activityContext} from '../src/web/record-activity.js';
 // Lab book profile text is a deferred catalogue; these checks read profiles directly.
 import '../src/web/i18n/catalogues/labBookProfiles.js';
 
@@ -41,8 +41,6 @@ function tracks(id,{subjects,primary,events,formats}){
   const section=configuration.sections.find(s=>s.id===record.template.id),context=activityContext(value,record);
   assert.equal(context.subject,subjects.includes(section.key),section.key);assert.equal(context.event,events.includes(section.key),section.key);
  }
- const keyOf=record=>configuration.sections.find(s=>s.id===record.template.id).key,first=value.entries[0];
- assert.deepEqual(activitySubjects(value,first).map(keyOf).sort(),subjects.filter(key=>key!==keyOf(first)).sort());
  for(const [path,format] of Object.entries(formats)){const [section,field]=path.split('/');assert.equal(profile.sections.find(s=>s.key===section).fields.find(f=>f.key===field).format,format,path);}
  return profile;
 }

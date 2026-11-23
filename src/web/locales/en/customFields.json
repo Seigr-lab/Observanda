@@ -11,7 +11,6 @@
  "typeName":"Record type name",
  "guidance":"Purpose / guidance",
  "fields":"Fields for new records",
- "savedFields":"Existing records keep their saved fields and values.",
  "addField":"Add field",
  "label":"Field label",
  "type":"Value type",

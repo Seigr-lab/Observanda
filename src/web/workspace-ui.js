@@ -15,6 +15,7 @@ import {bookConversionEntry} from './book-conversion-offer.js';
 import {createDataSession,workspaceData} from './data-registry.js';
 import {defaultPanelConfig} from './dashboard-model.js';
 import { identityFields, identityFromForm } from './workspace-identity.js';
+import {workspaceAvailable} from './workspace-availability.js';
 export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable,isUploading,projectDirectory,labBookDirectory,accessProject,enterProject,rootBook,renameWorkspace}) {
   const text=(key,parameters)=>esc(t('workspaceViews',key,parameters));
   const projectOpening=projectOpeningUI({state,api,esc,field,showDialog,refreshDirectory:()=>projectDirectory.refresh(),enterProject,render});
@@ -66,7 +67,7 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
 
   // New lab books are created through a project's own store (project-notebooks.js), so only a project
   // with a store, entered or listed in the project directory, takes them.
-  function bookStoresOnly(id){return state.storage?.researchStorage==='catalogue'&&!(state.projectOwner&&(state.projectOwner.projectId===id||projectDirectory.entries().some(entry=>entry.projectId===id)));}
+  function bookStoresOnly(id){return workspaceAvailable(state)&&!(state.projectOwner&&(state.projectOwner.projectId===id||projectDirectory.entries().some(entry=>entry.projectId===id)));}
   function projectView() {
     const p=state.book.projects.find(p=>p.id===state.project);if(!p)return overview();
     const ns=labNotebooks.directory(p.id),hierarchy=projectDirectory.navigation(state.book);
@@ -94,8 +95,8 @@ function generalPreferences(){
     if(name==='workspace'){state.page='workspace';state.project=null;state.notebook='all';render();return true;}
     if(name==='open-project'||name==='project-records') {state.page=name==='open-project'?'project':'entries';state.project=button.dataset.id;state.notebook='all';state.search='';state.filter='all';state.recordBrowse=null;render();return true;}
     if(name==='workspace-reorganize') {
-      const native=state.storage?.researchStorage==='catalogue',create=native?`<p>${text('newProjectHelp')}</p><button type="button" class="button primary" data-action="new-project" data-copy-workspace-details>${text('createProject')}</button>`:'';
-      if(native&&!state.book.projects.length){showDialog('<div><h2 id="dialog-title">'+esc(t('workspaceNaming','copyToProject'))+'</h2>'+create+`<div class="dialog-actions"><button class="button" data-action="close-dialog">${text('cancel')}</button></div></div>`);return true;}
+      const create=`<p>${text('newProjectHelp')}</p><button type="button" class="button primary" data-action="new-project" data-copy-workspace-details>${text('createProject')}</button>`;
+      if(!state.book.projects.length){showDialog('<div><h2 id="dialog-title">'+esc(t('workspaceNaming','copyToProject'))+'</h2>'+create+`<div class="dialog-actions"><button class="button" data-action="close-dialog">${text('cancel')}</button></div></div>`);return true;}
       showDialog(`<form id="workspace-organize-form"><h2 id="dialog-title">${esc(t('workspaceNaming','copyToProject'))}</h2>${create}<p>${esc(t('workspaceNaming','copyToProjectDescription',{name:state.book.title}))}</p>${field(`${text('newIntroduction')} <small>${text('optional')}</small>`,'<textarea name="workspaceDescription" maxlength="1500" rows="2"></textarea>')}${field(text('destinationProject'),`<select name="projectId">${state.book.projects.map(p=>option(p.id,t('workspaceViews','projectChoice',{title:p.title,books:notebooks(p.id).length,records:recordCount(p.id)}),state.book.projects[0]?.id)).join('')}${native?'':option('new',t('workspaceViews','createProject'),null)}</select>`)}<p class="muted">${text('organizeHelp')}</p><div class="dialog-actions"><button class="button" type="button" data-action="close-dialog">${text('cancel')}</button><button class="button primary" type="submit">${text('review')}</button></div></form>`);return true;
     }
     return false;

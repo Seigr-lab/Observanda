@@ -13,27 +13,24 @@ import {trackingText} from './laboratory/profile-text.js';
 import {templateText} from './custom-field-presentation.js';
 import {configurationDocumentClient} from './configuration-document-client.js';
 import {configurationTypeChoices} from './configuration-type-choices.js';
-import {activityContext,activityTemplates,activityChoices,documentRecord} from './record-activity.js';
+import {activityContext} from './record-activity.js';
 import {recordBrowse} from './record-query.js';
 import {recordDateLabel} from './record-date.js';
-import {editableRecord} from './workspace-snapshot.js';
 import {researchTargetPicker} from './research-target-picker.js';
 import {relationValue} from './record-relation-value.js';
 
-export function recordActivityUI({state,api,esc,field,showDialog,notify,render,dirty,revisions,create,getRecord,relationSaved=async()=>{}}){
+export function recordActivityUI({state,api,esc,field,showDialog,notify,revisions,create,getRecord,relationSaved=async()=>{}}){
  const targets=researchTargetPicker({state,api,esc,field,showDialog});
  const configuration=configurationDocumentClient({state,api});
  const typeChoices=configurationTypeChoices({state,api,esc,showDialog});
  let selectedSection=null,selectedPrimary=null,contextPending=null,contextError=null,contextLoaded=false,contextGeneration=0;
- const native=()=>state.storage?.researchStorage==='catalogue';
  const contextFor=entry=>activityContext(state.book,entry,{selectedSection});
- let key='',result=null,error=null,loading=false,controller=null,generation=0,opened=false,creation=null;
+ let key='',result=null,error=null,loading=false,controller=null,generation=0,opened=false;
  const record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
  const active=()=>['editor','record-reader'].includes(state.page)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!!record();
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.selected,state.etag]);
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="record-activity-${action}" ${extra}>${esc(label)}</button>`;
- function closeCreation(){if(creation&&document.querySelector('#dialog [data-activity-creation]'))document.querySelector('#dialog').close();creation=null;}
- function stop(){closeCreation();targets.stop();configuration.stop();typeChoices.stop();contextGeneration++;contextLoaded=false;selectedSection=selectedPrimary=contextPending=contextError=null;controller?.abort();controller=null;generation++;key='';result=null;error=null;loading=false;opened=false;}
+ function stop(){targets.stop();configuration.stop();typeChoices.stop();contextGeneration++;contextLoaded=false;selectedSection=selectedPrimary=contextPending=contextError=null;controller?.abort();controller=null;generation++;key='';result=null;error=null;loading=false;opened=false;}
  function sync(){const next=identity();if(next!==key){stop();key=next;opened=contextFor(record()).subject;}}
  function history(){
   if(!opened)return button(tr('activityShow'),'show');
@@ -46,8 +43,7 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
  // The record editor and the reader share one page; the record type's context redraws the section the way it was shown.
  let shownReadonly=false;
  function view({readonly=false}={}){
-  shownReadonly=readonly;sync();const e=record(),context=contextFor(e),templates=native()?[]:activityTemplates(state.book,e,state.dashboardSettings);
-  const primary=native()?selectedPrimary:context.subject?templates.find(s=>s.profileId===e.template.profileId&&s.key===context.tracking.primary):null;
+  shownReadonly=readonly;sync();const e=record(),context=contextFor(e),primary=selectedPrimary;
   const heading=context.subject?trackingHeading(context,e.template?.profileId):tr('activityLinked');
   const choose=readonly||!context.event?'':button(tr('activityChoose',{subject:trackingLabel(context,e.template?.profileId,'subjectLabel',tr('activitySubject')).toLocaleLowerCase()}),'subjects');
   return `<section class="record-activity" aria-label="${esc(heading)}"><header><h2>${esc(heading)}</h2><div class="inline-actions">${!readonly&&primary?button(trackingLabel(context,e.template?.profileId,'primaryLabel',tr('activityNewRelated')),'inspect'):''}${readonly?'':button(tr('activityAdd'),'create')}</div></header>${choose}${contextError?'<p role="status">'+esc(contextError.message)+'</p>'+button(t('configurationEditor','retry'),'context-retry'):contextPending?'<p role="status">'+esc(t('configurationEditor','loading'))+'</p>':''}<div data-activity-results>${history()}</div></section>`;
@@ -62,7 +58,7 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
    result=data;loading=false;paint();if(focus)document.querySelector('[data-activity-status]')?.focus();
   }catch(e){if(request===generation&&active()&&identity()===requestedKey&&e.name!=='AbortError'){error=e;loading=false;paint();}}
  }
- function bind(){targets.sync();if(!active()){stop();return;}sync();if(native()&&!contextPending&&!contextLoaded&&!contextError&&record().template?.id)void loadContext();if(opened&&!result&&!error&&!loading)void load();}
+ function bind(){targets.sync();if(!active()){stop();return;}sync();if(!contextPending&&!contextLoaded&&!contextError&&record().template?.id)void loadContext();if(opened&&!result&&!error&&!loading)void load();}
  // A saved record gains its subject as one new research link, saved through the record's own values,
  // so neither the workspace nor the subject's body is read.
  async function linkSubject(e,subject,stillCurrent){
@@ -84,28 +80,16 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
   if(name==='record-activity-subjects'){
    targets.open({title:tr('activityLink',{subject:trackingLabel(context,e.template?.profileId,'subjectLabel',tr('activitySubject')).toLocaleLowerCase()}),recordType:'subject',recordsOnly:true,onChoose:(subject,{stillCurrent})=>{
     if(!stillCurrent())return;
-    if(native())return linkSubject(e,subject,stillCurrent);
-    if(!documentRecord(state.book.id,editableRecord(state.book,e.id),subject))throw Error(tr('activityAlreadyLinked'));
-    dirty();document.querySelector('#dialog').close();targets.stop();render();
+    return linkSubject(e,subject,stillCurrent);
    }});return true;
   }
   if(state.dirty||state.page!=='record-reader'&&!revisions()[e.id]){notify(tr('activitySaveFirst'),true);return true;}
   if(name==='record-activity-inspect'){
-   if(native()){if(contextPending)await contextPending;if(selectedPrimary)await create('note',e.notebookId,{...selectedPrimary.value,sectionId:selectedPrimary.key,configurationPin:configuration.descriptor().configurationPin},e);return true;}
-   const section=activityTemplates(state.book,e,state.dashboardSettings).find(s=>context.subject&&s.profileId===e.template.profileId&&s.key===context.tracking.primary);
-   if(section)create('note',e.notebookId,section,e);return true;
+   if(contextPending)await contextPending;if(selectedPrimary)await create('note',e.notebookId,{...selectedPrimary.value,sectionId:selectedPrimary.key,configurationPin:configuration.descriptor().configurationPin},e);return true;
   }
   if(name==='record-activity-create'){
-   if(native()){await typeChoices.open(state.book.notebooks.find(book=>book.id===e.notebookId),{title:tr('activityAdd'),description:tr('activityAbout',{title:e.title}),onChoose:async choice=>{document.querySelector('#dialog').close();await create(choice.type,choice.notebookId,choice.section??null,e);}});return true;}
-   const choices=activityChoices(state.book,e,state.dashboardSettings);
-   creation=key;showDialog(`<h2 id="dialog-title" data-activity-creation>${esc(tr('activityAdd'))}</h2><p>${esc(tr('activityAbout',{title:e.title}))}</p>${field(esc(tr('activityTemplate')),`<select id="activity-template">${choices.map(c=>`<option value="${c.value}">${esc(c.section?c.label:recordTypeLabel(c.type,c.label))}</option>`).join('')}</select>`)}<div class="dialog-actions">${button(tr('activityCreate'),'confirm')}${button(t('configurationEditor','cancel'),'cancel')}</div>`);return true;
+   await typeChoices.open(state.book.notebooks.find(book=>book.id===e.notebookId),{title:tr('activityAdd'),description:tr('activityAbout',{title:e.title}),onChoose:async choice=>{document.querySelector('#dialog').close();await create(choice.type,choice.notebookId,choice.section??null,e);}});return true;
   }
-  if(name==='record-activity-confirm'){
-   if(creation!==key||!document.querySelector('#dialog')?.open)return true;
-   const choice=activityChoices(state.book,e,state.dashboardSettings).find(c=>c.value===document.querySelector('#activity-template')?.value);
-   if(choice){closeCreation();create(choice.type,e.notebookId,choice.section,e);}return true;
-  }
-  if(name==='record-activity-cancel'){closeCreation();return true;}
   return false;
  }
  async function loadContext(){

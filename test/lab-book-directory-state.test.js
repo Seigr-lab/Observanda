@@ -8,7 +8,7 @@ const deferred=()=>{let resolve;return {promise:new Promise(done=>resolve=done),
 const result=(items,revision='current')=>({items,next:null,total:items.length,revision});
 const operation=(projectId,kind='create',status='completed')=>({id:randomUUID(),kind:'/api/projects/'+projectId+'/lab-books/'+kind,state:status});
 function fixture(){
- const projectId=randomUUID(),state={book:{},page:'project',projectOwner:{projectId},storage:{contextId:'workspace',researchStorage:'catalogue'}},calls=[],rows=new Map([[projectId,[row('First book')]]]);let handler=null,paints=0;
+ const projectId=randomUUID(),state={book:{},page:'project',projectOwner:{projectId},storage:{contextId:'workspace',available:true}},calls=[],rows=new Map([[projectId,[row('First book')]]]);let handler=null,paints=0;
  const directory=labBookDirectoryState({state,changed:()=>paints++,api:async(route,input,options)=>{assert.equal(options.adopt,false);assert.equal(input.limit,50);const owner=route.split('/')[3];calls.push({owner,...input});return handler?handler(owner,input):result(rows.get(owner)??[]);}});
  return {state,directory,projectId,rows,calls,setHandler:value=>handler=value,paints:()=>paints,snapshot:operations=>({contextId:state.storage.contextId,operations})};
 }
@@ -73,11 +73,11 @@ test('returning to a loaded project revalidates once even after completed activi
  f.state.page='project';await f.directory.bind();await f.directory.bind();assert.equal(f.calls.length,2);assert.equal(f.directory.page(f.projectId).items.length,2);
 });
 
-test('late replies are discarded across workspace, storage-format and lock changes',async()=>{
- for(const change of [state=>state.storage.contextId='second',state=>state.storage.researchStorage='document',state=>state.access={locked:true}]){
+test('late replies are discarded across workspace, availability and lock changes',async()=>{
+ for(const change of [state=>state.storage.contextId='second',state=>state.storage.available=false,state=>state.access={locked:true}]){
   const f=fixture(),wait=deferred();f.setHandler(()=>wait.promise);const loading=f.directory.bind(),before=f.paints();change(f.state);wait.resolve(result([row('Previous workspace')]));await loading;assert.equal(f.paints(),before);assert.deepEqual(f.directory.entries(),[]);
  }
- const f=fixture();f.state.storage.researchStorage='document';await f.directory.bind();await f.directory.refresh(f.projectId);await f.directory.activity(f.snapshot([operation(f.projectId)]));assert.equal(f.calls.length,0);
+ const f=fixture();f.state.storage.available=false;await f.directory.bind();await f.directory.refresh(f.projectId);await f.directory.activity(f.snapshot([operation(f.projectId)]));assert.equal(f.calls.length,0);
 });
 
 test('visible directory failures remain actionable and retry preserves existing entries until recovery',async()=>{

@@ -7,7 +7,6 @@ import path from 'node:path';
 import {Workspace} from '../src/storage.js';
 import {createNotebook} from '../src/model.js';
 import {workspaceModules} from '../src/modules/index.js';
-import {sectionAction} from '../src/web/laboratory/section-editor.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {createModuleHost,moduleForEntity} from '../src/web/feature-modules.js';
 import {laboratoryProfiles,enableProfile,availableSections} from '../src/web/laboratory/catalog.js';
@@ -67,10 +66,6 @@ test('legacy arts data remains readable without owning canonical notebook naviga
  await save('lab-entry',collectionId,entry('Sound installation documentation',galleryId,collection,{accession:'EX-26-07',provenance:'Commissioned from Nightjar collective'},[],[{workspaceId:book.id,type:'lab-entry',id:sessionId}]));
  let data=await workspaceModules(new Workspace(root)).read();
  const savedSession=data.entities.find(e=>e.id===sessionId);
- assert.deepEqual(savedSession.data.contributors,credits);
- // Contributor commands must pass through the schema editor to their record owner.
- assert.equal(sectionAction(savedSession.data,'contributor-add',{}),false);
- assert.equal(sectionAction(savedSession.data,'contributor-remove',{index:'0'}),false);
  assert.deepEqual(savedSession.data.contributors,credits);
  assert.equal(data.entities.find(e=>e.id===collectionId).data.links[0].id,sessionId);
  assert.equal(data.entities.find(e=>e.id===galleryId).data.sections.find(s=>s.key==='sessions').label,'Rehearsals & recordings');

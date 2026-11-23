@@ -105,16 +105,6 @@ export function repeatPreparation(record,reference,{uuid=()=>crypto.randomUUID()
  preparation.conditions=preparation.conditions.map(c=>({...c,basis:'inherited',reference}));
  return {...emptyAttempt(),preparations:[preparation]};
 }
-export function attemptComparison(value){
- if(!value)return null;
- const preparation=value.preparations.at(-1),preparations=new Map(value.preparations.map((item,position)=>[item.id,{item,number:position+1}]));
- return {preparationId:preparation?.id??null,preparationNumber:value.preparations.length,applicability:preparation?.applicability??'',conditions:preparation?.conditions.map(({id,name,value,unit,basis})=>({id,name,value,unit,basis}))??[],
-  assessments:currentAttemptItems(value.assessments).map(a=>{
-   const {item:p,number}=preparations.get(a.preparationId),c=p.criteria.find(c=>c.id===a.criterionId);
-   return {criterion:c.label,preparationId:a.preparationId,preparationNumber:number,expected:c.expected,comparator:c.comparator,scope:c.scope,outcome:a.outcome,domainOutcome:a.domainOutcome,observed:a.observed,denominator:a.denominator};
-  }),
-  events:currentAttemptItems(value.events).map(({kind,label,extent,context})=>({kind,label,extent,context}))};
-}
 
 // Search authored facts, including superseded observations, without indexing
 // opaque identities or treating an interface translation as research content.

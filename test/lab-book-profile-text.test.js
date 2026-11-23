@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {prepareLanguage,activateLanguage,t,loadedMessages} from '../src/web/i18n/index.js';
 import {laboratoryProfiles,enableProfile} from '../src/web/laboratory/catalog.js';
-import {profileText,storedChoices,trackingText,isProfileText,prepareProfileText} from '../src/web/laboratory/profile-text.js';
+import {profileText,trackingText,isProfileText,prepareProfileText} from '../src/web/laboratory/profile-text.js';
 import {customFieldLabel,customFieldValueText} from '../src/web/custom-field-presentation.js';
 import {validConfiguration} from '../src/web/notebook-schema.js';
 
@@ -71,8 +71,6 @@ test('books keep the canonical text while every interface language displays it t
   assert.equal(customFieldValueText(queen,'Not seen'),t('labBookProfiles','beekeeping.inspection.choices.queen.not-seen'));
   assert.equal(customFieldValueText({type:'text'},'Not seen'),'Not seen','free text is never translated');
   assert.equal(profileText('My own <inspection>'),'My own <inspection>');
-  // An edited list of displayed choices keeps the stored values records refer to.
-  assert.deepEqual(storedChoices([...queen.choices.map(profileText),'Partly seen'],queen.choices),[...queen.choices,'Partly seen']);
   assert.equal(trackingText('beekeeping','history','hive'),t('labBookProfiles','beekeeping.tracking.history.hive'));
   if(locale!=='en')assert.notEqual(profileText(copied.label),copied.label);
  }

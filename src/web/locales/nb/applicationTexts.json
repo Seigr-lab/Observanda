@@ -35,8 +35,6 @@
   "activityIncomplete": "Svaret med tilknyttede poster var ufullstendig. Oppdater historikken.",
   "activityAlreadyLinked": "Denne posten er allerede tilknyttet.",
   "activitySaveFirst": "Lagre denne posten før du legger til en tilknyttet post.",
-  "activityTemplate": "Oppføringsmal",
-  "activityCreate": "Opprett oppføring",
   "activityLoading": "Laster tilknyttede poster...",
   "activityChanged": "Postene er endret. Oppdater for å se den nyeste historikken.",
   "activityPages": "Sider med tilknyttede poster",

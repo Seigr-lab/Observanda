@@ -11,7 +11,6 @@
   "typeName": "Navn på oppføringstype",
   "guidance": "Formål / veiledning",
   "fields": "Felt for nye oppføringer",
-  "savedFields": "Eksisterende oppføringer beholder de lagrede feltene og verdiene.",
   "addField": "Legg til felt",
   "label": "Feltetikett",
   "type": "Verditype",

@@ -1,13 +1,14 @@
 import {researchId} from './research-reference.js';
 import {t} from './i18n/index.js';
+import {workspaceAvailable} from './workspace-availability.js';
 
 // Only the selected owners' directory pages are retained. Completed commands
 // invalidate names and membership; record writes and progress never do.
 export function labBookDirectoryState({state,api,changed}){
  let context=null,generation=0,pages=new Map(),entered=null,completed=new Set();
- const key=()=>JSON.stringify([state.storage?.contextId,state.storage?.researchStorage,!!state.access?.locked,!!state.storageUnavailable,!!state.newWorkspace]);
+ const key=()=>JSON.stringify([state.storage?.contextId,workspaceAvailable(state),!!state.access?.locked,!!state.storageUnavailable,!!state.newWorkspace]);
  function sync(){const next=key();if(context!==next){context=next;generation++;pages=new Map();entered=null;completed=new Set();}}
- const available=()=>state.storage?.researchStorage==='catalogue'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
+ const available=()=>workspaceAvailable(state)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
  function page(projectId){sync();if(!pages.has(projectId))pages.set(projectId,{projectId,items:[],next:null,total:null,revision:null,loaded:false,loading:false,error:'',depth:0,wantedDepth:1,stale:false,task:null,refresh:false,more:false,version:0});return pages.get(projectId);}
  const current=(token,value)=>token===generation&&context===key()&&pages.get(value.projectId)===value&&available();
  async function read(value,{more,token,version}){

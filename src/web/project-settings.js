@@ -9,17 +9,13 @@ import {localizedText,t} from './i18n/index.js';
 const projectText=localizedText('projectDirectory'),msg=(key,args)=>t('projectEditors',key,args);
 import {availableLocationTools} from './modules/location-tools.js';
 import {enabledLabBookTypes} from './feature-modules.js';
-import {emptyConfiguration} from './notebook-schema.js';
-import {projectTypeChoices,projectTypeChoice,recommendedProfile,starterTemplate,copyConfiguration,templateChoices,templateAvailable,validLabBookTemplate} from './project-templates.js';
+import {projectTypeChoices,projectTypeChoice,recommendedProfile,starterTemplate,templateAvailable} from './project-templates.js';
 import {locationName} from './workspace-structure.js';
-import {sectionDetails,sectionInput,sectionAction} from './laboratory/section-editor.js';
 
 export function projectSettings(services){
  const {state,api,esc,field,option,showDialog,render,notify}=services;
  const text=(key,args)=>esc(msg(key,args));
  let placementRequest=null,saveRequest=null,creation=null,creationBase=null,remoteTemplates=new Map(),placementParent=null;
- const native=()=>state.storage?.researchStorage==='catalogue';
- const available=value=>native()?Boolean(value):templateAvailable(value,state.dashboardSettings);
  const configuration=configurationEditor({...services,draw:()=>{if(draft&&form())draw();},root:()=>form()?.querySelector('[data-configuration-editor]')});
  const sourceReader=configurationDocumentClient({state,api});
  // The record types of a project's saved default template, read for its settings.
@@ -34,7 +30,7 @@ export function projectSettings(services){
   finally{savedReader.stop();if(draft?.id===projectId&&form())draw();}
  }
  let configurationSource;
- let draft=null,base=null,etag=null,mode='project',type='none',source='blank',selected=null,templateChosen=false,busy=false,error='',replace=false;
+ let draft=null,base=null,etag=null,mode='project',type='none',source='blank',templateChosen=false,busy=false,error='',replace=false;
  const form=()=>document.querySelector('#dialog[open] #'+(mode==='template'?'project-template-form':'structure-project-form'));
  const directoryChoices=projectDirectoryChoices({state,api,esc,changed:paintChoices});
  const button=(label,command,attrs='',style='')=>`<button type="button" class="button ${style}" data-action="project-template-command" data-command="${command}" ${attrs}>${esc(label)}</button>`;
@@ -56,7 +52,7 @@ export function projectSettings(services){
  }
  function sourceOptions(){
   const profiles=enabledLabBookTypes(state.dashboardSettings),query=directoryChoices.query('templates').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('en'),matches=value=>value.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('en').includes(query);
-  const local=(native()?state.book.projects.filter(p=>p.labBookTemplate).map(p=>({id:p.id,label:p.labBookTemplate.name+' / '+p.title})):templateChoices(state.book,state.dashboardSettings)).filter(t=>t.id!==draft.id),templates=local.filter(t=>matches(t.label));
+  const local=state.book.projects.filter(p=>p.labBookTemplate).map(p=>({id:p.id,label:p.labBookTemplate.name+' / '+p.title})).filter(t=>t.id!==draft.id),templates=local.filter(t=>matches(t.label));
   for(const entry of directoryChoices.rows('templates',services.projectDirectory.entries()))if(entry.projectId!==draft.id&&entry.summary?.templateName&&!templates.some(t=>t.id===entry.projectId))templates.push({id:entry.projectId,label:entry.summary.templateName+' / '+entry.summary.title});
   const selectedId=source.startsWith('project:')?source.slice(8):null;
   if(selectedId&&!templates.some(t=>t.id===selectedId)){
@@ -75,10 +71,10 @@ export function projectSettings(services){
   directoryChoices.paint(target,kind);
  }
  function summary(){
-  const template=native()&&configurationSource?.profileId?starterTemplate(configurationSource.profileId):draft.labBookTemplate;
+  const template=configurationSource?.profileId?starterTemplate(configurationSource.profileId):draft.labBookTemplate;
   if(!template)return '<p>'+text('blankHelp')+'</p>';
   const list=items=>'<p>'+text('includedTypes')+'</p><ul class="project-template-summary">'+items.map(([label,count])=>'<li><strong>'+esc(templateText(label))+'</strong><span>'+text('fields',{count})+'</span></li>').join('')+'</ul>';
-  if(native()&&!template.configuration){
+  if(!template.configuration){
    const types=source==='current'?savedTypes:source.startsWith('project:')?remoteTemplates.get(source.slice(8))?.types:null;
    const saved=types?.rows?list(types.rows.map(row=>[row.value.label,row.counts?.fields??0]))+(types.more?'<p>'+text('moreTypes')+'</p>':''):'';
    return '<p>'+esc(template.name)+'</p>'+saved+'<p>'+esc(t('configurationEditor','sourceHelp'))+'</p>';
@@ -90,21 +86,7 @@ export function projectSettings(services){
    '<p>'+text('copyHelp')+'</p>';
  }
  function templateFields(){
-  if(native())return '<p>'+esc(t('configurationEditor','templateHelp'))+'</p><div class="project-template-source">'+field(t('configurationEditor','startingTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button(t('configurationEditor','useTemplate'),'apply',source==='choose'?'disabled':'')+'</div>'+(replace?'<div class="project-template-confirm" role="alert"><p>'+esc(t('configurationEditor','replaceHelp'))+'</p>'+button(t('configurationEditor','replace'),'replace')+button(t('configurationEditor','keep'),'keep')+'</div>':'')+(draft.labBookTemplate?field(t('configurationEditor','templateName'),'<input name="templateName" required maxlength="160" value="'+esc(draft.labBookTemplate.name)+'">'):'')+(draft.labBookTemplate?configuration.view()+'<div class="inline-actions">'+button(t('configurationEditor','removeTemplate'),'remove','','subtle')+'</div>':'<p>'+esc(t('configurationEditor','noTemplate'))+'</p>');
-  const template=draft.labBookTemplate,c=template?.configuration,choices=c?.sections??[];
-  if(!choices.some(s=>s.id===selected))selected=choices.find(s=>s.enabled)?.id??choices[0]?.id;
-  const section=choices.find(s=>s.id===selected),index=choices.indexOf(section),siblings=choices.filter(s=>s.enabled&&s.profileId===section?.profileId),position=siblings.indexOf(section);
-  return '<p>'+text('defaultHelp',{title:draft.title})+'</p>'+
-   '<div class="project-template-source">'+field(msg('startingTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button(msg('useTemplate'),'apply',source==='choose'?'disabled':'')+'</div>'+
-   '<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'+
-   (replace?'<div class="project-template-confirm" role="alert"><p>'+text('replacePrompt')+'</p>'+button(msg('replaceTemplate'),'replace')+button(msg('keepTemplate'),'keep')+'</div>':'')+
-   (!template?'<p>'+text('noTemplateHelp')+'</p>':
-    field(msg('templateName'),'<input name="templateName" required maxlength="160" value="'+esc(template.name)+'">')+
-    '<div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="'+text('recordTypes')+'"><div class="lab-type-list-heading"><strong>'+text('recordTypesCount',{count:choices.length})+'</strong>'+button(msg('addType'),'section-add','','subtle')+'</div><div class="lab-type-list">'+
-    choices.map(s=>'<button type="button" class="lab-type-choice" data-action="project-template-command" data-command="select-type" data-id="'+s.id+'" aria-current="'+(s.id===selected)+'"><span data-type-title>'+esc(s.label)+'</span><small>'+(s.enabled?text('fields',{count:s.fields.length}):msg('removed'))+'</small></button>').join('')+
-    '</div></aside><section class="lab-type-detail" aria-label="'+text('selectedType')+'">'+(section?
-     '<div class="lab-type-detail-heading"><strong>'+(section.enabled?msg('typeDetails'):msg('removedType'))+'</strong><div>'+button(msg('moveUp'),'section-move','data-index="'+index+'" data-direction="-1" '+(position<=0?'disabled':''),'subtle')+button(msg('moveDown'),'section-move','data-index="'+index+'" data-direction="1" '+(position<0||position>=siblings.length-1?'disabled':''),'subtle')+button(section.enabled?msg('removeType'):msg('restoreType'),section.enabled?'section-remove':'section-restore','data-index="'+index+'"','subtle')+'</div></div>'+sectionDetails(section,index,{field,esc,option,button}):'<p>'+text('addTypeHelp')+'</p>')+
-    '</section></div><div class="inline-actions">'+button(msg('removeDefault'),'remove','','subtle')+'</div>');
+  return '<p>'+esc(t('configurationEditor','templateHelp'))+'</p><div class="project-template-source">'+field(t('configurationEditor','startingTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button(t('configurationEditor','useTemplate'),'apply',source==='choose'?'disabled':'')+'</div>'+(replace?'<div class="project-template-confirm" role="alert"><p>'+esc(t('configurationEditor','replaceHelp'))+'</p>'+button(t('configurationEditor','replace'),'replace')+button(t('configurationEditor','keep'),'keep')+'</div>':'')+(draft.labBookTemplate?field(t('configurationEditor','templateName'),'<input name="templateName" required maxlength="160" value="'+esc(draft.labBookTemplate.name)+'">'):'')+(draft.labBookTemplate?configuration.view()+'<div class="inline-actions">'+button(t('configurationEditor','removeTemplate'),'remove','','subtle')+'</div>':'<p>'+esc(t('configurationEditor','noTemplate'))+'</p>');
  }
  function projectFields(){
   const tools=availableLocationTools(state.dashboardSettings);
@@ -121,7 +103,7 @@ export function projectSettings(services){
   const optionalOpen=!!form()?.querySelector('[data-project-optional]')?.open,scroll=form()?.querySelector('.project-config-scroll')?.scrollTop??0,current=state.book.projects.some(p=>p.id===draft.id),template=mode==='template';
   showDialog('<form id="'+(template?'project-template-form':'structure-project-form')+'" data-no-draft class="project-config-form '+(template?'project-template-form':'')+'" '+(busy?'data-busy="true" aria-busy="true"':'')+'><h2 id="dialog-title">'+(template?msg('labBookTemplate'):current?msg('editProject'):msg('newProject'))+'</h2>'+
    '<div class="project-config-scroll"><fieldset class="project-config-fields" '+(busy?'disabled':'')+'>'+(template?templateFields():projectFields())+'</fieldset></div>'+
-   (busy&&creation?'<p role="status">'+esc(projectText('creating'))+'</p>':'')+'<p class="module-error" role="alert" tabindex="-1" data-project-error '+(error?'':'hidden')+'>'+esc(error)+'</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog" '+(busy?'disabled':'')+'>'+text('cancel')+'</button><button class="button primary" '+(busy||native()&&template&&configuration.busy()?'disabled':'')+'>'+ (template?msg('saveTemplate'):creation?projectText('create'):msg('saveProject'))+'</button></div></form>');
+   (busy&&creation?'<p role="status">'+esc(projectText('creating'))+'</p>':'')+'<p class="module-error" role="alert" tabindex="-1" data-project-error '+(error?'':'hidden')+'>'+esc(error)+'</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog" '+(busy?'disabled':'')+'>'+text('cancel')+'</button><button class="button primary" '+(busy||template&&configuration.busy()?'disabled':'')+'>'+ (template?msg('saveTemplate'):creation?projectText('create'):msg('saveProject'))+'</button></div></form>');
   if(optionalOpen&&form().querySelector('[data-project-optional]'))form().querySelector('[data-project-optional]').open=true;form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'templates');
   if(focus)form().querySelector(focus)?.focus({preventScroll:true});
  }
@@ -133,13 +115,13 @@ export function projectSettings(services){
   placementParent=current&&state.projectOwner?services.projectDirectory.entries().find(entry=>entry.projectId===current.id)?.parentId??null:null;
   mode=editingTemplate?'template':'project';
   const initial=current??{id:crypto.randomUUID(),title:details?.title??'',description:details?.description??'',share:false,logoId:null,parentId:null,kind:'Project'};
-  if(native()){const {labBookTemplate,...header}=initial;draft=structuredClone(header);if(labBookTemplate)draft.labBookTemplate={name:labBookTemplate.name};}else draft=structuredClone(initial);
+  const {labBookTemplate,...header}=initial;draft=structuredClone(header);if(labBookTemplate)draft.labBookTemplate={name:labBookTemplate.name};
   draft.tools??=[];draft.kind??='Project';
-  if(editingTemplate&&!draft.labBookTemplate)draft.labBookTemplate=native()?{name:''}:{name:'',configuration:emptyConfiguration()};
+  if(editingTemplate&&!draft.labBookTemplate)draft.labBookTemplate={name:''};
   base=structuredClone(draft);etag=state.etag;type=projectTypeChoice(draft.kind,state.dashboardSettings);
-  source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;selected=null;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id);
-  if(native()&&!editingTemplate&&current?.labBookTemplate)void loadSavedTypes(current.id);
-  if(native()&&editingTemplate){
+  source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id);
+  if(!editingTemplate&&current?.labBookTemplate)void loadSavedTypes(current.id);
+  if(editingTemplate){
    const selection=draft,initialName=draft.labBookTemplate.name;
    await configuration.open({workspaceId:state.book.id,projectId:draft.id,notebookId:null,slot:'labBookTemplate'});if(draft!==selection)return;
    // A name typed while the template was opening is the author's: keep it and record it in the draft.
@@ -150,24 +132,14 @@ export function projectSettings(services){
  }
  async function apply(){
   if(source==='choose')return;const captured=draft,choice=source;
-  if(native()){
-   let selectedSource=null,name='';
-   if(source==='current'){draft.labBookTemplate=structuredClone(base.labBookTemplate);configurationSource=undefined;return;}
-   if(source.startsWith('profile:')){const profile=recommendedProfile(source,state.dashboardSettings);if(!profile)throw new Error(t('templatePreferences','enableFirst',{preferences:t('preferences','title'),templates:t('preferences','templates')}));selectedSource={profileId:profile.id};name=profile.label;}
-   else if(source.startsWith('project:')){const id=source.slice(8);let retained=remoteTemplates.get(id);if(!retained){await loadTemplate(source,false);retained=remoteTemplates.get(id);}if(draft!==captured||source!==choice)return;if(!retained)throw new Error(projectText('templateUnavailable'));selectedSource=retained.configurationPin;name=retained.name;}
-   configurationSource=selectedSource;
-   if(mode==='template'){await configuration.source(selectedSource,name);draft.labBookTemplate={name:configuration.descriptor().header.name??name};}
-   else if(selectedSource)draft.labBookTemplate={name};else delete draft.labBookTemplate;
-   selected=null;replace=false;return;
-  }
-  if(source==='current'){draft.labBookTemplate=structuredClone(base.labBookTemplate);return;}
-  const profile=recommendedProfile(source,state.dashboardSettings);
-  if(source.startsWith('profile:')&&!profile)throw new Error(t('templatePreferences','enableFirst',{preferences:t('preferences','title'),templates:t('preferences','templates')}));
-  const existing=source.startsWith('project:')?(state.book.projects.find(p=>p.id===source.slice(8))?.labBookTemplate??remoteTemplates.get(source.slice(8))):null;
-  if(source.startsWith('project:')&&!templateAvailable(existing,state.dashboardSettings))throw new Error(msg('templateUnavailable'));
-  if(source==='blank'&&mode==='project')delete draft.labBookTemplate;
-  else draft.labBookTemplate=profile?starterTemplate(profile.id):existing?{name:existing.name,configuration:copyConfiguration(existing.configuration)}:{name:'',configuration:emptyConfiguration()};
-  selected=null;replace=false;
+  let selectedSource=null,name='';
+  if(source==='current'){draft.labBookTemplate=structuredClone(base.labBookTemplate);configurationSource=undefined;return;}
+  if(source.startsWith('profile:')){const profile=recommendedProfile(source,state.dashboardSettings);if(!profile)throw new Error(t('templatePreferences','enableFirst',{preferences:t('preferences','title'),templates:t('preferences','templates')}));selectedSource={profileId:profile.id};name=profile.label;}
+  else if(source.startsWith('project:')){const id=source.slice(8);let retained=remoteTemplates.get(id);if(!retained){await loadTemplate(source,false);retained=remoteTemplates.get(id);}if(draft!==captured||source!==choice)return;if(!retained)throw new Error(projectText('templateUnavailable'));selectedSource=retained.configurationPin;name=retained.name;}
+  configurationSource=selectedSource;
+  if(mode==='template'){await configuration.source(selectedSource,name);draft.labBookTemplate={name:configuration.descriptor().header.name??name};}
+  else if(selectedSource)draft.labBookTemplate={name};else delete draft.labBookTemplate;
+  replace=false;
  }
  async function action(node){
   if(await directoryChoices.action(node))return true;
@@ -180,13 +152,9 @@ export function projectSettings(services){
    busy=true;draw();try{await apply();}catch(e){error=e?.message??msg('loadFailed');}finally{busy=false;draw('[name="templateName"]');}return true;
   }
   if(command==='keep')replace=false;
-  else if(command==='remove'){if(native()){await configuration.discard();configurationSource=null;}delete draft.labBookTemplate;replace=false;}
-  else if(command==='select-type')selected=node.dataset.id;
-  else if(draft.labBookTemplate){
-   if(!sectionAction(draft.labBookTemplate.configuration,command,node.dataset))return true;
-   const c=draft.labBookTemplate.configuration;if(command==='section-add')selected=c.sections.at(-1).id;
-  }
-  draw(['section-add','select-type'].includes(command)?'[data-lab-section-prop="label"]':undefined);return true;
+  else if(command==='remove'){await configuration.discard();configurationSource=null;delete draft.labBookTemplate;replace=false;}
+  else return true;
+  draw();return true;
  }
  async function changePlacement(element){
   const id=draft.id,parentId=element.value||null,expectedParentId=placementParent,signature=JSON.stringify({id,parentId,expectedParentId});if(placementRequest?.signature!==signature)placementRequest={id:crypto.randomUUID(),signature};const requestId=placementRequest.id;element.disabled=true;
@@ -197,21 +165,14 @@ export function projectSettings(services){
  async function loadTemplate(choice,applySelection=true){
   const id=draft.id,wasBusy=busy;busy=true;draw();
   try{
-   if(native()){
-    const projectId=choice.slice(8),local=state.book.projects.some(project=>project.id===projectId);let workspaceId=state.book.id,owner=undefined;
-    if(!local){const response=await services.accessProject(()=>api('/api/projects/'+projectId+'/workspace/read/start',{}, {adopt:false}));workspaceId=response.metadata.id;owner=projectId;}
-    const result=await services.accessProject(()=>sourceReader.open({workspaceId,projectId,notebookId:null,slot:'labBookTemplate'},owner===undefined?{saved:true}:{owner,saved:true}));
-    if(draft?.id!==id||source!==choice)return;
-    // Its record types, to show what the chosen template includes.
-    const page=await services.accessProject(()=>sourceReader.window('sections',{offset:0,limit:32}));if(draft?.id!==id||source!==choice)return;
-    remoteTemplates.set(projectId,{name:result.header.name,configurationPin:result.configurationPin,types:{rows:page.rows.filter(row=>row.value.enabled),more:page.next!==null}});
-    if(mode==='project'&&applySelection){templateChosen=true;await apply();}return;
-   }
-   const result=await services.accessProject(()=>api('/api/projects/'+choice.slice(8)+'/workspace/read/start',{}, {adopt:false}));
+   const projectId=choice.slice(8),local=state.book.projects.some(project=>project.id===projectId);let workspaceId=state.book.id,owner=undefined;
+   if(!local){const response=await services.accessProject(()=>api('/api/projects/'+projectId+'/workspace/read/start',{}, {adopt:false}));workspaceId=response.metadata.id;owner=projectId;}
+   const result=await services.accessProject(()=>sourceReader.open({workspaceId,projectId,notebookId:null,slot:'labBookTemplate'},owner===undefined?{saved:true}:{owner,saved:true}));
    if(draft?.id!==id||source!==choice)return;
-   const template=result.metadata.projects.find(p=>p.id===choice.slice(8))?.labBookTemplate;
-   if(!validLabBookTemplate(template)||!templateAvailable(template,state.dashboardSettings))throw new Error(projectText('templateUnavailable'));
-   remoteTemplates.set(choice.slice(8),template);if(mode==='project'){templateChosen=true;await apply();}
+   // Its record types, to show what the chosen template includes.
+   const page=await services.accessProject(()=>sourceReader.window('sections',{offset:0,limit:32}));if(draft?.id!==id||source!==choice)return;
+   remoteTemplates.set(projectId,{name:result.header.name,configurationPin:result.configurationPin,types:{rows:page.rows.filter(row=>row.value.enabled),more:page.next!==null}});
+   if(mode==='project'&&applySelection){templateChosen=true;await apply();}
   }catch(e){if(draft?.id===id)error=e.message??projectText('templateUnavailable');}
   finally{if(draft?.id===id){busy=wasBusy;draw(error?'[data-project-error]':'[data-project-template-source]');}}
  }
@@ -219,28 +180,24 @@ export function projectSettings(services){
   const selected=draft;busy=true;draw();try{await apply();}catch(reason){if(draft===selected)error=reason.message;}finally{if(draft===selected){busy=false;draw(error?'[data-project-error]':focus);}}
  }
  function input(el){
-  if(!form()?.contains(el))return false;if(busy)return true;if(native()&&configuration.input(el))return true;if(directoryChoices.input(el))return true;if(el.hasAttribute('data-project-parent')){void changePlacement(el);return true;}capture();error='';
+  if(!form()?.contains(el))return false;if(busy)return true;if(configuration.input(el))return true;if(directoryChoices.input(el))return true;if(el.hasAttribute('data-project-parent')){void changePlacement(el);return true;}capture();error='';
   // Before the template has opened, the typed name waits in the draft and is recorded once it opens.
-  if(native()&&mode==='template'&&el.name==='templateName'){if(configuration.descriptor())configuration.changedHeader('name',el.value);return true;}
+  if(mode==='template'&&el.name==='templateName'){if(configuration.descriptor())configuration.changedHeader('name',el.value);return true;}
   if(el.hasAttribute('data-project-type')){
    type=el.value;draft.kind=type==='none'?'Project':type==='custom'?'':projectTypeChoices(state.dashboardSettings).find(c=>c.id===type).label;
    if(!templateChosen){source=recommendedProfile(type,state.dashboardSettings)?type:'blank';void chooseSource('[data-project-type]');}
    draw(type==='custom'?'[name="customKind"]':'[data-project-type]');
   }else if(el.hasAttribute('data-project-template-source')){source=el.value;replace=false;if(source.startsWith('project:')&&!state.book.projects.some(p=>p.id===source.slice(8))&&!remoteTemplates.has(source.slice(8))){void loadTemplate(source);return true;}if(mode==='project'){templateChosen=true;void chooseSource('[data-project-template-source]');}draw('[data-project-template-source]');}
-  else if(mode==='template'&&draft.labBookTemplate&&sectionInput(el,draft.labBookTemplate.configuration)){if(el.dataset.labSectionProp==='label'){const title=form().querySelector('[data-id="'+selected+'"] [data-type-title]');if(title)title.textContent=el.value;}if(['type','numericRepresentation'].includes(el.dataset.labFieldProp))draw('[data-lab-field="'+el.dataset.labField+'"][data-lab-field-prop="'+el.dataset.labFieldProp+'"]');}
   return true;
  }
  async function submit(target){
   if(!['structure-project-form','project-template-form'].includes(target.id))return false;if(busy)return true;capture();
-  if(!native()&&draft.labBookTemplate&&!validLabBookTemplate(draft.labBookTemplate)){error=msg('invalidTemplate');draw('[data-project-error]');throw new Error(error);}
   busy=true;error='';const refreshDirectory=Boolean(creation||state.projectOwner),value=structuredClone(draft);value.title=value.title.trim();value.kind=value.kind.trim();draw();
   try{
    let selectedConfiguration={};
-   if(native()){
-    delete value.labBookTemplate;
-    if(mode==='template')selectedConfiguration=draft.labBookTemplate?await configuration.checkpoint():{configurationSource:null};
-    else if(configurationSource!==undefined)selectedConfiguration={configurationSource};
-   }
+   delete value.labBookTemplate;
+   if(mode==='template')selectedConfiguration=draft.labBookTemplate?await configuration.checkpoint():{configurationSource:null};
+   else if(configurationSource!==undefined)selectedConfiguration={configurationSource};
    if(creation){await api('/api/projects/create',{...creation,project:value,...selectedConfiguration},{adopt:false});if(creation.password)await api('/api/projects/'+value.id+'/access/unlock',{username:creation.username,password:creation.password,recovery:''},{adopt:false});await services.enterProject(value.id);}
    else{const signature=JSON.stringify({etag,project:value,...selectedConfiguration});if(saveRequest?.signature!==signature)saveRequest={id:crypto.randomUUID(),signature};const result=state.projectOwner?await services.accessProject(()=>api('/api/projects/'+value.id+'/settings/save',{id:saveRequest.id,etag,project:value,...selectedConfiguration})):await api('/api/workspace/structure',{etag,change:{kind:'project',value},...selectedConfiguration});state.book=result.book;state.etag=result.etag;}
    state.preview=null;state.project=value.id;state.notebook='all';state.page='project';

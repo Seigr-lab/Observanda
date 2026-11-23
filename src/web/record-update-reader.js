@@ -5,9 +5,9 @@ import {MAX_BYTES,MAX_WORKSPACE_RECORDS} from './workspace-limits.js';
 const invalid=()=>{throw {code:'WORKSPACE_READ_INVALID',message:t('recordUpdates','invalid')};};
 const capacity=()=>{throw {code:'WORKSPACE_READ_LIMIT',message:t('errors','WORKSPACE_READ_LIMIT')};};
 const integer=value=>Number.isSafeInteger(value)&&value>=0;
-// This compatibility reader is for a client that already owns a complete saved
-// base. Normal authoring uses selected-record reads. Until every received page
-// is checked, no partial update reaches either the saved base or an open draft.
+// Reads the record updates since a complete saved base the client already
+// holds; selected-record reads serve ordinary authoring. Until every received
+// page is checked, no partial update reaches either the saved base or an open draft.
 export function recordUpdateReader(request,initial){
  const first=initial?.recordUpdate;
  if(!first||initial.etag!==first.etag||!researchId(first.workspaceId)||!revisionId(first.etag)||!revisionId(first.baseEtag)||first.metadata?.id!==first.workspaceId||!Array.isArray(first.metadata.entries)||first.metadata.entries.length||!integer(first.count))invalid();

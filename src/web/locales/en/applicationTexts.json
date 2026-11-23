@@ -35,8 +35,6 @@
   "activityIncomplete": "The linked record response was incomplete. Refresh history.",
   "activityAlreadyLinked": "That record is already linked.",
   "activitySaveFirst": "Save this record before adding a linked record.",
-  "activityTemplate": "Record template",
-  "activityCreate": "Create record",
   "activityLoading": "Loading linked records...",
   "activityChanged": "Records have changed. Refresh to see the latest history.",
   "activityPages": "Linked record pages",

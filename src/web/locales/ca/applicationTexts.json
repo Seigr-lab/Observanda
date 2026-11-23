@@ -35,8 +35,6 @@
   "activityIncomplete": "La resposta de registres enllaçats era incompleta. Actualitza l’historial.",
   "activityAlreadyLinked": "Aquest registre ja està enllaçat.",
   "activitySaveFirst": "Guarda aquest registre abans d’afegir-ne un d’enllaçat.",
-  "activityTemplate": "Plantilla del registre",
-  "activityCreate": "Crea el registre",
   "activityLoading": "S’estan carregant els registres enllaçats...",
   "activityChanged": "Els registres han canviat. Actualitza per veure l’historial més recent.",
   "activityPages": "Pàgines de registres enllaçats",

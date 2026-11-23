@@ -5,7 +5,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {attemptFixture,preparation,event,assessment,fact} from './fixtures/attempts.js';
-import {validAttempt,appendOnlyAttempt,mergeAttemptAdditions,attemptComparison,currentAttemptItems,hasNestedAttemptContinuations} from '../src/web/attempt-model.js';
+import {validAttempt,appendOnlyAttempt,mergeAttemptAdditions,currentAttemptItems,hasNestedAttemptContinuations} from '../src/web/attempt-model.js';
 import {attemptView} from '../src/web/attempt-view.js';
 import {attemptComparisonView} from '../src/web/attempt-comparison.js';
 import {createRun} from '../src/web/record-workflow.js';
@@ -83,9 +83,9 @@ test('repeats retain preparation as inherited conditions, compare one changed pa
  const read=ResearchCatalogue.prototype.read;ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace loaded');};let page;
  try{page=await new RecordRuns(f.ws).list({workspaceId:f.book.id,recordId:f.investigation.id,compare:true});}finally{ResearchCatalogue.prototype.read=read;}
  assert.equal(page.runs.length,2);assert.ok(page.runs.every(r=>r.conditions.attempt.assessments.some(a=>a.outcome==='unresolved')));
- const view=attemptComparisonView(attemptComparison(second.attempt),attemptComparison(first.attempt),esc);assert.match(view,/Differs from the first run/);assert.match(view,/240/);
+ const compared=id=>page.runs.find(run=>run.id===id).conditions.attempt,view=attemptComparisonView(compared(second.id),compared(first.id),esc);assert.match(view,/Differs from the first run/);assert.match(view,/240/);
  assert.match(view,/Requested pattern recognized/);assert.match(view,/Preparation revision 1/);
- const removed=structuredClone(second.attempt);removed.preparations[0].conditions=[];assert.match(attemptComparisonView(attemptComparison(removed),attemptComparison(first.attempt),esc),/Not present in this preparation/);
+ assert.match(attemptComparisonView({...compared(second.id),conditions:[]},compared(first.id),esc),/Not present in this preparation/);
  const book=(await f.ws.read()).book;validateNotebook(book);
  // The website copy states the outcomes; the private method protocol stays withheld.
  const copy=await convertPublicationRecord(f.ws,book,book.entries.find(e=>e.id===first.id)),html=copy.html;
@@ -114,7 +114,7 @@ test('growing history compatibility preserves current facts, merges and nested-f
  const preparations=[];for(let i=0;i<33;i++){const p=preparation();if(i){p.supersedes=preparations.at(-1).id;p.reason='Later configuration '+i;}preparations.push(p);}
  const p=preparations.at(-1),events=Array.from({length:257},(_,i)=>event(p,{label:'Acquisition '+i})),assessments=Array.from({length:257},(_,i)=>assessment(p,i%2,{observed:'Assessment '+i})),value={version:1,preparations,events,assessments},before=structuredClone(value);
  assert.ok(validAttempt(value));assert.ok(validAttempt(value,{draft:true}));const mine=structuredClone(value),stored=structuredClone(value),correction={...events[256],id:randomUUID(),supersedes:events[256].id,reason:'Late receipt correction',label:'Corrected late acquisition'};mine.events.push(correction);stored.assessments.push(assessment(p,1,{observed:'Independent later assessment'}));
- const combined=mergeAttemptAdditions(value,mine,stored);assert.ok(combined);assert.deepEqual(currentAttemptItems(combined.events),[...events.slice(0,256),correction]);assert.equal(attemptComparison(combined).assessments.at(-1).preparationNumber,33);assert.deepEqual(value,before);
+ const combined=mergeAttemptAdditions(value,mine,stored);assert.ok(combined);assert.deepEqual(currentAttemptItems(combined.events),[...events.slice(0,256),correction]);assert.equal(combined.preparations.findIndex(preparation=>preparation.id===currentAttemptItems(combined.assessments).at(-1).preparationId)+1,33);assert.deepEqual(value,before);
  const html=attemptView(combined,esc);assert.match(html,/Preparation revision 33/);assert.ok(html.indexOf('Acquisition 1')<html.indexOf('Acquisition 255'));assert.ok(html.includes('Corrected late acquisition'));
  for(const group of ['conditions','inputs','observations','criteria']){const invalid=structuredClone(value);invalid.preparations[32][group]=[...p[group],...Array.from({length:65-p[group].length},()=>({...p[group][0],id:randomUUID()}))];
   // Preparation collections are paged: more than 64 rows are valid and marked as continuations for older readers.

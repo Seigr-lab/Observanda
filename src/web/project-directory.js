@@ -1,14 +1,14 @@
 import {ancestors} from './workspace-structure.js';
 import {placeAt,updateText,updateProperty} from './progress-dom.js';
-import {hasProjectDirectory} from './project-directory-capability.js';
+import {workspaceAvailable} from './workspace-availability.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectDirectory');
 // Only directory summaries are cached here. Never adopt them as editable
 // research metadata or hydrate every project's database to build navigation.
 export function projectDirectory({state,api,esc,changed}){
- let context=state.storage?.contextId,kind=state.storage?.researchStorage,pages=new Map(),generation=0,lastView=null,completedCommands='';
- const available=()=>hasProjectDirectory(state);
- function sync(){if(context!==state.storage?.contextId||kind!==state.storage?.researchStorage){context=state.storage?.contextId;kind=state.storage?.researchStorage;pages=new Map();generation++;lastView=null;completedCommands='';}}
+ let context=state.storage?.contextId,opened=workspaceAvailable(state),pages=new Map(),generation=0,lastView=null,completedCommands='';
+ const available=()=>workspaceAvailable(state);
+ function sync(){if(context!==state.storage?.contextId||opened!==workspaceAvailable(state)){context=state.storage?.contextId;opened=workspaceAvailable(state);pages=new Map();generation++;lastView=null;completedCommands='';}}
  const page=parentId=>{sync();if(!pages.has(parentId))pages.set(parentId,{parentId,items:[],ancestors:[],revision:null,total:0,loaded:false,loading:false,error:'',depth:0,requestedDepth:1});return pages.get(parentId);};
  const summary=entry=>({id:entry.projectId,parentId:entry.parentId,...(entry.summary??{title:text('unnamed',{id:entry.projectId}),description:'',kind:text('project')}),share:false,logoId:null});
  function entries(){sync();const found=new Map();for(const value of pages.values())for(const entry of [...value.ancestors,...value.items])found.set(entry.projectId,entry);return [...found.values()];}

@@ -8,7 +8,7 @@ import {projectSettings} from '../src/web/project-settings.js';
 import {projectNotebooksUI} from '../src/web/project-notebooks.js';
 import {starterTemplate,projectTypeChoice} from '../src/web/project-templates.js';
 import {emptyConfiguration} from '../src/web/notebook-schema.js';
-import {recordTypeSettings} from '../src/web/laboratory/record-type-settings.js';
+import {prepareProfileText} from '../src/web/laboratory/profile-text.js';
 
 const locales=['en','ca','es','nb','nn'];
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -18,22 +18,6 @@ const option=(value,label,selected)=>'<option value="'+esc(value)+'"'+(value===s
 const settings={enabledModules:['laboratory-beekeeping']};
 const projectId='00000000-0000-4000-8000-000000000001',bookId='00000000-0000-4000-8000-000000000002';
 
-test('record type settings translate live controls and validation without changing stored templates',async context=>{
- const originalDocument=globalThis.document;globalThis.document={querySelector:()=>null};
- context.after(()=>{globalThis.document=originalDocument;activateLanguage('en');});
- const section={id:'00000000-0000-4000-8000-000000000003',profileId:'beekeeping',key:'custom',label:'Authored <type>',description:'Keep this guidance',enabled:true,fields:[]};
- const book={id:bookId,title:'Authored workspace',projects:[],notebooks:[{id:bookId,title:'Authored notebook',configuration:{profiles:[{id:'beekeeping',version:1,enabled:true}],sections:[section]}}]},before=structuredClone(book);
- let writes=0;
- const ui=await recordTypeSettings({state:{book,storage:{}},api:async(path,data)=>{if(data){writes++;throw Error('Unexpected write');}return {book,etag:'test'};},esc,field,option,draw(){}},{id:'beekeeping'});
- for(const locale of locales){
-  await load(locale);activateLanguage(locale);
-  const html=ui.view();assert.ok(html.includes(esc(t('projectEditors','editTypesHelp'))));assert.ok(html.includes(esc(t('projectEditors','fields',{count:0}))));
-  assert.ok(html.includes('Authored &lt;type&gt;'));assert.ok(!html.includes('<type>'));
-  ui.input({dataset:{labSection:'0',labSectionProp:'label'},value:'',hasAttribute:()=>false});
-  await assert.rejects(ui.save(),{message:t('projectEditors','typeNameRequired')});
-  await ui.discard();assert.deepEqual(book,before);assert.equal(writes,0);
- }
-});
 function fixture(context){
  const previousDocument=globalThis.document,previousFormData=globalThis.FormData;
  context.after(()=>{globalThis.document=previousDocument;globalThis.FormData=previousFormData;activateLanguage('en');});
@@ -48,13 +32,16 @@ function fixture(context){
  let html='',saved;
  const services={state,esc,field,option,showDialog:value=>{html=value;},render(){},notify(){},rootBook:()=>state.book,
   projectDirectory:{entries:()=>[],navigation:()=>state.book},
-  api:async(path,body)=>{if(path==='/api/projects/choices')return new Promise(()=>{});saved=body;return {book:state.book,etag:'next'};}
+  // A lab book's record types are read through its configuration; these views only need its settings.
+  api:async(path,body)=>{if(path==='/api/projects/choices')return new Promise(()=>{});if(path.startsWith('/api/research/configurations/'))throw Object.assign(new Error('Configuration unavailable'),{code:'NOT_FOUND'});saved=body;return {book:state.book,etag:'next'};}
  };
  return {services,project,book,form,elements,html:()=>html,saved:()=>saved};
 }
 
 test('project and profile display labels translate without changing stored kinds or starter templates',async context=>{
  context.after(()=>activateLanguage('en'));
+ // The application prepares the lab book profile texts at startup (app.js), before any template is read.
+ await prepareProfileText();
  const template=starterTemplate('beekeeping'),before=structuredClone(template),originalKind=template.name;
  for(const locale of locales){
   await load(locale);activateLanguage(locale);
@@ -118,12 +105,12 @@ test('lab-book deletion review translates the count and escapes names before any
  }
 });
 
-// In catalogue storage a new lab book gets its own store through a project's store. A project held in
+// A new lab book gets its own store through a project's store. A project held in
 // the workspace itself (for example a shared project in a collaboration copy) takes no new lab books.
 test('a project held in the workspace refuses new lab books with a translated explanation',async context=>{
  const f=fixture(context),notices=[];let dialogs=0;
  Object.assign(f.services,{notify:(message,error)=>notices.push({message,error}),showDialog:()=>{dialogs++;}});
- f.services.state.storage={contextId:'context',researchStorage:'catalogue'};
+ f.services.state.storage={contextId:'context',available:true};
  const ui=projectNotebooksUI(f.services),before=structuredClone(f.services.state.book);
  for(const locale of locales){
   await load(locale);activateLanguage(locale);

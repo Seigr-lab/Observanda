@@ -1,6 +1,5 @@
 import {recordDateLabel} from './record-date.js';
-import {runsOf} from './record-workflow.js';
-import {runConditions,validRunPage,validRunComparisonPage,RUN_PAGE_SIZE,RUN_DETAIL_PAGE_SIZE} from './record-runs.js';
+import {validRunPage,validRunComparisonPage,RUN_DETAIL_PAGE_SIZE} from './record-runs.js';
 import {t} from './i18n/index.js';
 import {attemptComparisonView} from './attempt-comparison.js';
 
@@ -9,7 +8,6 @@ export function recordRunsUI({state,api,esc,getRecord}){
  const record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
  const active=()=>['editor','record-reader'].includes(state.page)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&record()?.type!=='run'&&!!record();
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.selected,state.etag]);
- const indexed=()=>state.storage?.researchStorage==='catalogue';
  const link=run=>`<a href="#/records/${run.id}/read" data-action="record-read-linked" data-id="${run.id}">${esc(run.title)}</a>`;
  const button=(key,action,disabled=false)=>`<button type="button" class="button" data-action="workflow-${action}" ${disabled?'disabled':''}>${text(key)}</button>`;
  let key='',generation=0,controller=null,page=null,error=null,loading=false,opened=false,compare=false,requestedCursor=null,detail=null;
@@ -42,14 +40,9 @@ export function recordRunsUI({state,api,esc,getRecord}){
   if(!active())return;sync();const request=++generation,expectedKey=key;
   controller?.abort();controller=new AbortController();loading=true;error=null;requestedCursor=cursor;detail=null;paint();
   try{
-   const command={workspaceId:state.book.id,recordId:record().id,cursor,compare};let result;
-   if(indexed()){
-    result=await api('/api/research/records/runs',command,{adopt:false,signal:controller.signal});
-    if(!validRunPage(result,command))throw Error(t('recordWorkflow','invalidPage'));
-   }else{
-    const runs=runsOf(state.book,record().id),offset=Number(cursor??0);
-    result={runs:runs.slice(offset,offset+RUN_PAGE_SIZE).map(run=>({...run,...(compare?{conditions:runConditions(run)}:{})})),total:runs.length,offset,cursor:String(offset),nextCursor:offset+RUN_PAGE_SIZE<runs.length?String(offset+RUN_PAGE_SIZE):null,previousCursor:offset?String(Math.max(0,offset-RUN_PAGE_SIZE)):null,changed:false,compare};
-   }
+   const command={workspaceId:state.book.id,recordId:record().id,cursor,compare};
+   const result=await api('/api/research/records/runs',command,{adopt:false,signal:controller.signal});
+   if(!validRunPage(result,command))throw Error(t('recordWorkflow','invalidPage'));
    if(request!==generation||!active()||expectedKey!==identity())return;
    page=result;loading=false;paint(focus);
   }catch(caught){if(request===generation&&active()&&expectedKey===identity()&&caught.name!=='AbortError'){page=null;error={message:caught.message??t('recordWorkflow','loadFailed')};loading=false;paint(true);}}

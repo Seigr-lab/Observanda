@@ -3,6 +3,7 @@ import {calculatorResultClient,savedCalculator} from './calculator-result-client
 import {moduleReferenceClient} from './modules/reference-client.js';
 import {moduleReferencePicker} from './modules/reference-picker.js';
 import {t} from './i18n/index.js';
+import {workspaceAvailable} from './workspace-availability.js';
 const tr=(key,values)=>t('calculatorResults',key,values);
 export function calculatorResultUI(services,{current}){
  const {state,api,esc,field,notify}=services;let selected=null,session=null,timer=null;
@@ -29,7 +30,7 @@ export function calculatorResultUI(services,{current}){
  function failure(s,error){if(!valid(s)||error.name==='AbortError')return;s.error=error;paint(s);}
  async function retain(s){if(!valid(s)||s.busy)return;s.busy=true;s.error=null;paint(s);try{await receive(s,await client.retain(s.captured,s.dest,s));}catch(error){failure(s,error);}finally{if(valid(s)){s.busy=false;paint(s);}}}
  async function action(s,name){if(!valid(s))return;if(name==='close'){stop();return;}if(name==='open'){if(s.busy)return;s.busy=true;paint(s);const target={workspaceId:s.dest.workspaceId,type:'record',id:s.dest.recordId};try{await services.openReference?.(target);if(session===s)stop();}catch(error){failure(s,error);}finally{if(valid(s)){s.busy=false;paint(s);}}return;}if(s.busy)return;if(name==='check'){clearTimeout(timer);s.busy=true;s.error=null;paint(s);try{await receive(s,await client.status(s.captured,s.dest,s.jobId));}catch(error){failure(s,error);}finally{if(valid(s)){s.busy=false;paint(s);}}return;}if(name==='retry'&&!s.job){await retain(s);return;}if(!['retry','cancel'].includes(name))return;clearTimeout(timer);s.busy=true;paint(s);try{await receive(s,await client.control(s.captured,s.dest,s.jobId,name==='retry'?'retry-job':'cancel-job'));}catch(error){failure(s,error);}finally{if(valid(s)){s.busy=false;paint(s);}}}
- return {available:()=>state.storage?.researchStorage==='catalogue',
+ return {available:()=>workspaceAvailable(state),
   open(index,{approximate=false}={}){stop();if(!savedCalculator(current())){notify(tr('saved'));return;}try{if(approximate&&current()?.data.engine!==4)throw Error('CALCULATOR_RESULT_SAVED');selected={...client.capture(index),approximate};}catch{notify(tr('unsupported'));return;}picker.open({title:tr(approximate?'chooseApproximate':'choose'),types:['record']});},
   label:({approximate=false}={})=>tr(approximate?'retainApproximate':'retain'),stop,sync(){picker.sync();if(selected&&!selected.current()||session&&!valid(session))stop();}
  };

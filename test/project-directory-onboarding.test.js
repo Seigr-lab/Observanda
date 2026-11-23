@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {projectDirectory} from '../src/web/project-directory.js';
 
 test('first-project guidance requires a confirmed empty directory in the current workspace',async()=>{
- const state={book:{projects:[]},page:'workspace',storage:{contextId:'first',researchStorage:'catalogue'}};
+ const state={book:{projects:[]},page:'workspace',storage:{contextId:'first',available:true}};
  let rows=[],failure=false,calls=0;
  const directory=projectDirectory({state,esc:String,changed:()=>{},api:async(route,input)=>{
   assert.equal(route,'/api/projects/list');assert.equal(input.parentId,null);assert.equal(input.limit,50);calls++;
@@ -21,9 +21,9 @@ test('first-project guidance requires a confirmed empty directory in the current
  assert.equal(calls,4);
 });
 
-test('document workspaces retain their embedded first-project guidance without a directory read',()=>{
- const state={book:{projects:[]},storage:{researchStorage:'document'}};
- const directory=projectDirectory({state,esc:String,changed:()=>{},api:()=>assert.fail('Document workspace must not read a project directory')});
+test('an unavailable workspace keeps first-project guidance without a directory read',()=>{
+ const state={book:{projects:[]},storage:{available:false}};
+ const directory=projectDirectory({state,esc:String,changed:()=>{},api:()=>assert.fail('An unavailable workspace must not read a project directory')});
  assert.equal(directory.confirmedEmpty(),true);
  state.book.projects.push({id:'embedded-project'});assert.equal(directory.confirmedEmpty(),false);
 });

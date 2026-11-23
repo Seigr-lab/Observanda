@@ -28,7 +28,6 @@ export const profileText=value=>{
 // A choice is also the value records store. An edited list of displayed
 // choices maps every unchanged translation back to the stored choice, so a
 // translated interface never renames the values existing records refer to.
-export const storedChoices=(lines,previous)=>lines.map(line=>previous.find(choice=>choice===line||profileText(choice)===line)??line);
 // Subject tracking labels belong to the profile that declares the subjects.
 export const trackingText=(profileId,name,subject)=>t('labBookProfiles',profileId+'.tracking.'+(name==='history'?'history.'+subject:name));
 // What an upgrade plan (catalog.js profileUpgrade) adds, in display text.

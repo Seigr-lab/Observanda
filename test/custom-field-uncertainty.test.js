@@ -10,7 +10,6 @@ import {fieldUncertaintyParts} from '../src/web/custom-field-uncertainty.js';
 import {customFieldLabel,customFieldText} from '../src/web/custom-field-presentation.js';
 import {templateFieldInput} from '../src/web/custom-field-input.js';
 import {fieldNumberControls} from '../src/web/custom-field-number-controls.js';
-import {sectionInput} from '../src/web/laboratory/section-editor.js';
 import {validConfigurationField} from '../src/web/configuration-model.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -39,7 +38,7 @@ test('number fields read stated uncertainties exactly and keep the spelling with
 
 test('schema controls set and clear the uncertainty, and the input shows its written form',()=>{
  const f=field('reading'),lab={sections:[{fields:[f]}]};
- const edit=(key,value)=>sectionInput({dataset:{labSection:'0',labField:'0',labFieldProp:key},value},lab);
+ const edit=(key,value)=>setCustomFieldProperty(lab.sections[0].fields[0],key,value);
  assert.equal(edit('uncertainty','absolute'),true);assert.equal(f.uncertainty,'absolute');assert.equal(edit('uncertainty','standard'),false);
  assert.ok(validConfigurationField({key:f.key,label:f.label,type:f.type,unit:f.unit,required:false,uncertainty:'absolute'}));
  assert.equal(customFieldLabel(f),'reading (mV) · '+customFieldText('uncertainties.absolute'));

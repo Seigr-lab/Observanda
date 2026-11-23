@@ -10,7 +10,6 @@ import {TEXT_FIELD_FORMATS,textFieldValueValid} from '../src/web/custom-field-fo
 import {customFieldLabel,customFieldText} from '../src/web/custom-field-presentation.js';
 import {templateFieldInput} from '../src/web/custom-field-input.js';
 import {fieldTextFormatControls} from '../src/web/custom-field-format-controls.js';
-import {sectionInput} from '../src/web/laboratory/section-editor.js';
 import {validConfigurationField} from '../src/web/configuration-model.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -45,7 +44,7 @@ test('exact text formats validate identifiers, addresses and digests without rew
 
 test('schema controls set and clear a text format, and the value input stays one verbatim line',()=>{
  const f=field('image'),lab={sections:[{fields:[f]}]};
- const edit=(key,value)=>sectionInput({dataset:{labSection:'0',labField:'0',labFieldProp:key},value},lab);
+ const edit=(key,value)=>setCustomFieldProperty(lab.sections[0].fields[0],key,value);
  assert.equal(edit('format','sha-256'),true);assert.equal(f.format,'sha-256');assert.ok(validConfigurationField({key:f.key,label:f.label,type:f.type,unit:f.unit,required:f.required,format:f.format}));
  assert.equal(edit('format','unsupported'),false);assert.equal(f.format,'sha-256');
  assert.equal(customFieldLabel(f),'image · '+customFieldText('formats.sha-256'));

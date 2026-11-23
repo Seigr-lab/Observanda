@@ -10,7 +10,6 @@ import {exactRational} from '../src/web/measurement-model.js';
 import {customFieldLabel} from '../src/web/custom-field-presentation.js';
 import {templateFieldInput} from '../src/web/custom-field-input.js';
 import {recordRevisionField} from '../src/web/record-revision-view.js';
-import {sectionInput} from '../src/web/laboratory/section-editor.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {sampleNotebook} from '../src/sample.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
@@ -39,7 +38,7 @@ test('number fields share exact measurement interpretation while preserving ever
 
 test('schema controls pin interpretation, reject unrelated properties and escape contexts in all value inputs',()=>{
  const f={...field(),type:'text'},lab={sections:[{fields:[f]}]};
- const edit=(key,value)=>sectionInput({dataset:{labSection:'0',labField:'0',labFieldProp:key},value},lab);
+ const edit=(key,value)=>setCustomFieldProperty(lab.sections[0].fields[0],key,value);
  assert.equal(edit('type','number'),true);assert.deepEqual(f.numeric,numeric());edit('numericRepresentation','radix-fraction');edit('numericRadix','6');assert.deepEqual(f.numeric,numeric('radix-fraction',6));
  edit('numericRepresentation','rational');assert.deepEqual(f.numeric,numeric('rational'));edit('numericRepresentation','radix');edit('numericRadix','6');
  assert.equal(edit('__proto__',{}),false);assert.equal(edit('numericRepresentation','unsupported'),false);

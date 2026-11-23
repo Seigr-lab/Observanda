@@ -35,8 +35,6 @@
   "activityIncomplete": "La respuesta de registros enlazados estaba incompleta. Actualiza el historial.",
   "activityAlreadyLinked": "Ese registro ya está enlazado.",
   "activitySaveFirst": "Guarda este registro antes de añadir uno enlazado.",
-  "activityTemplate": "Plantilla de registro",
-  "activityCreate": "Crear registro",
   "activityLoading": "Cargando los registros enlazados...",
   "activityChanged": "Los registros han cambiado. Actualiza para ver el historial más reciente.",
   "activityPages": "Páginas de registros enlazados",

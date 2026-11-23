@@ -6,6 +6,5 @@
   "chooseMore": "Tria més plantilles a {preferences} / {templates}. Personalitza aquest llibre a Configuració del llibre de laboratori.",
   "manage": "Tria més plantilles a {preferences} / {templates}.",
   "defaultUnavailable": "La plantilla predeterminada del projecte utilitza un tipus desactivat. Tria una altra plantilla o activa la predeterminada a {preferences} / {templates}.",
-  "enableFirst": "Activa primer aquesta plantilla a {preferences} / {templates}.",
-  "enableTypes": "Activa tipus de llibre de laboratori a {preferences} / {templates}, o afegeix els teus propis tipus de registre a continuació."
+  "enableFirst": "Activa primer aquesta plantilla a {preferences} / {templates}."
 }

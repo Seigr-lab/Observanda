@@ -28,8 +28,19 @@ test('record filters translate labels while retaining query values and custom do
  }
 });
 
+// A lab book's record types are read through its configuration, in the shape the server returns.
+const configurationRoute='/api/research/configurations/';
+const configurationReply=(sections,operation,data)=>{
+ if(operation==='open')return {configurationPin:null,header:{counts:{profiles:1,sections:sections.length,fields:0,choices:0}},draft:null};
+ if(operation==='window')return {configurationPin:null,draft:null,rows:sections.map((value,position)=>({key:value.id,position,value})),total:sections.length,offset:0,next:null};
+ if(operation==='section'){const value=sections.find(s=>data.sectionId?s.id===data.sectionId:s.profileId===data.profileId&&s.key===data.key);return {configurationPin:null,draft:null,item:value?{key:value.id,value}:null};}
+ if(operation==='profiles')return {configurationPin:null,draft:null,profiles:data.ids.map(id=>({id,enabled:true}))};
+ throw Error('Unexpected configuration request '+operation);
+};
+// The type chooser draws into the open dialog it finds by its own marker.
+const chooserDocument=()=>{const chooser={querySelector:()=>null,contains:()=>true};return {querySelector:selector=>selector==='#dialog'?{close(){}}:selector.startsWith('#dialog[open] [data-configuration-type-choices=')?chooser:null,activeElement:{}};};
 test('linked history translates built-in names and tracking actions without rewriting authored data',async context=>{
- const previous=globalThis.document;globalThis.document={querySelector:()=>null};
+ const previous=globalThis.document;globalThis.document=chooserDocument();
  context.after(()=>{globalThis.document=previous;activateLanguage('en');});
  const hive={id:'hive-template',profileId:'beekeeping',key:'hive',label:'My <hive>',enabled:true,fields:[]};
  const inspection={id:'inspection-template',profileId:'beekeeping',key:'inspection',label:'My inspection',enabled:true,fields:[]};
@@ -38,7 +49,10 @@ test('linked history translates built-in names and tracking actions without rewr
  const state={page:'record-reader',selected:'record',book:{id:'workspace',notebooks:[notebook],entries:[record]},storage:{},dashboardSettings:{enabledModules:['laboratory-beekeeping']}};
  const records=[{id:'linked',type:'observation',title:'My <observation>',status:'draft',occurredOn:'2026-10-29',linkedBy:[{type:'My <relationship>',revision:'old-revision-value'}]}];
  const original=structuredClone({state,records});let dialog='';const calls=[];
- const ui=recordActivityUI({state,esc,field,showDialog:value=>{dialog=value;},api:async(path,data)=>{calls.push({path,data});return {workspaceId:'workspace',records,total:1,offset:0,nextCursor:null,previousCursor:null};},notify:()=>{},render:()=>{},dirty:()=>{},revisions:()=>({record:'new-revision-value'}),create:()=>{}});
+ const ui=recordActivityUI({state,esc,field,showDialog:value=>{dialog=value;},api:async(path,data)=>{calls.push({path,data});if(path.startsWith(configurationRoute))return configurationReply(notebook.configuration.sections,path.slice(configurationRoute.length),data);return {workspaceId:'workspace',records,total:1,offset:0,nextCursor:null,previousCursor:null};},notify:()=>{},revisions:()=>({record:'new-revision-value'}),create:()=>{}});
+ // The record's type and the profile's next action come from the lab book's configuration.
+ ui.view();ui.bind();for(let turn=0;turn<20;turn++)await new Promise(resolve=>setImmediate(resolve));
+ assert.ok(calls.some(call=>call.path===configurationRoute+'section'));
  for(const locale of ['en','ca','es','nb','nn']){
   await load(locale);activateLanguage(locale);
   const before=ui.view();assert.ok(before.includes(esc(t('labBookProfiles','beekeeping.tracking.history.hive'))));
@@ -50,7 +64,7 @@ test('linked history translates built-in names and tracking actions without rewr
   assert.ok(html.includes(esc(t('applicationTexts','activityRetainedDifferent',{revision:'old-revisi'}))));
   await ui.action({dataset:{action:'record-activity-create'}});
   assert.ok(dialog.includes('My &lt;hive&gt;'));assert.ok(dialog.includes(esc(t('recordEditors','type_observation_label'))));
-  assert.deepEqual(calls.at(-1).data.relatedTo,{workspaceId:'workspace',id:'record'});
+  assert.deepEqual(calls.filter(call=>call.path==='/api/research/records/query').at(-1).data.relatedTo,{workspaceId:'workspace',id:'record'});
   assert.deepEqual({state,records},original);
  }
  ui.stop();

@@ -55,9 +55,9 @@ export async function moduleEditor(services,definition){
  const recovery=await moduleRecovery({api,workspaceId:state.book.id,moduleId:definition.id,onStatus:()=>{status();if(recoveryReady&&!disposed&&!busy&&!currentId&&drafts.size&&recovery.canPark())void releaseDrafts().then(drawList);},onChange:()=>{if(recoveryReady)drawRecovery();}});recoveryReady=true;
  const operationDirty=()=>!!operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base);
  const checkpoint=()=>recovery.schedule([...drafts.values()].filter(d=>dirty(d)||d.id===currentId&&operationDirty()&&definition.recoverOperation).map(d=>d.id===currentId&&operationDirty()&&definition.recoverOperation?{...d,operation}:d));
- const linkedWork=state.storage?.researchStorage==='catalogue'?moduleReferenceLinks(services,{moduleId:definition.id,current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}}):null;
+ const linkedWork=moduleReferenceLinks(services,{moduleId:definition.id,current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}});
  const references=moduleReferencesUI(services,{moduleId:definition.id,current:()=>drafts.get(currentId),changed:change,draw:()=>render()});
- const itemChoices=definition.paged?moduleItemChoices(services,{moduleId:definition.id,includeLinks:!linkedWork,fields:draft=>definition.itemFields?.(draft)??[],current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}}):null;
+ const itemChoices=definition.paged?moduleItemChoices(services,{moduleId:definition.id,fields:draft=>definition.itemFields?.(draft)??[],current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}}):null;
  const all=type=>(definition.availableItems?definition.availableItems(snapshot.entities,state.book):definition.scoped?snapshot.entities.filter(e=>projectUsesTool(state.book,ownerOf(e,snapshot.entities),moduleForEntity(e,snapshot.entities)?.id??definition.id)):snapshot.entities).filter(e=>!type||e.type===type);
  const get=id=>snapshot.entities.find(e=>e.id===id);
  function adopt(data){

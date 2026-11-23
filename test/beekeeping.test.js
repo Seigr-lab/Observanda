@@ -8,7 +8,7 @@ import {beekeepingFixture} from './beekeeping-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {validateNotebook} from '../src/model.js';
 import {enabledLabBookTypes,labBookTypeModules,validLabBookTypeSelection} from '../src/web/feature-modules.js';
-import {activityContext,activityTemplates,documentRecord} from '../src/web/record-activity.js';
+import {activityContext,documentRecord} from '../src/web/record-activity.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {RecordQuery} from '../src/record-query.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -28,8 +28,6 @@ test('beekeeping is opt-in in the shared registry and retains editable independe
  const {book,notebook,hive,inspection}=beekeepingFixture();validateNotebook(book);
  assert.ok(labBookTypeModules().some(m=>m.id==='laboratory-beekeeping'));assert.ok(validLabBookTypeSelection(['laboratory-beekeeping']));
  assert.equal(enabledLabBookTypes({enabledModules:[]}).length,0);assert.equal(enabledLabBookTypes({enabledModules:['laboratory-beekeeping']})[0].id,'beekeeping');
- assert.equal(activityTemplates(book,hive,{enabledModules:[]}).length,0);
- assert.equal(activityTemplates(book,hive,{enabledModules:['laboratory-beekeeping']}).length,9);
  assert.equal(activityContext(book,hive).subject,true);assert.equal(activityContext(book,inspection).event,true);
  const fresh=templateFrom(notebook.configuration.sections.find(s=>s.key==='inspection'));assert.deepEqual(fresh.values,{});
  const old=structuredClone(inspection.template);notebook.configuration.sections.find(s=>s.key==='inspection').fields[0].label='Changed';assert.deepEqual(inspection.template,old);

@@ -1,9 +1,8 @@
-import {proseText} from './prose-model.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {validRecordDate} from './record-date.js';
 import {STATUSES} from './record-types.js';
-import {attemptComparison,CONDITION_BASES,ASSESSMENT_OUTCOMES,EVENT_KINDS,EVENT_EXTENTS,EVENT_CONTEXTS} from './attempt-model.js';
+import {CONDITION_BASES,ASSESSMENT_OUTCOMES,EVENT_KINDS,EVENT_EXTENTS,EVENT_CONTEXTS} from './attempt-model.js';
 export const RUN_PAGE_SIZE=10;
 export const RUN_DETAIL_PAGE_SIZE=4;
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
@@ -19,11 +18,6 @@ export function validRunConditions(value){
  });
 }
 export const validRunComparisonPage=(page,command)=>page&&['workspaceId','recordId','runId','snapshotId'].every(key=>page[key]===command[key])&&validRunConditions(page.conditions)&&Object.entries(page.conditions.windows).every(([name,window])=>window.offset===Math.min(command.windows[name]??0,Math.max(0,window.total-1)));
-export function runConditions(record){
- const body=title=>proseText(record.sections.find(section=>section.title===title)?.body??'');
- return {parameters:body('Parameters and conditions'),changes:body('Purpose and planned changes'),deviations:body('Observed deviations'),
-  methods:record.relations.filter(link=>link.role==='uses-method').map(link=>({label:link.label,revision:link.target.revision})),attempt:attemptComparison(record.attempt)};
-}
 export function validRunPage(page,{workspaceId,recordId,compare}){
  const cursor=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=4096;
  return page?.workspaceId===workspaceId&&page.recordId===recordId&&revisionId(page.snapshotId)&&page.compare===compare&&typeof page.changed==='boolean'&&
