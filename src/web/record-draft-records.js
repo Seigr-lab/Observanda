@@ -18,7 +18,9 @@ export function recordDraftRecords({api,esc}){
     if(done||controller.signal.aborted)return;
     if(value?.id!==draft.id||value.workspaceId!==draft.workspaceId||value.revision!==revision||value.offset!==offset||!Number.isSafeInteger(value.total)||value.total<1||!Array.isArray(value.items)||value.items.length>4||!value.items.every((item,i)=>item.position===offset+i&&item.position<value.total&&typeof item.title==='string'&&typeof item.recovered==='boolean'))throw Error(text('invalidPage'));
     page=value;render();dialog.querySelector('h2').focus();
-   }catch(error){if(!done&&!controller.signal.aborted)render(false,error.message??text('readFailed'));}
+   }catch(error){if(!done&&!controller.signal.aborted){render(false,error.message??text('readFailed'));
+    // The failure and its retry can sit below a long list on a small screen; bring them into reach.
+    dialog.querySelector('[data-draft-records="retry"]')?.focus();}}
   }
   dialog.oncancel=event=>{event.preventDefault();close(null);};
   dialog.onclick=event=>{const action=event.target.closest('[data-draft-records]')?.dataset.draftRecords;if(action==='close')close(null);else if(action==='next')void load(offset+4);else if(action==='previous')void load(Math.max(0,offset-4));else if(action==='retry')void load(offset);else if(action?.startsWith('select-')){const position=Number(action.slice(7));if(page?.items.some(item=>item.position===position&&!item.recovered))close(position);}};
