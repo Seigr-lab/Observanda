@@ -5,7 +5,7 @@ import os from 'node:os';
 import {mkdtemp,mkdir,readFile,readdir,writeFile,symlink} from 'node:fs/promises';
 import {Workspace,serialize} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {createAccess,createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE} from '../src/research-catalogue.js';
@@ -66,12 +66,12 @@ test('copy review rejects changed sources, occupied destinations and linked priv
   }finally{clearVault(vault);}
 });
 
-test('password settings use salted verifiers and corrupted access settings fail closed',async()=>{
-  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-access-')),password='a long synthetic password';
-  const a=await createAccess('Researcher',password),b=await createAccess('Researcher',password);assert.notDeepEqual(a.password,b.password);assert.ok(!serialize(a).includes(password));
-  await initializeLocation(root,sampleNotebook(),a);const saved=await readAccess(root);await verifyAccess(saved,'Researcher',password);
-  await assert.rejects(verifyAccess(saved,'Someone else',password),{code:'ACCESS_DENIED'});
-  await assert.rejects(createAccess('Researcher','short'),{code:'ACCESS_INVALID'});
+test('password grants are salted and corrupted access settings fail closed',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-access-')),password='a long synthetic password',deviceStore=new TestDeviceStore({file:path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-location-device-')),'device.key')});
+  const a=await createWorkspaceAccess('Researcher',password,deviceStore),b=await createWorkspaceAccess('Researcher',password,deviceStore);clearVault(takeCreatedVault(b));assert.notDeepEqual(a.password,b.password);assert.ok(!serialize(a).includes(password));
+  await initializeLocation(root,sampleNotebook(),a);const saved=await readAccess(root,{deviceStore});clearVault(await verifyAccess(saved,'Researcher',password,{deviceStore}));
+  await assert.rejects(verifyAccess(saved,'Someone else',password,{deviceStore}),{code:'ACCESS_DENIED'});
+  await assert.rejects(createWorkspaceAccess('Researcher','short',deviceStore),{code:'ACCESS_INVALID'});
   await writeFile(path.join(root,'.observanda','access.json'),'{bad');await assert.rejects(readAccess(root),{code:'ACCESS_FORMAT'});
 });
 

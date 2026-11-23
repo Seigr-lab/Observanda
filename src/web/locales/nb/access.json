@@ -54,7 +54,6 @@
   "username": "Brukernavn",
   "password": "Passord",
   "confirmPassword": "Bekreft passord",
-  "passwordHint": "Skriv inn passordet for dette arbeidsområdet.",
   "authorized": "Denne enheten er godkjent. Lås opp med operativsystemkontoen din.",
   "useRecovery": "Bruk en gjenopprettingsnøkkel",
   "recovery": "Gjenopprettingsnøkkel",

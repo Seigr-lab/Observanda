@@ -209,8 +209,6 @@
   "FOLDER_NAME": "Enter a folder name without slashes, reserved names or trailing dots.",
   "FOLDER_EXISTS": "A folder or file with that name already exists. Choose another name.",
   "ENCRYPTION_DAMAGED": "Encrypted content could not be authenticated. The file may be damaged or replaced. Restore a verified backup; no changes were saved.",
-  "ENCRYPT_COPY": "Create an encrypted copy in a new folder to protect this existing workspace. The original is retained until you decide what to do with it.",
-  "ENCRYPT_PASSWORD": "An encrypted workspace requires a password. Enter a new password to change it.",
   "STORAGE_PATH": "Choose an absolute path to a dedicated workspace folder. Its parent must already exist. Mount or connect network shares through your operating system first.",
   "PROJECT_NESTING": "Projects stay at the top level of a workspace. Lab books go inside projects; a project cannot be placed inside another project.",
   "STORAGE_INCOMPLETE": "This folder contains an incomplete workspace creation or copy. Choose another destination, or open the original when copying.",

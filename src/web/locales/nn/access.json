@@ -54,7 +54,6 @@
   "username": "Brukarnamn",
   "password": "Passord",
   "confirmPassword": "Stadfest passord",
-  "passwordHint": "Skriv inn passordet for dette arbeidsområdet.",
   "authorized": "Denne eininga er godkjend. Lås opp med operativsystemkontoen din.",
   "useRecovery": "Bruk ein gjenopprettingsnøkkel",
   "recovery": "Gjenopprettingsnøkkel",

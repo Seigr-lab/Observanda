@@ -54,7 +54,6 @@
   "username": "Nombre de usuario",
   "password": "Contraseña",
   "confirmPassword": "Confirmar contraseña",
-  "passwordHint": "Introduce la contraseña de este espacio de trabajo.",
   "authorized": "Este dispositivo está autorizado. Desbloquea con tu cuenta del sistema operativo.",
   "useRecovery": "Utilizar una clave de recuperación",
   "recovery": "Clave de recuperación",

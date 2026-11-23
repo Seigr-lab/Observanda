@@ -1,5 +1,5 @@
 import {researchContext,ownedAssetURL} from './project-context.js';
-import {sessionHeaders,sessionCredential} from './session-store.js';
+import {sessionCredential} from './session-store.js';
 // Upload intents remain local to the open editor. Durable jobs never edit a record.
 import {t,language} from './i18n/index.js';
 import './i18n/catalogues/supportEditors.js';
@@ -70,12 +70,6 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
   stop();context=researchContext(state);target=intent;const token=watch;receiving=true;busy(true);input.disabled=true;
   if(!resume){document.getElementById('media-upload-status')?.remove();const node=document.createElement('div');node.id='media-upload-status';input.parentElement.after(node);}
   try{
-   // Older unencrypted workspaces retain their existing immediate upload API.
-   // All newly created workspaces use the durable encrypted path below.
-   if(!state.storage.encrypted){
-    const response=await fetch(ownedAssetURL(state,'/api/media/'+kind),{method:'POST',headers:await sessionHeaders({'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId}),body:file});
-    if(!response.ok)throw await response.json();const asset=await response.json();guard();busy(false);if(currentDestination(intent))await apply(intent,asset);return;
-   }
    const session=resume??await call('start',{name:file.name,size:file.size,kind});guard();uploadId=session.id;
    const credential=await sessionCredential();
    await new Promise((resolve,reject)=>{

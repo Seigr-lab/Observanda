@@ -54,7 +54,6 @@
   "username": "Nom d'usuari",
   "password": "Contrasenya",
   "confirmPassword": "Confirma la contrasenya",
-  "passwordHint": "Introdueix la contrasenya d'aquest espai de treball.",
   "authorized": "Aquest dispositiu està autoritzat. Desbloqueja amb el teu compte del sistema operatiu.",
   "useRecovery": "Utilitza una clau de recuperació",
   "recovery": "Clau de recuperació",

@@ -1,4 +1,4 @@
-import {requireAccess,verifyAccess,isEncryptedAccess} from './access.js';
+import {requireAccess,verifyAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
 
@@ -6,7 +6,6 @@ import {AppError} from './errors.js';
 // device key. Credentials are used only for this check, never retained in plans.
 export async function verifyPortableAccess(root,{username='',password='',recovery=''}={}){
  const access=await requireAccess(root);
- if(!isEncryptedAccess(access.value))return;
  if(!password&&!recovery)throw new AppError('STORAGE_PORTABLE_ACCESS');
  const vault=await verifyAccess(access,username,password,{recovery});
  await clearVault(vault);

@@ -209,8 +209,6 @@
   "FOLDER_NAME": "Skriv inn et mappenavn uten skråstreker, reserverte navn eller avsluttende punktum.",
   "FOLDER_EXISTS": "En mappe eller fil med dette navnet finnes allerede. Velg et annet navn.",
   "ENCRYPTION_DAMAGED": "Kryptert innhold kunne ikke autentiseres. Filen kan være skadet eller erstattet. Gjenopprett en verifisert sikkerhetskopi; ingen endringer ble lagret.",
-  "ENCRYPT_COPY": "Opprett en kryptert kopi i en ny mappe for å beskytte dette eksisterende arbeidsområdet. Originalen beholdes til du bestemmer hva du vil gjøre med den.",
-  "ENCRYPT_PASSWORD": "Et kryptert arbeidsområde krever et passord. Skriv inn et nytt passord for å endre det.",
   "STORAGE_PATH": "Velg en absolutt bane til en egen arbeidsområdemappe. Den overordnede mappen må finnes fra før. Monter eller koble til nettverksressurser gjennom operativsystemet først.",
   "PROJECT_NESTING": "Prosjekter ligger på øverste nivå i et arbeidsområde. Labbøker ligger i prosjekter; et prosjekt kan ikke plasseres i et annet prosjekt.",
   "STORAGE_INCOMPLETE": "Denne mappen inneholder en ufullstendig opprettelse eller kopi av et arbeidsområde. Velg et annet mål, eller åpne originalen ved kopiering.",

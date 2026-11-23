@@ -209,8 +209,6 @@
   "FOLDER_NAME": "Introduce un nombre de carpeta sin barras, nombres reservados ni puntos finales.",
   "FOLDER_EXISTS": "Ya existe una carpeta o archivo con ese nombre. Elige otro.",
   "ENCRYPTION_DAMAGED": "No se ha podido autenticar el contenido cifrado. El archivo puede estar dañado o haber sido sustituido. Restaura una copia de seguridad verificada; no se ha guardado ningún cambio.",
-  "ENCRYPT_COPY": "Crea una copia cifrada en una carpeta nueva para proteger este espacio de trabajo existente. El original se conserva hasta que decidas qué hacer con él.",
-  "ENCRYPT_PASSWORD": "Un espacio de trabajo cifrado requiere una contraseña. Introduce una contraseña nueva para cambiarla.",
   "STORAGE_PATH": "Elige una ruta absoluta a una carpeta dedicada del espacio de trabajo. Su carpeta superior debe existir. Monta o conecta primero los recursos de red mediante tu sistema operativo.",
   "PROJECT_NESTING": "Los proyectos permanecen en el nivel superior de un espacio de trabajo. Los cuadernos de laboratorio van dentro de los proyectos; un proyecto no puede colocarse dentro de otro proyecto.",
   "STORAGE_INCOMPLETE": "Esta carpeta contiene una creación o copia incompleta de un espacio de trabajo. Elige otro destino o abre el original al copiar.",

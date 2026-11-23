@@ -209,8 +209,6 @@
   "FOLDER_NAME": "Introdueix un nom de carpeta sense barres, noms reservats ni punts al final.",
   "FOLDER_EXISTS": "Ja existeix una carpeta o un fitxer amb aquest nom. Tria un altre nom.",
   "ENCRYPTION_DAMAGED": "No s'ha pogut autenticar el contingut xifrat. El fitxer pot estar malmès o haver estat substituït. Restaura una còpia de seguretat verificada; no s'ha guardat cap canvi.",
-  "ENCRYPT_COPY": "Crea una còpia xifrada en una carpeta nova per protegir aquest espai de treball existent. L'original es conserva fins que decideixis què en vols fer.",
-  "ENCRYPT_PASSWORD": "Un espai de treball xifrat requereix una contrasenya. Introdueix una contrasenya nova per canviar-la.",
   "STORAGE_PATH": "Tria un camí absolut a una carpeta dedicada a l'espai de treball. La carpeta mare ja ha d'existir. Munta o connecta primer els recursos compartits de xarxa a través del sistema operatiu.",
   "PROJECT_NESTING": "Els projectes es mantenen al nivell superior d’un espai de treball. Els llibres de laboratori van dins dels projectes; un projecte no es pot posar dins d’un altre projecte.",
   "STORAGE_INCOMPLETE": "Aquesta carpeta conté una creació o còpia incompleta d'un espai de treball. Tria una altra destinació o obre l'original si estàs copiant.",

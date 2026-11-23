@@ -47,7 +47,7 @@ export class AccessTrustStore{
  }
  async resolve(value){
   if(value===null)throw new AppError('ACCESS_FORMAT');
-  if(![2,3].includes(value?.formatVersion))return value;
+  if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
   const current=await this.current(value.vaultId);if(!current)return value;
   const fingerprint=keyringFingerprint(value);if(current.sha256===fingerprint)return current.keyring;
   const file=path.join(this.folder(value.vaultId),fingerprint+'.retired'),info=await assertRegular(file,{missing:true});
@@ -61,7 +61,7 @@ export class AccessTrustStore{
   catch(error){if(error.code!=='LOCKED'||Date.now()>=deadline)throw error;await delay(50);}
  }
  async remember(value,vault){
-  if(value.formatVersion!==3)return;authenticateKeyring(value,vault);
+  if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(value,vault);
   // Every unlock remembers its keyring. An already current record needs no
   // write, so read it first: current.json is only ever replaced atomically.
   // Taking the kernel lease here serialized every concurrent unlock of one

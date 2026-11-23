@@ -22,7 +22,7 @@ import {Workspace,workspaceFile,WORKSPACE_FILE,assertRegular,atomicWrite,seriali
 import {validateNotebook} from './model.js';
 import {validDashboard} from './web/dashboard-model.js';
 import {AppError} from './errors.js';
-import {requireAccess,readAccess,takeCreatedVault,isEncryptedAccess} from './access.js';
+import {requireAccess,readAccess,takeCreatedVault} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {keyringFingerprint} from './security/access-trust.js';
 import {assertNotMoving} from './workspace-move-state.js';
@@ -69,7 +69,7 @@ export async function inspectLocation(input){
     if(await assertRegular(path.join(root,'.observanda','copy-in-progress'),{missing:true}))throw new AppError('STORAGE_INCOMPLETE');
   }
   if(items.includes(WORKSPACE_FILE)){
-    const access=await readAccess(root);if(!isEncryptedAccess(access.value))throw new AppError('ACCESS_FORMAT');return {root,kind:'workspace',protected:!!access.value.password,encrypted:true};
+    const access=await requireAccess(root);return {root,kind:'workspace',protected:!!access.value.password,encrypted:true};
   }
   return {root,kind:items.length?'occupied':'empty',protected:false};
 }
@@ -103,7 +103,7 @@ export function storageMap(root,preferencesFile){
 export async function initializeLocation(input,book,access,suppliedVault,{dashboard,populate}={}){
   if(populate!==undefined&&typeof populate!=='function')throw new AppError('INVALID');
   const vault=suppliedVault??takeCreatedVault(access);
-  if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
+  if(access?.formatVersion!==3||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
   try{
   validateNotebook(book);if(dashboard!==undefined&&!validDashboard(dashboard))throw new AppError('INVALID');
   // An occupied location is refused before any database is started.
@@ -204,7 +204,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
       await publishCatalogueBinding(destination,binding.id,{cluster:binding.cluster,installation:binding.placement==='installation'});
     }else if(!recovery?.databaseReady)await backupCatalogue(plan.source,destination);
     if(recovery&&!recovery.databaseReady)await recovery.database();
-    if(!isEncryptedAccess((await readAccess(destination)).value))throw new AppError('ACCESS_FORMAT');
+    await requireAccess(destination);
     const target=new Workspace(destination,vault),descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
     if(activateCatalogue){
       // Restore and fully verify the independent database exactly once.
@@ -233,7 +233,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
 // A fresh-key successor remains marked incomplete until its independently
 // authorized owners and relative registry have also been published.
 export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress,recovery,beforeSnapshot,afterSnapshotVerified,beforePublish,afterVerified,excludeProject}={}){
-  if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
+  if(access?.formatVersion!==3||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
   return withNativeDestination(plan.destination,admitted=>withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
     const source=new Workspace(plan.source,sourceVault),target=new Workspace(plan.destination,vault);
     let publication;

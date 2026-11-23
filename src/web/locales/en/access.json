@@ -54,7 +54,6 @@
   "username": "Username",
   "password": "Password",
   "confirmPassword": "Confirm password",
-  "passwordHint": "Enter the password for this workspace.",
   "authorized": "This device is authorized. Unlock with your operating-system account.",
   "useRecovery": "Use a recovery key",
   "recovery": "Recovery key",

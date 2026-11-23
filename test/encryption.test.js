@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {Workspace,atomicWrite,serialize,workspaceFile} from '../src/storage.js';
-import {createAccess,createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess,changeAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess,changeAccess} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {seal,unseal,clearVault,encrypted} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -36,19 +36,18 @@ test('authenticated encryption rejects modified ciphertext, wrong keys and swapp
  for(const offset of [0,8,20,36]){const changed=Buffer.from(a);changed[offset]^=1;assert.throws(()=>unseal(changed,key,'file-a'),{code:'ENCRYPTION_DAMAGED'});}
 });
 test('password wrapping, encrypted saves and history survive restart; changing password never rewrites research',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-'));
- const access=await createAccess('Owner','first synthetic password'),vault=takeCreatedVault(access),ws=new Workspace(root,vault);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-')),deviceStore=await testDevice('password');
+ const access=await createWorkspaceAccess('Owner','first synthetic password',deviceStore),vault=takeCreatedVault(access),ws=new Workspace(root,vault);
  const initial=await ws.create(sampleNotebook()),originalDescription=initial.book.description,originalRevision=initial.etag;assert.deepEqual(await revisions(ws),[]);await atomicWrite(path.join(root,'.observanda','access.json'),serialize(access));
  const raw=await readFile(await workspaceFile(root));assert.ok(encrypted(raw));assert.ok(!raw.includes(Buffer.from(initial.book.title)));
  initial.book.description='Private changed description';const saved=await ws.save(initial.book,initial.etag);
  const saves=await revisions(ws);assert.equal(saves.length,1);assert.ok(saves.some(revision=>revision.id===originalRevision));assert.equal((await ws.readRevision(originalRevision)).description,originalDescription);await assertEncryptedFile(root,CATALOGUE_FILE);
  clearVault(vault);await assert.rejects(ws.read(),{code:'ACCESS_LOCKED'});await assert.rejects(new Workspace(root).read(),{code:'ACCESS_LOCKED'});
- const settings=await readAccess(root);await assert.rejects(verifyAccess(settings,'Owner','wrong'),{code:'ACCESS_DENIED'});
- const reopened=await verifyAccess(settings,'Owner','first synthetic password');const next=new Workspace(root,reopened);assert.equal((await next.read()).etag,saved.etag);
- const catalogueBefore=await readFile(path.join(root,CATALOGUE_FILE)),before=await readFile(await workspaceFile(root));await changeAccess(root,{username:'Owner',password:'second synthetic password',currentPassword:'first synthetic password'},settings.etag);
- assert.deepEqual(await readFile(await workspaceFile(root)),before);assert.deepEqual(await readFile(path.join(root,CATALOGUE_FILE)),catalogueBefore);await assert.rejects(verifyAccess(await readAccess(root),'Owner','first synthetic password'),{code:'ACCESS_DENIED'});
- const changed=await verifyAccess(await readAccess(root),'Owner','second synthetic password');assert.equal((await new Workspace(root,changed).read()).etag,saved.etag);
- await assert.rejects(changeAccess(root,{username:'Owner',password:'',currentPassword:'second synthetic password'},(await readAccess(root)).etag),{code:'ENCRYPT_PASSWORD'});
+ const settings=await readAccess(root,{deviceStore});await assert.rejects(verifyAccess(settings,'Owner','wrong',{deviceStore}),{code:'ACCESS_DENIED'});
+ const reopened=await verifyAccess(settings,'Owner','first synthetic password',{deviceStore});const next=new Workspace(root,reopened);assert.equal((await next.read()).etag,saved.etag);
+ const catalogueBefore=await readFile(path.join(root,CATALOGUE_FILE)),before=await readFile(await workspaceFile(root));await changeAccess(root,{username:'Owner',password:'second synthetic password',currentPassword:'first synthetic password'},settings.etag,{deviceStore});
+ assert.deepEqual(await readFile(await workspaceFile(root)),before);assert.deepEqual(await readFile(path.join(root,CATALOGUE_FILE)),catalogueBefore);await assert.rejects(verifyAccess(await readAccess(root,{deviceStore}),'Owner','first synthetic password',{deviceStore}),{code:'ACCESS_DENIED'});
+ const changed=await verifyAccess(await readAccess(root,{deviceStore}),'Owner','second synthetic password',{deviceStore});assert.equal((await new Workspace(root,changed).read()).etag,saved.etag);
  assert.equal((await new Workspace(root,changed).readRevision(originalRevision)).description,originalDescription);
  clearVault(reopened);clearVault(changed);
 });
@@ -82,9 +81,9 @@ test('laboratory history and publishing configuration use the same encrypted bou
 
 test('copying ciphertext preserves unlock and tampering never produces a replacement plaintext notebook',async()=>{
  const {initializeLocation,copyPlan,copyWorkspace}=await import('../src/locations.js');
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-cipher-copy-')),root=path.join(parent,'source'),target=path.join(parent,'copy');const access=await createAccess('','copy synthetic password'),vault=takeCreatedVault(access);
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-cipher-copy-')),root=path.join(parent,'source'),target=path.join(parent,'copy');const deviceStore=await testDevice('copy'),access=await createWorkspaceAccess('','copy synthetic password',deviceStore),vault=takeCreatedVault(access);
  await initializeLocation(root,sampleNotebook(),access,vault);await copyWorkspace(await copyPlan(root,target,{vault}),{vault});
- const key=await verifyAccess(await readAccess(target),'','copy synthetic password'),ws=new Workspace(target,key);assert.ok((await ws.read()).book);
+ const key=await verifyAccess(await readAccess(target,{deviceStore}),'','copy synthetic password',{deviceStore}),ws=new Workspace(target,key);assert.ok((await ws.read()).book);
  const file=await workspaceFile(target),bytes=await readFile(file);bytes[bytes.length-1]^=1;await writeFile(file,bytes);await assert.rejects(ws.read(),{code:'ENCRYPTION_DAMAGED'});assert.deepEqual(await readFile(file),bytes);
  await writeFile(file,serialize(sampleNotebook()));await assert.rejects(ws.read(),{code:'ENCRYPTION_DAMAGED'});clearVault(vault);clearVault(key);
 });
@@ -92,7 +91,7 @@ test('copying ciphertext preserves unlock and tampering never produces a replace
 
 test('missing keys cannot create plaintext files in an encrypted workspace or initialize an encrypted header without its key',async()=>{
  const {initializeLocation}=await import('../src/locations.js');const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-key-boundary-')),root=path.join(parent,'secure');
- const access=await createAccess('','boundary synthetic password'),vault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','boundary synthetic password',await testDevice('boundary')),vault=takeCreatedVault(access);
  await assert.rejects(initializeLocation(root,sampleNotebook(),JSON.parse(serialize(access))),{code:'ACCESS_LOCKED'});
  await initializeLocation(root,sampleNotebook(),access,vault);const {Laboratory}=await import('../src/laboratory.js'),locked=new Workspace(root);
  await assert.rejects(locked.writeFile(path.join(root,'.observanda','new-file'),'plaintext'),{code:'ACCESS_LOCKED'});

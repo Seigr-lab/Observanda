@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createFolderPicker,detectFolderPicker,dialogInvocation,dialogResult,initialFolder,runDialogProcess} from '../src/native-folder-picker.js';
 import {testServer,TestDeviceStore} from './device-fixture.js';
-import {createAccess,createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {createNotebook} from '../src/model.js';
 import {copyPlan,copyWorkspace,encryptedCopy,initializeLocation,workspaceManifest} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -116,7 +116,7 @@ test('native-created empty folders accept verified ordinary and encrypted copies
  await initializeLocation(source,createNotebook('Original'),sourceAccess,sourceVault);const before=await workspaceManifest(source);
  for(const secure of [false,true]){
    const destination=path.join(parent,secure?'encrypted':'ordinary');await mkdir(destination);const plan=await copyPlan(source,destination,{vault:sourceVault});
-   if(secure){const access=await createAccess('','synthetic empty folder password'),vault=takeCreatedVault(access);try{await encryptedCopy(plan,access,vault,sourceVault);assert.equal((await new Workspace(destination,vault).read()).book.title,'Original');}finally{clearVault(vault);}}
+   if(secure){const access=await createWorkspaceAccess('','synthetic empty folder password',deviceStore),vault=takeCreatedVault(access);try{await encryptedCopy(plan,access,vault,sourceVault);assert.equal((await new Workspace(destination,vault).read()).book.title,'Original');}finally{clearVault(vault);}}
    else{await copyWorkspace(plan,{vault:sourceVault});assert.equal((await new Workspace(destination,sourceVault).read()).book.title,'Original');}
  }
  const occupied=path.join(parent,'became-occupied');await mkdir(occupied);const plan=await copyPlan(source,occupied,{vault:sourceVault});await writeFile(path.join(occupied,'retain.txt'),'untouched');
