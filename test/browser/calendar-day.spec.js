@@ -52,7 +52,8 @@ test('calendar dates open a scoped day plan and create dated drafts without savi
   await expect(plan).not.toContainText('Finished yesterday');
   await expect(plan).not.toContainText('Tomorrow only');
   await expect(plan).not.toContainText('Ends at midnight');
-  await expect(plan.getByRole('button',{name:/Late session/})).toContainText('00:30');
+  // Times follow the app language, in the browser's time zone: 23:30 UTC is 00:30 in Oslo on the selected day.
+  await expect(plan.getByRole('button',{name:/Late session/})).toContainText(new Date('2026-10-30T23:30:00.000Z').toLocaleString('en',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Oslo'}));
   await expect(plan.getByRole('button',{name:/Desk reservation/})).toContainText('10:00');
   await main.locator('[data-calendar-source="'+otherCalendar+'"]').uncheck();
   await expect(plan).not.toContainText('Gallery programme');

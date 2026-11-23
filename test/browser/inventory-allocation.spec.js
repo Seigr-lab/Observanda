@@ -41,10 +41,11 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   await page.goto(app.url);await preferences();
   const controls=main.locator('[data-module-settings-slot="resources"]');
   await expect(controls.getByRole('heading',{name:'Inventory locations'})).toBeVisible();
-  await expect(controls).toContainText('Seigr');
+  // A workspace is named after its folder.
+  await expect(controls).toContainText(path.basename(root));
   await expect(controls.locator('[data-tool-project]:checked')).toHaveCount(0);
   await controls.getByRole('button',{name:'Open inventory',exact:true}).click();
-  await expect(main.getByRole('heading',{name:'Seigr inventory',exact:true})).toBeVisible();
+  await expect(main.getByRole('heading',{name:path.basename(root)+' inventory',exact:true})).toBeVisible();
   await main.getByRole('button',{name:'New item',exact:true}).click();
   await expect(main.getByLabel('Owned by',{exact:true})).toHaveValue('');
   await main.getByLabel('Item name',{exact:true}).fill('Apples');
@@ -95,7 +96,7 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   if(await page.locator('#notice').isVisible())await page.locator('#notice').getByRole('button',{name:'Dismiss'}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.setViewportSize({width:1440,height:1000});
-  await main.getByRole('button',{name:'Back to items',exact:true}).click();
+  await main.getByRole('button',{name:'Back to Items',exact:true}).click();
   await main.getByLabel('Inventory location').selectOption(a.id);
   await expect(main.getByRole('heading',{name:'Music studio inventory',exact:true})).toBeVisible();
   await expect(main.locator('.inventory-metrics')).toContainText('40 apples');
@@ -110,7 +111,7 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   await expect(main.locator('.inventory-metrics')).toContainText('35 apples');await expect(main.locator('.inventory-metrics')).toContainText('95 apples');
   await page.evaluate(()=>window.scrollTo(0,0));
   if(await page.locator('#notice').isVisible())await page.locator('#notice').getByRole('button',{name:'Dismiss'}).click();
-  await rootInventory().click();await expect(main.getByRole('heading',{name:'Seigr inventory',exact:true})).toBeVisible();await page.reload();
+  await rootInventory().click();await expect(main.getByRole('heading',{name:path.basename(root)+' inventory',exact:true})).toBeVisible();await page.reload();
   await expect(main.locator('.inventory-metrics')).toContainText('95 apples');
   const entities=(await store.current()).entities,item=entities.find(e=>e.type==='resource'),saved=(await workspace.read()).book;
   expect(item.data.projectId).toBe(null);expect(balance(entities,item.id).physical).toBe('95');
