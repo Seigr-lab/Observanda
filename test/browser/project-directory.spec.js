@@ -13,6 +13,7 @@ import {ProjectStorage} from '../../src/project-storage.js';
 import {ProjectCreation} from '../../src/project-creation.js';
 import {readAccess,verifyAccess} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
+import {nestAsEarlierVersion} from '../fixtures/earlier-nested-project.js';
 
 test('a project is created at the top level with its own database and directory, and a project nested by an earlier version moves out',async({page})=>{
  test.setTimeout(180000);
@@ -32,7 +33,8 @@ test('a project is created at the top level with its own database and directory,
   // Workspace > Project > Lab book: nothing offers a project inside another project.
   await expect(page.locator('main').getByRole('button',{name:'New subproject',exact:true})).toHaveCount(0);await expect(page.locator('main [data-project-nested]')).toBeHidden();
   // A workspace from an earlier version can still hold a nested project; it opens and can move to the top level.
-  await new ProjectCreation(registry,f.deviceStore).create({id:randomUUID(),username:'',password:'',project:{id:randomUUID(),title:'Stream observations',description:'',parentId:entry.projectId,share:false,logoId:null}});await page.reload();await expect(page.locator('main h1')).toHaveText('Field ecology');
+  const streamId=randomUUID();await new ProjectCreation(registry,f.deviceStore).create({id:randomUUID(),username:'',password:'',project:{id:streamId,title:'Stream observations',description:'',parentId:null,share:false,logoId:null}});
+  await nestAsEarlierVersion({provider:owner,registry,projectId:(await registry.read()).value.projects.find(p=>p.summary?.title==='Stream observations').projectId,parent:renamed});await page.reload();await expect(page.locator('main h1')).toHaveText('Field ecology');
   const entries=(await registry.read()).value.projects,child=entries.find(p=>p.parentId===entry.projectId);expect(child.summary.title).toBe('Stream observations');expect((await project.outline()).metadata.projects).toHaveLength(1);
   await page.locator('#workspace-navigation [data-action=projects]').click();await expect(page.locator('[data-project-directory=root]')).toContainText('Field ecology');await expect(page.locator('[data-project-directory=root]')).not.toContainText('Stream observations');
   await page.locator('[data-project-directory=root] [data-action=open-project]').click();await expect(page.locator('main h1')).toHaveText('Field ecology');await expect(page.locator('[data-project-directory="'+entry.projectId+'"]')).toContainText('Stream observations');
