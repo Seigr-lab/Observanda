@@ -11,7 +11,6 @@ import {startServer} from '../../src/server.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {largestSheet} from '../module-capacity-fixture.js';
-import {ModuleCatalogue} from '../../src/modules/catalogue.js';
 import {ModuleReader} from '../../src/modules/reader.js';
 
 test('maximum Unicode sheet saves and recovers through the actual app after a lost checkpoint reply',async({page})=>{
@@ -19,7 +18,6 @@ test('maximum Unicode sheet saves and recovers through the actual app after a lo
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-largest-sheet-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),data=largestSheet(),id=randomUUID();
  const settings=defaultDashboard();settings.views[0].panels=[];settings.enabledModules=['spreadsheet'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),errors=[],checkpointBodies=[],checkpointReplies=[];
- const original=ModuleCatalogue.prototype.read;ModuleCatalogue.prototype.read=()=>{throw Error('Full module state loaded');};
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(new URL(r.url()).pathname==='/api/modules/drafts/write')checkpointBodies.push(r.postDataJSON());});
  page.on('response',async r=>{if(new URL(r.url()).pathname==='/api/modules/drafts/write'&&r.ok())checkpointReplies.push((await r.body()).length);});
@@ -46,5 +44,5 @@ test('maximum Unicode sheet saves and recovers through the actual app after a lo
   expect(checkpointBodies.filter(b=>b.drafts.length).every(b=>b.drafts.length===1&&b.drafts[0].base===undefined)).toBe(true);expect(Math.max(...checkpointReplies)).toBeLessThan(200);
   expect(errors).toEqual([]);expect(heap).toBeLessThan(96*1024*1024);
   console.log(JSON.stringify({maximumSheetBytes:Buffer.byteLength(JSON.stringify(data)),largestCheckpointReply:Math.max(...checkpointReplies),sampledBrowserHeapMiB:Math.round(heap/1024/1024)}));
- }finally{ModuleCatalogue.prototype.read=original;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -31,7 +31,6 @@ import {ObjectIndex} from './object-index.js';
 import {metadataBatchIndex,shareWriterNodes} from './metadata-batch.js';
 import {cataloguePayloadRows} from './catalogue-payload-rows.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
-import {ModuleCatalogue} from './modules/catalogue.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {catalogueOutline} from './catalogue-outline.js';
 import {recordPublicationSummary} from './web/record-publication-summary.js';
@@ -447,9 +446,9 @@ export class ResearchCatalogue{
   }
   if(count!==head.revisions)fail();
  }
- async moduleData(workspaceId,options){return new ModuleCatalogue(this).read(workspaceId,options);}
- async assertModuleWrite(){if((await readProjectDomainRegistry(this))?.commandVersion===1)throw new AppError('ACCESS_UPGRADE');}
- async putModuleData(data,changed,event){return new ModuleCatalogue(this).write(data,changed,event);}
+ // Module items live in the domain stores named by the project domain registry.
+ // The catalogue's own module tables belong to an earlier layout and stay read-only.
+ async assertModuleWrite(){throw new AppError('ACCESS_UPGRADE');}
  async objectIdPage(prefix,{after=null,limit=32,signal}={}){
   if(typeof prefix!=='string'||after!==null&&(typeof after!=='string'||!after.startsWith(prefix))||!Number.isSafeInteger(limit)||limit<1||limit>32)throw new AppError('INVALID');
   signal?.throwIfAborted();const index=this.objectIndex({cacheReads:true}),head=await index.head(),items=[];let next=null;

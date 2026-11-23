@@ -21,8 +21,7 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
  const reference={id:randomUUID(),type:'calculation',revision:1,createdAt:now,updatedAt:now,data:{name:'Reference calculation',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}};
  await seedModuleCurrent(f.workspace,book.id,[...entities,reference]);
  const settings=defaultDashboard();settings.views[0].panels=[];settings.enabledModules=['spreadsheet','scientific-calculator'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
- const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),original={read:ModuleCatalogue.prototype.read,selected:ModuleCatalogue.prototype.selected},loaded=[],requests=[],errors=[],sizes=[];
- ModuleCatalogue.prototype.read=()=>{throw Error('Full module state loaded during paged authoring');};
+ const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),original={selected:ModuleCatalogue.prototype.selected},loaded=[],requests=[],errors=[],sizes=[];
  ModuleCatalogue.prototype.selected=async function(head,id){const value=await original.selected.call(this,head,id);if(value)loaded.push(id);return value;};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('response',async r=>{if(new URL(r.url()).pathname!=='/api/modules/items'||!r.ok())return;
   // A page that navigated on may have released this body; the size sample simply skips it.
@@ -77,5 +76,5 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   await expect(page).toHaveURL(new RegExp('/records/'+book.entries[1].id+'$'));await expect(main.locator('[data-module-links]')).toBeVisible();
   expect(requests.filter(p=>p==='/api/modules/data')).toEqual([]);expect(errors).toEqual([]);
   console.log(JSON.stringify({items:count,largestPage:Math.max(...sizes),sampledBrowserHeapMiB:Math.round(heap/1024/1024),originalIds:new Set(loaded).size}));
- }finally{ModuleCatalogue.prototype.read=original.read;ModuleCatalogue.prototype.selected=original.selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.selected=original.selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

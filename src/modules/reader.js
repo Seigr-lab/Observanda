@@ -5,8 +5,6 @@ import {validResourceTags} from '../web/modules/resource-tags.js';
 import {AppError} from '../errors.js';
 import {digest} from '../storage-format.js';
 import {summaryPage} from '../summary-page.js';
-import {ModuleCatalogue} from './catalogue.js';
-import {ModuleBrowseIndex} from './browse-index.js';
 import {moduleBrowsePage} from './browse-page.js';
 import {workspaceModules} from './index.js';
 import {uuid} from './validation.js';
@@ -19,10 +17,7 @@ export class ModuleReader{
   if(this.readContext)return this.readContext(workspaceId,operation);
   return this.workspace.catalogue(async store=>{
    const {metadata:book}=await store.snapshot();if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   const owned=await moduleDomainContext(store,operation,{domains:this.readDomains});if(owned)return owned.value;
-   const catalogue=new ModuleCatalogue(store),head=await catalogue.head(workspaceId);
-   return operation({book,head,stockProjection:()=>catalogue.stockProjection(head),browse:async options=>{const plan=await new ModuleBrowseIndex(catalogue).plan(head,options);return plan?[plan]:null;},members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
-    encode:value=>store.encode('module-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('module-page',workspaceId,Buffer.from(value,'base64url'))});
+   return moduleDomainContext(store,operation,{domains:this.readDomains});
   });
  }
  async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,consume,referenceNamespaces=null}={}){

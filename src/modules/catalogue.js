@@ -131,33 +131,6 @@ export class ModuleCatalogue{
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(hash(value)!==member.constraintHash||value.id!==member.id)damaged();return value;
  }
- async read(workspaceId,{history=true}={}){
-  const s=this.store,head=await this.head(workspaceId);
-  // This compatibility API materializes a response. Paged reads and compact
-  // commands continue to work when the complete collection exceeds its budget.
-  if(moduleCurrentBytes(workspaceId,head.revision,await this.currentSize(head))>MODULE_BYTES)throw new AppError('LIMIT');
-  let responseBytes=Buffer.byteLength(serialize({formatVersion:1,workspaceId,revision:head.revision,entities:[],...(history?{events:[]}: {})}));
-  const admit=value=>{responseBytes+=moduleEntityBytes(value)+4;if(responseBytes>MODULE_BYTES)throw new AppError('LIMIT');};
-  const entities=[];
-  for await(const row of s.db.rows('SELECT id,revision,payload FROM module_entities ORDER BY id',[],{batchSize:16})){
-   const entity=s.decode('module-entity',row.id+'/'+row.revision,row.payload),member=await this.member(head,row.id);
-   await this.checkPolicy(entity);if(!member||entity.id!==row.id||entity.revision!==row.revision||member.revision!==row.revision||member.hash!==hash(entity))damaged();
-   if(head.currentVersion===1&&(moduleEntityBytes(entity)!==member.bytes||hash(moduleConstraint(entity))!==member.constraintHash))damaged();
-   if(head.viewVersion===1&&(entity.type!==member.type||hash(moduleView(entity))!==member.viewHash||hash(moduleSearch(entity))!==member.searchHash))damaged();
-   if(member.referencesHash&&hash(moduleReferences(entity))!==member.referencesHash)damaged();
-   if(member.calendarHash!==undefined&&(calendarFacts(entity)?hash(calendarFacts(entity)):null)!==member.calendarHash)damaged();
-   if(member.inventoryHash!==undefined&&(inventoryFacts(entity)?hash(inventoryFacts(entity)):null)!==member.inventoryHash)damaged();
-   admit(entity);entities.push(entity);
-  }
-  const data={formatVersion:1,workspaceId,revision:head.revision,entities};
-  if(history){
-   data.events=[];
-   for await(const row of s.db.rows('SELECT command_id,ordinal,payload FROM module_events ORDER BY ordinal',[],{batchSize:8})){
-    if(row.ordinal!==data.events.length+1)damaged();const event=await this.event(row);admit(event);data.events.push(event);
-   }
-  }
-  return data;
- }
  async event(row){const event=this.store.decode('module-event',row.command_id+'/'+row.ordinal,row.payload);if(event.commandId!==row.command_id)damaged();if(Array.isArray(event.changes))for(const entity of event.changes)await this.checkPolicy(entity);return event;}
  async receipt(commandId,revision){
   const row=await this.store.db.get('SELECT command_id,ordinal,payload FROM module_events WHERE command_id=$1',commandId);
@@ -194,12 +167,6 @@ export class ModuleCatalogue{
    }
    if(ordinal!==0)damaged();for await(const expected of work.items())if(expected&&expected.revision!==0)damaged();
   });
- }
- async write(data,changed,event=data.events?.at(-1)){
-  const previous=await this.head(data.workspaceId);
-  if(data.revision!==previous.revision+1)damaged();
-  const values=data.entities.filter(e=>changed.has(e.id));
-  await this.writeChanges(previous,values,event);
  }
  async writeChanges(previous,entities,event){
   if(entities.some(usesResourceQuality))await requireResourceQualityFormat(this.store);

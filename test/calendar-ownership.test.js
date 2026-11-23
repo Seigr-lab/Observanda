@@ -15,7 +15,6 @@ import {parseCalendar} from '../src/calendar/ical.js';
 import {parseFeed} from '../src/calendar/parse.js';
 import {publicAddress,fetchCalendar} from '../src/calendar/fetch.js';
 import {CalendarSources} from '../src/calendar/service.js';
-import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {calendarPage} from '../src/calendar/pages.js';
 const material=projectId=>({projectId,name:'Pigment',code:'P1',kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Cupboard A',unit:'g',capacity:1,status:'available',links:[]});
 const cal=projectId=>({projectId,name:'Studio',color:'#3958ba',archived:false});
@@ -88,7 +87,6 @@ test('connected calendars read no research bodies and session-only keys clear ac
  await destination.save('calendar-connection',id,connection);
  t.mock.method(ResearchCatalogue.prototype,'read',()=>{throw Error('Complete research read');});
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Research body read');});
- t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Complete module read');});
  const service=new CalendarSources(),range={from:'2026-10-01',to:'2026-11-01',timeZone:'UTC'};
  let result=await service.data(destination.workspace,range);assert.equal(result.sources[0].locked,true);
  const key=Buffer.from(source.vault.key);await service.unlock({id,data:connection},{},async()=>({id:source.vault.id,key}));

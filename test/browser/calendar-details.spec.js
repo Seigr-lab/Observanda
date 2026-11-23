@@ -25,8 +25,7 @@ test('connected calendar opens selected notes with retry and cancels a closed de
  await save(source,'event',event,{title:'Remote field session',calendarId:calendar,startsAt:'2026-10-15',endsAt:'2026-10-16',allDay:true,timeZone:'UTC',location:'Outside studio',notes,status:'confirmed'});
  await save(f.workspace,'calendar-connection',connection,{name:'Other workspace',projectId:null,color:'#38786c',path:root,enabled:true});
  const settings=defaultDashboard();settings.enabledModules=['planning'];settings.views[0].panels=[];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
- const original=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,opened=[],errors=[];
- ModuleCatalogue.prototype.read=function(...args){if(this.store.workspace.root===root)throw Error('Full connected module data loaded');return original.apply(this,args);};
+ const selected=ModuleCatalogue.prototype.selected,opened=[],errors=[];
  ModuleCatalogue.prototype.selected=async function(head,id){const value=await selected.call(this,head,id);if(this.store.workspace.root===root&&value?.type==='event')opened.push(id);return value;};
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),main=page.locator('main'),dialog=page.locator('#dialog');let release=()=>{};
  page.on('pageerror',e=>errors.push(e.message));
@@ -43,5 +42,5 @@ test('connected calendar opens selected notes with retry and cancels a closed de
   await eventButton.click();await waiting;await expect(dialog).toContainText('Loading event notes');await page.keyboard.press('Escape');release();await expect(dialog).not.toBeVisible();
   await eventButton.click();await expect(dialog.locator('.calendar-notes')).toHaveText(notes);await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect(errors).toEqual([]);
- }finally{release();ModuleCatalogue.prototype.read=original;ModuleCatalogue.prototype.selected=selected;await app.close();await clearVault(vault);await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release();ModuleCatalogue.prototype.selected=selected;await app.close();await clearVault(vault);await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

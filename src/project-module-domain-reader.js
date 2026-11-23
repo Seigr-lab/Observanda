@@ -6,7 +6,9 @@ import {projectDomainSchema} from './project-domain-schema.js';
 import {ProjectDomainCatalogue} from './project-domain-catalogue.js';
 import {AppError} from './errors.js';
 export async function projectModuleDomainReader(research){
- const registry=await readProjectDomainRegistry(research);if(registry?.commandVersion!==1)return null;
+ // Every supported workspace, project and lab book keeps its modules in domain
+ // stores named by this registry. Without it the catalogue holds an earlier layout.
+ const registry=await readProjectDomainRegistry(research);if(registry?.commandVersion!==1)throw new AppError('ACCESS_UPGRADE');
  return {registry,async run(operation){
   const mode=await research.db.get("SELECT current_setting('transaction_read_only') AS read_only,current_setting('transaction_isolation') AS isolation"),readOnly=mode.read_only==='on'&&['repeatable read','serializable'].includes(mode.isolation);
   const session=databaseSchemaSession(research.db),stores=new Map(),root=research.workspace.catalogueStore(session.schema(research.db.schema));

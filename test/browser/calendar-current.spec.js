@@ -20,8 +20,8 @@ for(const count of [65,650])test('dense calendars retain month totals and page t
  const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:{title:'Deadline '+String(i).padStart(3,'0'),description:'Private original. '.repeat(3500),status:'todo',priority:'normal',dueOn:day,assignees:[],checklist:[],dependencies:[],links:[]}}));
  await seedModuleCurrent(f.workspace,book.id,entities);
  const settings=defaultDashboard();settings.enabledModules=['planning'];const card=createPanel('calendar-agenda','schedule-growth');card.moduleId='planning';card.count=5;settings.views[0].panels=[card];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),read=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,opened=[],requests=[],errors=[];
- ModuleCatalogue.prototype.read=()=>{throw Error('Calendar read full module data');};ModuleCatalogue.prototype.selected=async function(head,id){opened.push(id);return selected.call(this,head,id);};
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),selected=ModuleCatalogue.prototype.selected,opened=[],requests=[],errors=[];
+ ModuleCatalogue.prototype.selected=async function(head,id){opened.push(id);return selected.call(this,head,id);};
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));const cdp=await page.context().newCDPSession(page);
  try{
   const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/workspace');
@@ -37,7 +37,7 @@ for(const count of [65,650])test('dense calendars retain month totals and page t
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   const heap=(await cdp.send('Runtime.getHeapUsage')).usedSize;expect(heap).toBeLessThan(96*1024*1024);expect(requests).not.toContain('/api/modules/data');expect(requests).not.toContain('/api/calendars');expect(errors).toEqual([]);
   console.log(JSON.stringify({events:count,browserHeapMiB:Math.round(heap/1024/1024)}));
- }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 for(const count of [65,650])test('calendar source pages search and filter '+count+' calendars without hiding schedule labels',async({page})=>{
@@ -48,8 +48,8 @@ for(const count of [65,650])test('calendar source pages search and filter '+coun
  const last=calendars.at(-1),event=entity('event',{title:'Far calendar event',calendarId:last.id,startsAt:day,endsAt:localDate(new Date(Date.now()+86400000)),allDay:true,timeZone:'UTC',location:'',notes:'Private original',status:'confirmed'});
  await seedModuleCurrent(f.workspace,book.id,[...calendars,event]);
  const settings=defaultDashboard();settings.enabledModules=['planning'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),read=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,opened=[],errors=[];
- ModuleCatalogue.prototype.read=()=>{throw Error('Whole module read');};ModuleCatalogue.prototype.selected=async function(head,id){opened.push(id);return selected.call(this,head,id);};page.on('pageerror',e=>errors.push(e.message));
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),selected=ModuleCatalogue.prototype.selected,opened=[],errors=[];
+ ModuleCatalogue.prototype.selected=async function(head,id){opened.push(id);return selected.call(this,head,id);};page.on('pageerror',e=>errors.push(e.message));
  const cdp=await page.context().newCDPSession(page);
  try{
   const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/modules/planning/agenda');
@@ -64,5 +64,5 @@ for(const count of [65,650])test('calendar source pages search and filter '+coun
   await main.getByRole('button',{name:'New event',exact:true}).click();await expect(main.getByLabel('Event title',{exact:true})).toBeVisible();await expect(main.getByRole('heading',{name:'Calendar',exact:true})).toHaveCount(0);
   expect(opened.every(id=>id===calendars[0].id)).toBe(true);
   const heap=(await cdp.send('Runtime.getHeapUsage')).usedSize;expect(heap).toBeLessThan(96*1024*1024);expect(errors).toEqual([]);console.log(JSON.stringify({sources:count,browserHeapMiB:Math.round(heap/1024**2)}));
- }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.selected=selected;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -3,14 +3,13 @@ import {CalendarSources,calendarScopeVersion} from './calendar/service.js';
 import {calendarPage} from './calendar/pages.js';
 import {readCalendar} from './calendar/reader.js';
 import {ProjectModuleReader} from './project-module-reader.js';
-import {ModuleReader} from './modules/reader.js';
 import {readProjectDomainRegistry} from './project-domain-registry.js';
 import {operationalReadDomains} from './project-module-read-context.js';
 import {AppError} from './errors.js';
 export const projectCalendarRequest=route=>['/api/calendars/page','/api/calendars/event','/api/calendars/unlock'].includes(route)?{write:false,limit:65536,calendar:route.split('/').at(-1)}:null;
 async function calendarReader(storage,namespaceId,signal){
  const managed=await storage.catalogue(async store=>(await readProjectDomainRegistry(store))?.commandVersion===1);
- if(!managed)return new ModuleReader(storage);
+ if(!managed)throw new AppError('ACCESS_UPGRADE');
  const reader=new ProjectModuleReader(storage,namespaceId);
  return {context:(id,operation)=>reader.context(id,operation,{domains:operationalReadDomains.planning,signal}),selected:(data,options)=>reader.selected(data,options)};
 }

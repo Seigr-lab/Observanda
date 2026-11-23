@@ -15,7 +15,7 @@ import {TestDeviceStore} from './device-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {workspaceModules} from '../src/modules/index.js';
-import {executeModuleCommand} from '../src/modules/command.js';
+import {executeModuleCommand} from './module-domain-command.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
 import {moduleCommandFingerprint} from '../src/modules/command-fingerprint.js';
 import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';

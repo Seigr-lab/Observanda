@@ -26,9 +26,9 @@ for(const count of [65,650])test('inventory queries include all ledger facts whi
  const movements=resources.map(r=>entity('movement',{resourceId:r.id,projectId:null,delta:'100.000000000000000001',unit:'pieces',reason:'Opening stock',links:[],reservationId:null}));
  const transfers=resources.map(r=>entity('stock-transfer',{resourceId:r.id,fromProjectId:null,toProjectId:projectId,quantity:'30',unit:'pieces',reason:'Project allocation',links:[]}));
  await seedModuleCurrent(f.workspace,book.id,[...resources,...movements,...transfers]);
- const read=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,loaded=[];
- ModuleCatalogue.prototype.read=()=>{throw Error('Full inventory snapshot read');};ModuleCatalogue.prototype.selected=async function(head,id){const result=await selected.call(this,head,id);if(result)loaded.push(id);return result;};
- t.after(()=>{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;});
+ const selected=ModuleCatalogue.prototype.selected,loaded=[];
+ ModuleCatalogue.prototype.selected=async function(head,id){const result=await selected.call(this,head,id);if(result)loaded.push(id);return result;};
+ t.after(()=>{ModuleCatalogue.prototype.selected=selected;});
  const reader=new InventoryReader(f.workspace),started=performance.now(),stock=await reader.stock({workspaceId:book.id,ids:[resources[0].id]});
  assert.deepEqual(loaded,[]);assert.equal(stock.items[0].locations.find(r=>r.projectId===null).available,'70.000000000000000001');assert.equal(stock.items[0].locations.find(r=>r.projectId===projectId).physical,'30');
  const stockMs=performance.now()-started,first=await reader.page({workspaceId:book.id,type:'resource',scopeIds:[projectId],limit:7}),pageMs=performance.now()-started-stockMs;

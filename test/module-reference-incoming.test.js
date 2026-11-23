@@ -44,7 +44,7 @@ test('incoming links compose qualified summaries, preserve source independence a
   const reader=projectCollectionReader(app,who,async()=>{});
   try{const result=await moduleReferenceIncoming(pages,who,{...base,...values},{collectionWorkspaceId:f.workspaceId,visit:visitor,resolveTarget:(_target,consume)=>reader.use({workspaceId:target.workspaceId,projectId:f.books[0].projectId,labBookId:f.books[0].labBookId},null,async(store,snapshot,{storage})=>{assert.ok(await store.member(snapshot,target.id));return consume(storage,target,{store,snapshot});})});await reader.verify();return result;}finally{await reader.close();}
  };
- t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Incoming lookup opened an original');});t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Incoming lookup loaded all originals');});t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Incoming lookup opened a research body');});
+ t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Incoming lookup opened an original');});t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Incoming lookup opened a research body');});
  const first=await read();assert.equal(first.total,5);assert.equal(first.items.length,2);assert.equal(first.partial,false);assert.equal(first.unavailableTotal,0);
  const rows=[...first.items];let next=first;
  while(next.nextCursor){const previous=next;next=await read({cursor:next.nextCursor});rows.push(...next.items);assert.deepEqual((await read({cursor:next.previousCursor})).items,previous.items);}

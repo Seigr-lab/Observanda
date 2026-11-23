@@ -25,7 +25,6 @@ test('indexed module collections grow past the response budget and remain editab
  const count=Math.floor(MODULE_BYTES/itemBytes)+2,ids=Array.from({length:count},()=>randomUUID());
  const save=(id,expectedRevision,value)=>({workspaceId:book.id,commandId:randomUUID(),action:'sheet.save',payload:{id,expectedRevision,data:value}});
  const started=performance.now();
- t.mock.method(ModuleCatalogue.prototype,'read',()=>assert.fail('Compact authoring must not assemble the collection'));
  for(const [index,id] of ids.entries())await modules.execute(save(id,null,{...data,name:'Sheet '+String(index).padStart(4,'0')}),{compact:true});
  const createdMs=Math.round(performance.now()-started);
  const bytes=await moduleDomainStore(f.workspace,book.id,'spreadsheet',async store=>(await new ModuleCatalogue(store).head(book.id)).totalBytes);
@@ -45,7 +44,6 @@ test('indexed module collections grow past the response budget and remain editab
  await moduleDomainStore(reopened,book.id,'spreadsheet',async store=>{
   const catalogue=new ModuleCatalogue(store),validate={entity:e=>modules.validateEntity(e),event:e=>modules.validateEvent(e),constraints:source=>modules.validateSource(source)};
   await catalogue.verify(book.id,validate);
-  await assert.rejects(catalogue.read(book.id,{history:false}),{code:'LIMIT'});
  });
  t.diagnostic(JSON.stringify({items:count,currentBytes:bytes,createdMs,verifiedMs:Math.round(performance.now()-verifyStarted),pageItems:page.items.length,pageBytes:Buffer.byteLength(JSON.stringify(page))}));
 });

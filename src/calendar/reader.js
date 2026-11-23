@@ -1,13 +1,11 @@
 import {moduleDomainContext} from '../module-domain-context.js';
 import {operationalReadDomains} from '../project-module-read-context.js';
-import {ModuleCatalogue} from '../modules/catalogue.js';
 import {calendarEntity} from '../web/modules/calendar-model.js';
 import {ownerLabel,ownerDescriptor} from '../web/modules/scope.js';
 import {calendarWindow} from './window.js';
 import {AppError} from '../errors.js';
 import {proseText} from '../web/prose-model.js';
 import {withScratch} from '../scratch-work.js';
-import {ModuleBrowseIndex} from '../modules/browse-index.js';
 const sourceTypes=['subscription','calendar-connection'];
 async function* typedMembers(context,types,signal,indexed=true){
  if(!types.length)return;const plans=indexed?await context.browse?.({types,sort:'title',signal}):null;
@@ -47,9 +45,6 @@ export async function readCalendar(workspace,book,range,{detailId=null,connectio
  if(context)return project(context.head,(types,indexed)=>typedMembers(context,types,signal,indexed),m=>context.calendar(m),id=>context.selected(id),async id=>{const member=await context.member(id);return member?context.calendar(member):null;});
  return workspace.catalogue(async store=>{
   if((await store.snapshot()).metadata.id!==book.id)throw new AppError('WORKSPACE_CHANGED');
-  const owned=await moduleDomainContext(store,c=>project(c.head,(types,indexed)=>typedMembers(c,types,signal,indexed),m=>c.calendar(m),id=>c.selected(id),async id=>{const member=await c.member(id);return member?c.calendar(member):null;}),{domains:operationalReadDomains.planning});if(owned)return owned.value;
-  const c=new ModuleCatalogue(store),head=await c.head(book.id);
-  const context={members:options=>c.members(head,options),member:id=>c.member(head,id),browse:async options=>{const plan=await new ModuleBrowseIndex(c).plan(head,options);return plan?[plan]:null;}};
-  return project(head,(types,indexed)=>typedMembers(context,types,signal,indexed),m=>c.calendar(head,m),id=>c.selected(head,id),async id=>{const member=await c.member(head,id);return member?c.calendar(head,member):null;});
+  return moduleDomainContext(store,c=>project(c.head,(types,indexed)=>typedMembers(c,types,signal,indexed),m=>c.calendar(m),id=>c.selected(id),async id=>{const member=await c.member(id);return member?c.calendar(member):null;}),{domains:operationalReadDomains.planning});
  });
 }

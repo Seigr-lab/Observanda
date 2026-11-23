@@ -11,8 +11,9 @@ export async function readPlanningTaskFromStore(store,reference,{label=false}={}
  if(!validTaskReference(reference))throw new AppError('INVALID');
   if((await store.snapshot()).metadata.id!==reference.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const registry=await readProjectDomainRegistry(store);
-  if(registry?.commandVersion!==1||!registry.domains.includes('tasks'))throw new AppError('TASK_PREREQUISITE_UNSUPPORTED');
-  const result=await moduleDomainContext(store,async context=>{
+  if(registry?.commandVersion!==1)throw new AppError('ACCESS_UPGRADE');
+  if(!registry.domains.includes('tasks'))throw new AppError('TASK_PREREQUISITE_UNSUPPORTED');
+  return moduleDomainContext(store,async context=>{
    let member;try{member=await context.member(reference.id);}catch(error){if(error.code!=='MODULE_REFERENCE')throw error;throw new AppError('NOT_FOUND');}
    if(!member||member.type!=='task')throw new AppError('NOT_FOUND');
    const constraint=await context.constraint(member);
@@ -21,6 +22,5 @@ export async function readPlanningTaskFromStore(store,reference,{label=false}={}
    if(label)value.title=(await context.view(member)).title;
    return value;
   },{domains:['tasks'],scoped:false});
-  if(!result)throw new AppError('TASK_PREREQUISITE_UNSUPPORTED');return result.value;
 }
 export const readPlanningTask=(storage,reference,options)=>storage.catalogue(store=>readPlanningTaskFromStore(store,reference,options));

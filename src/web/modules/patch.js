@@ -2,12 +2,6 @@
 // from another command require a fresh read, never an invented complete state.
 import {t} from '../i18n/index.js';
 const invalid=()=>{throw Error(t('moduleCurrent','invalid'));};
-export function applyModulePatch(snapshot,patch){
- if(!patch||patch.workspaceId!==snapshot?.workspaceId||!Number.isSafeInteger(patch.baseRevision)||!Number.isSafeInteger(patch.revision)||patch.revision<patch.baseRevision||patch.revision>patch.baseRevision+1||!Array.isArray(patch.entities))invalid();
- if(snapshot.revision!==patch.baseRevision)return null;
- return {...snapshot,revision:patch.revision,entities:mergeEntities(snapshot,patch.entities)};
-}
-
 function mergeEntities(snapshot,values){
  const changed=new Map();
  for(const entity of values){

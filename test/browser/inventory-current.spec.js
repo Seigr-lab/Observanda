@@ -24,8 +24,8 @@ for(const count of [65,650])test('inventory cards and selected-item choices stay
  const category=entity('category',{name:'Component details',description:'Selected schema',archived:false,fields:[{key:'package',label:'Package',type:'text',unit:'',required:false,choices:[]}]});
  await seedModuleCurrent(f.workspace,book.id,[...resources,...movements,...ledger,category]);
  const settings=defaultDashboard();settings.enabledModules=['resources'];const card=createPanel('resources','inventory-growth');card.moduleId='resources';card.count=5;settings.views[0].panels=[card];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),read=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,opened=[],requests=[],errors=[];
- ModuleCatalogue.prototype.read=()=>{throw Error('Inventory card loaded full module data');};ModuleCatalogue.prototype.selected=async function(head,id){const value=await selected.call(this,head,id);if(value)opened.push(id);return value;};
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),selected=ModuleCatalogue.prototype.selected,opened=[],requests=[],errors=[];
+ ModuleCatalogue.prototype.selected=async function(head,id){const value=await selected.call(this,head,id);if(value)opened.push(id);return value;};
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));const cdp=await page.context().newCDPSession(page);
  try{
   const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/workspace');
@@ -52,5 +52,5 @@ for(const count of [65,650])test('inventory cards and selected-item choices stay
   await expect(main.locator('.inventory-metrics')).toContainText((100+count)+'.000000000000000001 pieces');await main.getByRole('button',{name:'Receive',exact:true}).click();await main.getByLabel('Quantity (pieces)',{exact:true}).fill('2');await main.getByLabel('Reason / reference',{exact:true}).fill('Latest receipt');await main.getByRole('button',{name:'Record movement',exact:true}).click();await expect(main.locator('.inventory-metrics')).toContainText((102+count)+'.000000000000000001 pieces');
   const heap=(await cdp.send('Runtime.getHeapUsage')).usedSize;expect(heap).toBeLessThan(96*1024*1024);expect(errors).toEqual([]);expect(requests).not.toContain('/api/modules/data');expect(requests).not.toContain('/api/notebook');expect(requests).not.toContain('/api/workspace/read/page');
   console.log(JSON.stringify({items:count,browserHeapMiB:Math.round(heap/1024/1024),openedOriginals:new Set(opened).size}));
- }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -11,7 +11,6 @@ import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {largestSheet} from './module-capacity-fixture.js';
 import {ModuleDrafts} from '../src/modules/drafts.js';
-import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ModuleReader} from '../src/modules/reader.js';
@@ -29,7 +28,6 @@ for(const count of [1,10])test('maximum Unicode sheets checkpoint and recover am
  const ids=Array.from({length:count},()=>randomUUID()),save=(id,expectedRevision,value)=>({workspaceId:book.id,commandId:randomUUID(),action:'sheet.save',payload:{id,expectedRevision,data:value}});
  for(const id of ids)await modules.execute(save(id,null,data),{compact:true});
  if(count===10)await moduleDomainStore(f.workspace,book.id,'spreadsheet',async store=>{const old=await legacyModuleHead(store,book.id);delete old.currentVersion;delete old.viewVersion;delete old.historyVersion;await store.db.run("UPDATE state SET payload=$1 WHERE slot='modules'",store.encode('state','modules',old));},{write:true});
- t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Full module read');});
  const reader=new ModuleReader(f.workspace),beforePage=performance.now(),page=await reader.list({workspaceId:book.id,type:'sheet'}),pageMs=performance.now()-beforePage;
  assert.equal(page.total,count);assert.ok(Buffer.byteLength(JSON.stringify(page))<24000);assert.ok(pageMs<10000);
  const id=ids[0],checkpoint={workspaceId:book.id,id:randomUUID(),moduleId:'spreadsheet',etag:null,drafts:[{id,type:'sheet',expectedRevision:1,baseRevision:1,data:{...data,name:'Unfinished maximum sheet'}}]},started=performance.now(),saved=await drafts.write(checkpoint),writeMs=performance.now()-started;

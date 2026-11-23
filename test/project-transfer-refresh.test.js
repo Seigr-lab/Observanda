@@ -6,7 +6,7 @@ import {fixture,calculation} from './project-domain-fixture.js';
 import {copyProjectLocation} from '../src/project-transfer.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {ProjectDomains} from '../src/project-domains.js';
-import {executeModuleCommand} from '../src/modules/command.js';
+import {executeModuleCommand} from './module-domain-command.js';
 import {moduleCommandFingerprint} from '../src/modules/command-fingerprint.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';

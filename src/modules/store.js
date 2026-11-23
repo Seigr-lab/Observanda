@@ -1,13 +1,10 @@
 import {verifyProjectDomains} from '../project-domain-verification.js';
 import {moduleDomainContext,moduleDomainRoute} from '../module-domain-context.js';
 import {ProjectModuleCommands} from '../project-module-commands.js';
-import {moduleCommandFingerprint as fingerprint} from './command-fingerprint.js';
 import {serialize} from '../storage.js';
 import {AppError} from '../errors.js';
 import {exact,uuid,instant,requireValue,object} from './validation.js';
-import {moduleResearchContext} from './research-context.js';
 import {ModuleCatalogue,moduleEntityBytes} from './catalogue.js';
-import {executeModuleCommand} from './command.js';
 import {MODULE_BYTES} from './capacity.js';
 
 export function validateModuleEvent(event){
@@ -43,7 +40,7 @@ export class ModuleStore{
  async current(book){
   book??=(await this.workspace.outline()).metadata;
   return this.workspace.catalogue(async store=>{
-   const owned=await moduleDomainContext(store,async c=>{
+   return moduleDomainContext(store,async c=>{
     const entities=[];let bytes=Buffer.byteLength(serialize({formatVersion:1,workspaceId:book.id,revision:c.head.revision,revisions:c.revisions,entities:[]}));
     for await(const member of c.members()){
      const entity=await c.selected(member.id);bytes+=moduleEntityBytes(entity)+4;
@@ -52,29 +49,23 @@ export class ModuleStore{
     }
     return {formatVersion:1,workspaceId:book.id,revision:c.head.revision,revisions:c.revisions,entities};
    },{scoped:false});
-   return owned?owned.value:this.validate(await store.moduleData(book.id,{history:false}),{history:false});
   });
  }
  async version(){
   const {metadata:book}=await this.workspace.outline();
   return this.workspace.catalogue(async store=>{
-   const owned=await moduleDomainContext(store,c=>({workspaceId:book.id,revision:c.head.revision,revisions:c.revisions}),{scoped:false});if(owned)return owned.value;
-   const {workspaceId,revision}=await new ModuleCatalogue(store).head(book.id);return {workspaceId,revision};
+   return moduleDomainContext(store,c=>({workspaceId:book.id,revision:c.head.revision,revisions:c.revisions}),{scoped:false});
   });
  }
  async verifyCatalogue(store,workspaceId){
   await new ModuleCatalogue(store).verify(workspaceId,{entity:entity=>this.validateEntity(entity),constraints:source=>this.validateSource(source),event:event=>this.validateEvent(event)});
   await verifyProjectDomains(store);
  }
- async execute(command,{compact=false}={}){
+ async execute(command){
   if(Buffer.byteLength(JSON.stringify(command))>MODULE_BYTES)throw new AppError('LIMIT');
   requireValue(exact(command,['workspaceId','commandId','action','payload'])&&uuid(command.workspaceId)&&uuid(command.commandId)&&typeof command.action==='string'&&object(command.payload),'command');
   const handler=this.definitions.commands[command.action];requireValue(typeof handler==='function','command');
-  const namespaceId=await moduleDomainRoute(this.workspace);
-  if(namespaceId!==null){if(command.workspaceId!==namespaceId)throw new AppError('WORKSPACE_CHANGED');return new ProjectModuleCommands(this.workspace,namespaceId).execute(command);}
-  return this.workspace.withLock(async()=>{
-   const research=await moduleResearchContext(this.workspace),{book}=research;if(command.workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
-   return this.workspace.catalogue(store=>executeModuleCommand(this,store,research,command,fingerprint(command),{compact}));
-  });
+  const namespaceId=await moduleDomainRoute(this.workspace);if(command.workspaceId!==namespaceId)throw new AppError('WORKSPACE_CHANGED');
+  return new ProjectModuleCommands(this.workspace,namespaceId).execute(command);
  }
 }

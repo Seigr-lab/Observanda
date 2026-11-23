@@ -25,7 +25,8 @@ export async function planningTaskAccess(application,client,workspaceId,{scope=n
   if(!previous&&owners.size>=TASK_DEPENDENCY_OWNER_LIMIT)throw new AppError('TASK_DEPENDENCY_OWNER_LIMIT');
   const value=await reader.use(owner,null,async(store,_snapshot,{storage})=>{
    const domains=await readProjectDomainRegistry(store);
-   if(domains?.commandVersion!==1||!domains.domains.includes('tasks'))throw new AppError('TASK_PREREQUISITE_UNSUPPORTED');
+   if(domains?.commandVersion!==1)throw new AppError('ACCESS_UPGRADE');
+   if(!domains.domains.includes('tasks'))throw new AppError('TASK_PREREQUISITE_UNSUPPORTED');
    return consume(storage,owner,{store});
   });
   owners.set(namespaceId,owner);active();return value;

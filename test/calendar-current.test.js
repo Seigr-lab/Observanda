@@ -19,7 +19,6 @@ for(const count of [65,650])test('calendar discovery excludes '+count+' unrelate
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:{title:'Task '+i,description:'Private task body. '.repeat(4500),status:'todo',priority:'normal',dueOn:i%2?'2026-12-01':'2026-10-15',assignees:[],checklist:[],dependencies:[],links:[]}}));
  await seedModuleCurrent(f.workspace,book.id,entities);
- t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Whole module data loaded for a calendar');});
  t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Original body loaded for calendar summaries');});
  const service=new CalendarSources(),start=performance.now(),value=await service.data(f.workspace,range),elapsed=performance.now()-start,bytes=Buffer.byteLength(JSON.stringify(value));
  assert.equal(value.events.length,Math.ceil(count/2));assert.equal(value.sources.length,1);assert.ok(!JSON.stringify(value).includes('Private task body'));
@@ -37,7 +36,6 @@ for(const count of [65,650])test('dense calendar pages and month counts stay bou
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:{title:'Task '+String(i).padStart(3,'0'),description:'Unopened private notes. '.repeat(2600),status:'todo',priority:'normal',dueOn:'2026-10-15',assignees:[],checklist:[],dependencies:[],links:[]}}));
  await seedModuleCurrent(f.workspace,book.id,entities);
- t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Whole module data loaded');});
  const selected=ModuleCatalogue.prototype.selected,opened=[];t.mock.method(ModuleCatalogue.prototype,'selected',async function(...args){opened.push(args[1]);return selected.apply(this,args);});
  const service=new CalendarSources(),command={workspaceId:book.id,...range},start=performance.now(),month=await calendarPage(f.workspace,service,{...command,mode:'month'}),monthMs=performance.now()-start;
  assert.equal(month.total,count);assert.equal(month.events.length,3);assert.equal(month.days.find(d=>d.date==='2026-10-15').total,count);assert.ok(month.days.every(d=>d.date==='2026-10-15'||d.total===0));

@@ -13,5 +13,5 @@ export async function projectModuleHistoryContext({research,registry,inspect},id
 // Existing checkpoint readers can resolve their saved base inside their own
 // database snapshot. No second transaction or implicit storage conversion.
 export async function projectModuleHistoryOwner(research){
- const reader=await projectModuleDomainReader(research);return reader?(id,operation)=>reader.run(context=>projectModuleHistoryContext(context,id,operation)):null;
+ const reader=await projectModuleDomainReader(research);return (id,operation)=>reader.run(context=>projectModuleHistoryContext(context,id,operation));
 }

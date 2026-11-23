@@ -31,7 +31,6 @@ import {WorkspaceDirectory} from './workspace-directory.js';
 import {synchronizeWorkspaceName,requireCurrentWorkspaceName} from './workspace-name-state.js';
 import {workspaceFolderName,workspaceCreationPath} from './workspace-names.js';
 import {projectModuleRequest} from './project-module-requests.js';
-import {moduleDomainRoute} from './module-domain-context.js';
 import {ProjectApplication,projectRequest} from './project-application.js';
 import {researchRequest,executeResearchRequest} from './research-requests.js';
 import {LiveConnections} from './collaboration/live-connections.js';
@@ -69,7 +68,6 @@ import {moveSource} from './workspace-move-state.js';
 import {operationTransfer} from './operation-progress.js';
 import {operationResponse} from './operation-response.js';
 import {createApplicationAssets} from './application-assets.js';
-import {readBOMSource} from './bom-import.js';
 import {WorkspaceReader} from './workspace-reader.js';
 import {RecordContent} from './record-content.js';
 import {RecordSelectors} from './record-selectors.js';
@@ -105,13 +103,9 @@ import {readWorkspaceDashboard,writeWorkspaceDashboard} from './security/dashboa
 import {DeviceStore,defaultDeviceStore} from './security/device-store.js';
 import {workspaceAccess,updateWorkspaceAccess} from './security/workspace-access.js';
 import {createWorkspaceAccess,accessSummary} from './access.js';
-import {ModuleDrafts} from './modules/drafts.js';
-import {ModuleDraftTransfer} from './modules/draft-transfer.js';
 import {workspaceModules} from './modules/index.js';
 import {ModuleHistory} from './modules/history.js';
 import {ModuleReader} from './modules/reader.js';
-import {PlanningDashboard} from './modules/dashboard.js';
-import {InventoryReader} from './modules/inventory-reader.js';
 import {ResearchRecords,recordRevisions} from './research.js';
 import {RecordWriting} from './record-writing.js';
 import {RecordSectionCommands} from './record-section-commands.js';
@@ -164,7 +158,6 @@ import {Workspace,workspaceFile,assertRegular} from './storage.js';
 import {createNotebook,upgradeNotebook,MAX_BYTES} from './model.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
 import {admitResearchBytes} from './research-capacity.js';
-import {MODULE_BYTES,MODULE_CHECKPOINT_BYTES} from './modules/capacity.js';
 import {AppError,safeError} from './errors.js';
 import {MediaStore} from './media.js';
 import {WorkspaceFonts} from './workspace-fonts.js';
@@ -1092,26 +1085,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         return await projectContentHttp(req,res,starter,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executeRecordStarterRequest(workspace,starter,data,options)});
       }
       const moduleRequest=req.method==='POST'?projectModuleRequest(url.pathname):null;
-      if(moduleRequest&&(moduleRequest.references||moduleRequest.taskReadiness||await moduleDomainRoute(workspace)!==null)){
+      if(moduleRequest){
         const data=await body(req,moduleRequest.limit),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),taskSourceAccess:planningTaskAccessFactory(historyProjects,client,{check:req.checkWriter}),inventorySourceAccess:inventoryOperationAccessFactory(historyProjects,client,{check:req.checkWriter})});
           if(url.pathname==='/api/modules/command'&&result.entities)selectedContext.calendarSources.reconcile(result.entities,{partial:true});
           return json(result);
         }finally{res.off('close',abort);}
-      }
-      if(req.method==='POST'&&url.pathname.startsWith('/api/modules/drafts/')){
-        const drafts=new ModuleDrafts(workspace),data=await body(req,url.pathname==='/api/modules/drafts/write'?MODULE_CHECKPOINT_BYTES:MAX_BYTES);
-        if(url.pathname.startsWith('/api/modules/drafts/transfer/')){
-          const operation=url.pathname.slice('/api/modules/drafts/transfer/'.length);if(!['start','part','finish'].includes(operation))throw new AppError('NOT_FOUND');
-          const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-          try{return json(await new ModuleDraftTransfer(workspace)[operation]((({moduleId,...command})=>command)(data),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-        }
-        if(url.pathname==='/api/modules/drafts/list'){
-          const {moduleId,...options}=data,controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-          try{return json(await drafts.list(moduleId,options,{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-        }
-        if(url.pathname==='/api/modules/drafts/read')return json(await drafts.read(data.id));
-        if(url.pathname==='/api/modules/drafts/write'){const saved=await drafts.write(data);return json({etag:saved.etag});}
       }
       if(req.method==='POST'&&url.pathname==='/api/calendars/page'){
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
@@ -1254,30 +1233,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         return json({data:await workspaceModules(workspace).current()});
       }
       if(req.method==='GET'&&url.pathname==='/api/modules/version')return json(await workspaceModules(workspace).version());
-      if(req.method==='POST'&&['/api/modules/inventory/dashboard','/api/modules/inventory/discovery','/api/modules/inventory/stock','/api/modules/inventory/ledger'].includes(url.pathname)){
-        const controller=new AbortController(),abort=()=>controller.abort();res.on('close',abort);
-        try{const reader=new InventoryReader(workspace),method={'/api/modules/inventory/dashboard':'page','/api/modules/inventory/discovery':'discover','/api/modules/inventory/stock':'stock','/api/modules/inventory/ledger':'ledger'}[url.pathname];return json(await reader[method](await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-      }
-      if(req.method==='POST'&&['/api/modules/planning/dashboard','/api/modules/planning/discovery'].includes(url.pathname)){
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const reader=new PlanningDashboard(workspace);return json(await reader[url.pathname.endsWith('/discovery')?'discover':'page'](await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-      }
-      if(req.method==='POST'&&['/api/modules/items','/api/modules/item','/api/modules/labels'].includes(url.pathname)){
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const reader=new ModuleReader(workspace),method={'/api/modules/items':'list','/api/modules/item':'selected','/api/modules/labels':'labels'}[url.pathname];return json(await reader[method](await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-      }
       if(req.method==='GET'&&url.pathname==='/api/modules/history'){
         const history=new ModuleHistory(workspace),id=url.searchParams.get('id');
         return json(url.searchParams.has('revision')?await history.read({id,revision:Number(url.searchParams.get('revision'))}):await history.page({id,cursor:url.searchParams.get('cursor')}));
-      }
-      if(req.method==='POST'&&url.pathname==='/api/modules/bom-source'){
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{return json(await readBOMSource(workspace,await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-      }
-      if(req.method==='POST'&&url.pathname==='/api/modules/command'){
-        const compact=url.searchParams.get('compact')==='1',result=await workspaceModules(workspace).execute(await body(req,MODULE_BYTES),{compact});
-        if(result.modulePatch){selectedContext.calendarSources.reconcile(result.modulePatch.entities,{partial:true});return json(result);}
-        const {events,...data}=result.data;selectedContext.calendarSources.reconcile(data.entities);return json({...result,data});
       }
       const material=materialRequest(url.pathname);
       if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,quantityFavorites,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),sourceAccess:comparisonSources,sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(historyProjects,client,host,operation,input,{...options,check:req.checkWriter}),jobs:()=>{startJobs(context);return context.jobs;}})});

@@ -1,7 +1,6 @@
 import {AppError} from './errors.js';
 import {digest} from './storage-format.js';
 import {summaryPage} from './summary-page.js';
-import {ModuleCatalogue} from './modules/catalogue.js';
 import {moduleDomainContext} from './module-domain-context.js';
 import {moduleDomainOf} from './modules/domains.js';
 import {exact,uuid} from './modules/validation.js';
@@ -11,9 +10,7 @@ export const validModuleReference=ref=>exact(ref,['workspaceId','type','id'])&&u
 export async function moduleReferenceContext(store,types,consume){
  const domains=[...new Set(types.map(moduleDomainOf).filter(Boolean))];
  if(!domains.length)return consume(null);
- const current=await moduleDomainContext(store,consume,{domains,scoped:false});if(current)return current.value;
- const catalogue=new ModuleCatalogue(store),head=await catalogue.head((await store.snapshot()).metadata.id);
- return consume({head,member:id=>catalogue.member(head,id),members:options=>catalogue.members(head,options),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),constraint:member=>catalogue.constraint(head,member)});
+ return moduleDomainContext(store,consume,{domains,scoped:false});
 }
 export async function moduleReferenceSummary(store,snapshot,ref){
  if(ref.type==='record'){

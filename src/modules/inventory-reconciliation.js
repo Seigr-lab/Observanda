@@ -18,7 +18,6 @@ const directory=id=>{if(!researchId(id))throw new AppError('INVALID');return '.o
 export async function inventorySources(workspace,operation){
  return workspace.catalogue(async research=>{
   const owner=(await research.snapshot()).metadata.id,reader=await projectModuleDomainReader(research);
-  if(!reader)return operation([{domain:'legacy',namespaceId:owner,catalogue:new ModuleCatalogue(research)}],owner);
   return reader.run(async context=>{
    const sources=[];for(const domain of ['bom','inventory'])if(reader.registry.domains.includes(domain))sources.push({domain,namespaceId:reader.registry.namespaceId,catalogue:new ModuleCatalogue(await context.inspect(domain))});
    return operation(sources,owner);
@@ -40,7 +39,7 @@ async function admitted(sources,state,owner,{full=false}={}){
 export function validateInventoryCheckpoint(value,id,owner){
  const fields='attempt,checked,counts,format,id,member,offset,owner,phase,previous,read,reset,sequence,source,sources';
  if(!value||Object.keys(value).sort().join()!==fields||value.format!==1||value.id!==id||value.owner!==owner||!researchId(owner)||!['build','compare','cleanup','ready','reset','restart','stale'].includes(value.phase)||!['attempt','checked','member','offset','read','reset','sequence','source'].every(key=>integer(value[key]))||value.attempt<1||!Array.isArray(value.sources)||value.sources.length>2||!Array.isArray(value.counts)||value.counts.length!==value.sources.length||!value.counts.every(integer)||value.previous!==null&&(!integer(value.previous.read)||!integer(value.previous.checked))||value.source>value.sources.length)damaged();
- for(const source of value.sources)if(!source||Object.keys(source).sort().join()!=='domain,head,members,namespaceId,revision,rows'||!['legacy','bom','inventory'].includes(source.domain)||!researchId(source.namespaceId)||!revision(source.head)||!['members','revision','rows'].every(key=>integer(source[key])))damaged();
+ for(const source of value.sources)if(!source||Object.keys(source).sort().join()!=='domain,head,members,namespaceId,revision,rows'||!['bom','inventory'].includes(source.domain)||!researchId(source.namespaceId)||!revision(source.head)||!['members','revision','rows'].every(key=>integer(source[key])))damaged();
  if(new Set(value.sources.map(source=>source.domain)).size!==value.sources.length)damaged();
  const members=value.sources.reduce((sum,source)=>sum+source.members,0),rows=value.sources.reduce((sum,source)=>sum+source.rows,0),source=value.sources[value.source];
  if(!integer(members+rows)||value.read>members||value.checked>rows||value.previous!==null&&Object.keys(value.previous).sort().join()!=='checked,read')damaged();

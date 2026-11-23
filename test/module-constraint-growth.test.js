@@ -22,7 +22,6 @@ for(const count of [65,650])test('encrypted constraints validate a '+count+'-tas
  const execute=(entity,data)=>modules.execute({workspaceId:book.id,commandId:randomUUID(),action:entity.type+'.save',payload:{id:entity.id,expectedRevision:entity.revision,data}},{compact:true});
  const selected=ModuleCatalogue.prototype.selected,loaded=[];let allowOriginals=false,peak=0;
  t.mock.method(ModuleCatalogue.prototype,'selected',async function(head,id){if(!allowOriginals){assert.ok([ids[0],ids.at(-1),equipment.id,bookings[0].id].includes(id),'Unrelated original loaded');loaded.push(id);}return selected.call(this,head,id);});
- t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Full module snapshot loaded');});
  const sampler=setInterval(()=>{peak=Math.max(peak,process.memoryUsage().heapUsed);},20);sampler.unref();t.after(()=>clearInterval(sampler));
  let start=performance.now();const result=await execute(tasks.at(-1),{...tasks.at(-1).data,title:'Updated last task'}),editMs=performance.now()-start;
  assert.equal(result.entities.length,1);assert.ok(editMs<10000,'Dependency validation exceeds 10 seconds');

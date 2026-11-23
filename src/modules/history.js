@@ -1,7 +1,6 @@
 import {AppError} from '../errors.js';
 import {digest,serialize} from '../storage-format.js';
 import {uuid} from './validation.js';
-import {ModuleCatalogue} from './catalogue.js';
 import {ModuleHistoryIndex,moduleHistorySummary} from './history-index.js';
 import {workspaceModules} from './index.js';
 const hash=value=>digest(serialize(value));
@@ -14,10 +13,8 @@ export class ModuleHistory{
  async context(operation,id=null){
   if(this.readContext)return this.readContext(operation);
   return this.workspace.catalogue(async store=>{
-   {const {projectModuleHistoryOwner}=await import('../project-module-history-context.js'),owner=await projectModuleHistoryOwner(store);if(owner)return owner(id,operation);}
-   const workspaceId=(await store.snapshot()).metadata.id,catalogue=new ModuleCatalogue(store),head=await catalogue.head(workspaceId);
-   return operation({workspaceId,store,catalogue,head,member:id=>catalogue.member(head,id),
-    encode:value=>store.encode('module-history-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('module-history-page',workspaceId,Buffer.from(value,'base64url'))});
+   const {projectModuleHistoryOwner}=await import('../project-module-history-context.js');
+   return (await projectModuleHistoryOwner(store))(id,operation);
   });
  }
  async summaries(context,id,revisions,before=context.head.revision+1){

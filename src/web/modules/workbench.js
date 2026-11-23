@@ -14,7 +14,7 @@ import {moduleRecovery} from './recovery.js';
 import {moduleRecoveryView} from './recovery-ui.js';
 import {moduleHistoryUI} from './history-ui.js';
 import {validModuleRevision} from './revision.js';
-import {applyModulePatch,applyModuleDomainReceipt} from './patch.js';
+import {applyModuleDomainReceipt} from './patch.js';
 import {moduleItemPages} from './item-pages.js';
 import {moduleItemChoices} from './item-choices.js';
 // Common editing lifecycle; feature definitions own their fields and commands.
@@ -169,8 +169,9 @@ export async function moduleEditor(services,definition){
     if(!result.operationPending)pending=null;
     return result;
    }
-   const data=definition.paged&&result.revisions?applyModuleDomainReceipt(base,result):definition.paged&&result.modulePatch?applyModulePatch({...base,revision:result.modulePatch.baseRevision},result.modulePatch):result.modulePatch?(applyModulePatch(base,result.modulePatch)??(await api('/api/modules/data')).data):result.data;
-   if(definition.paged&&(result.modulePatch?.workspaceId??result.workspaceId)!==workspaceId)throw Error(currentText('invalid'));
+   // Every module editor is paged: a command returns a domain receipt of the changed items.
+   const data=applyModuleDomainReceipt(base,result);
+   if(result.workspaceId!==workspaceId)throw Error(currentText('invalid'));
    if(disposed){await finishSaved?.();return {...result,data};}
    adopt(data);if(!definition.paged)state.moduleData=data;pending=null;await definition.afterCommand?.(context);return {...result,data};
   }catch(e){error=e;throw e;}

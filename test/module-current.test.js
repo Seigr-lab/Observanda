@@ -31,10 +31,9 @@ test('incremental module capacity equals the serialized current representation',
  }
 });
 for(const count of [65,650])test('selected module commands do not read '+count+' unrelated originals',async t=>{
- const f=await fixture(t,count,(e,i,book)=>({...e,data:{...e.data,links:[{workspaceId:book.id,type:'record',id:book.entries[i%2].id}]}})),original=ModuleCatalogue.prototype.selected,read=ModuleCatalogue.prototype.read,loaded=[];
+ const f=await fixture(t,count,(e,i,book)=>({...e,data:{...e.data,links:[{workspaceId:book.id,type:'record',id:book.entries[i%2].id}]}})),original=ModuleCatalogue.prototype.selected,loaded=[];
  ModuleCatalogue.prototype.selected=async function(head,id){const entity=await original.call(this,head,id);if(entity)loaded.push(id);return entity;};
- ModuleCatalogue.prototype.read=()=>{throw Error('Full module read during selected command');};
- t.after(()=>{ModuleCatalogue.prototype.selected=original;ModuleCatalogue.prototype.read=read;});
+ t.after(()=>{ModuleCatalogue.prototype.selected=original;});
  const reader=new ModuleReader(f.workspace),pageStart=performance.now(),page=await reader.list({workspaceId:f.book.id,type:'task'}),pageMs=performance.now()-pageStart;
  assert.equal(page.items.length,25);assert.equal(page.total,count);assert.deepEqual(loaded,[]);assert.ok(JSON.stringify(page).length<24000);assert.ok(pageMs<1500);
  const second=await reader.list({workspaceId:f.book.id,type:'task',cursor:page.nextCursor});assert.equal(second.offset,25);
@@ -69,18 +68,17 @@ test('connected work includes prose links, respects project adoption and rejects
  const f=await fixture(t,4,(e,i,book)=>{
   const reference={workspaceId:book.id,kind:'record',id:book.entries[0].id};
   return {...e,data:{...e.data,projectId:i===3?book.projects[0].id:null,description:i===2?{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Original method',marks:[{type:'link',attrs:{href:researchReference(reference),title:'',target:'_self',nofollow:false}}]}]}]}:'',links:i===2?[]:[{workspaceId:book.id,type:'record',id:reference.id}]}};
- }),reader=new ModuleReader(f.workspace),command={workspaceId:f.book.id,types:['task'],reference:{workspaceId:f.book.id,type:'record',id:f.book.entries[0].id}},read=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected;
- ModuleCatalogue.prototype.read=()=>{throw Error('Whole current module data loaded');};ModuleCatalogue.prototype.selected=()=>{throw Error('Original loaded for connected work');};
+ }),reader=new ModuleReader(f.workspace),command={workspaceId:f.book.id,types:['task'],reference:{workspaceId:f.book.id,type:'record',id:f.book.entries[0].id}},selected=ModuleCatalogue.prototype.selected;
+ ModuleCatalogue.prototype.selected=()=>{throw Error('Original loaded for connected work');};
  try{
   const result=await reader.list(command);assert.equal(result.total,3);assert.deepEqual(new Set(result.items.map(e=>e.id)),new Set(f.data.entities.slice(0,3).map(e=>e.id)));
   assert.equal((await reader.list({workspaceId:f.book.id,type:'task',moduleId:'planning'})).total,3);
   const scoped=await reader.list({workspaceId:f.book.id,type:'task',projectId:f.book.projects[0].id,recursive:false});assert.deepEqual(scoped.items.map(e=>e.id),[f.data.entities[3].id]);
   assert.equal((await reader.list({workspaceId:f.book.id,type:'task',projectId:f.book.projects[0].id,moduleId:'planning'})).total,0);
   for(const query of [{kind:'equipment'},{archived:false},{moduleId:'invalid'},{projectId:'bad'},{recursive:'yes'}])await assert.rejects(reader.list({workspaceId:f.book.id,type:'task',...query}),{code:'INVALID'});
- }finally{ModuleCatalogue.prototype.selected=selected;ModuleCatalogue.prototype.read=read;}
+ }finally{ModuleCatalogue.prototype.selected=selected;}
  // Audit streams current originals as well as historical events.
- ModuleCatalogue.prototype.read=()=>{throw Error('Whole current module data loaded by audit');};
- try{await f.workspace.catalogue(store=>f.modules.verifyCatalogue(store,f.book.id));}finally{ModuleCatalogue.prototype.read=read;}
+ await f.workspace.catalogue(store=>f.modules.verifyCatalogue(store,f.book.id));
  await moduleDomainStore(f.workspace,f.book.id,'tasks',async store=>{
   const catalogue=new ModuleCatalogue(store),head=await catalogue.head(f.book.id),slot='module-references:'+(await catalogue.member(head,f.data.entities[0].id)).referencesHash;
   await store.db.run('DELETE FROM state WHERE slot=$1',slot);

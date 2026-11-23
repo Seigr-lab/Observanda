@@ -39,7 +39,7 @@ export class ProjectModuleCommands{
   let references=null;const externalReference=referenceAccess?async ref=>{references??=await referenceAccess(this.namespaceId,{signal});return references.validate(ref);}:null;
   try{
   const retained=async()=>{signal?.throwIfAborted();await check?.();return this.storage.catalogue(async research=>{
-   const reader=await projectModuleDomainReader(research);if(!reader)throw new AppError('ACCESS_UPGRADE');
+   const reader=await projectModuleDomainReader(research);
    if(reader.registry.namespaceId!==this.namespaceId)throw new AppError('WORKSPACE_CHANGED');
    const receipt=await reader.run(({identities})=>identities.locate('command',command.commandId));signal?.throwIfAborted();await check?.();return receipt;
   });};

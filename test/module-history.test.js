@@ -22,8 +22,7 @@ async function fixture(t,count=45){
 test('current module data, saves and summary pages do not load retained event bodies; pages stay anchored',async t=>{
  const f=await fixture(t),event=ModuleCatalogue.prototype.event;let loaded=0;
  ModuleCatalogue.prototype.event=function(...args){loaded++;return event.apply(this,args);};t.after(()=>{ModuleCatalogue.prototype.event=event;});
- const read=ModuleCatalogue.prototype.read;ModuleCatalogue.prototype.read=()=>{throw Error('Current bodies loaded by version check');};
- try{const version=await f.modules.version();assert.equal(version.workspaceId,f.workspaceId);assert.equal(version.revisions.tasks,45);}finally{ModuleCatalogue.prototype.read=read;}
+ const version=await f.modules.version();assert.equal(version.workspaceId,f.workspaceId);assert.equal(version.revisions.tasks,45);
  assert.equal((await f.modules.current()).events,undefined);
  const first=await f.history.page({id:f.id}),second=await f.history.page({id:f.id,cursor:first.nextCursor}),third=await f.history.page({id:f.id,cursor:second.nextCursor});
  assert.equal(first.items.length,20);assert.equal(second.items.length,20);assert.equal(third.items.length,5);assert.equal(third.nextCursor,null);

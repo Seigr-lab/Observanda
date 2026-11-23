@@ -12,7 +12,6 @@ import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {largeCategory} from '../module-capacity-fixture.js';
 import {workspaceModules} from '../../src/modules/index.js';
-import {ModuleCatalogue} from '../../src/modules/catalogue.js';
 import {ModuleReader} from '../../src/modules/reader.js';
 
 for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resource schema has bounded fields and choices, recovers edits and keeps hidden values',async({page})=>{
@@ -22,7 +21,6 @@ for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resour
  const settings=defaultDashboard();settings.views[0].panels=[];settings.enabledModules=['resources'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
  const modules=workspaceModules(f.workspace);await modules.execute({workspaceId:book.id,commandId:randomUUID(),action:'category.save',payload:{id,expectedRevision:null,data}},{compact:true});
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),errors=[],sizes=[];
- const original=ModuleCatalogue.prototype.read;ModuleCatalogue.prototype.read=()=>{throw Error('Full module state loaded');};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/modules/drafts/transfer/'))sizes.push(Buffer.byteLength(r.postData()??''));});
  try{
   await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
@@ -64,5 +62,5 @@ for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resour
    expect(resource.data.values).toEqual({part:'Changed last choice',field_23:'Required value from last page'});
   }
   expect(Math.max(...sizes)).toBeLessThan(2*1024*1024);expect(errors).toEqual([]);
- }finally{ModuleCatalogue.prototype.read=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

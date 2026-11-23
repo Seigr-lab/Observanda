@@ -21,7 +21,6 @@ for(const count of [65,650])test(count+' calendar sources remain searchable and 
  const events=calendars.map((calendar,i)=>entity('event',{title:'Event '+String(i).padStart(3,'0'),calendarId:calendar.id,startsAt:'2026-10-15',endsAt:'2026-10-16',allDay:true,timeZone:'UTC',location:'',notes:'Private original',status:'confirmed'}));
  await seedModuleCurrent(f.workspace,book.id,[...calendars,...events]);
  const selected=ModuleCatalogue.prototype.selected;let allow=false;
- t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Whole module read');});
  t.mock.method(ModuleCatalogue.prototype,'selected',function(...args){if(!allow)throw Error('Calendar source discovery loaded an original');return selected.apply(this,args);});
  const service=new CalendarSources(),command={workspaceId:book.id,from:'2026-10-01',to:'2026-11-01'},start=performance.now(),first=await calendarPage(f.workspace,service,command),pageMs=performance.now()-start;
  assert.equal(first.sources.length,20);assert.equal(first.sourcePage.total,count);assert.equal(first.total,count);assert.equal(first.events.length,50);
