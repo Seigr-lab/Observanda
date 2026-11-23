@@ -25,7 +25,7 @@ for(const compiled of [false,true])test('figure authoring loads on demand and sa
   await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[0].id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create observation',exact:true}).click();
   await page.getByLabel('Record title',{exact:true}).fill('Retained deferred figure');
-  if(!compiled){await page.getByRole('button',{name:'Retry figure editor',exact:true}).click();await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Retained deferred figure');}
+  if(!compiled){await (await revealInEditor(page,page.getByRole('button',{name:'Retry figure editor',exact:true}),'Evidence and results')).click();await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Retained deferred figure');}
   await (await revealInEditor(page,page.getByRole('button',{name:'Add figure',exact:true}),'Evidence and results')).click();await page.getByRole('button',{name:'Add measurement',exact:true}).click();
   await page.getByLabel('Coordinate 1',{exact:true}).fill('1');await page.getByLabel('Coordinate 2',{exact:true}).fill('2');
   await page.getByLabel('Value 1',{exact:true}).fill('3');await page.getByLabel('Value 2',{exact:true}).fill('8');

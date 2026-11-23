@@ -1,20 +1,27 @@
 import {test,expect} from '@playwright/test';
 import {workDirectory} from '../../scripts/work-directory.js';
-import {mkdtemp} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
-import {Workspace} from '../../src/storage.js';
 import {sampleNotebook} from '../../src/sample.js';
-import {startServer} from '../../src/server.js';
+import {clearVault} from '../../src/encryption.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {testServer} from '../device-fixture.js';
+import {revealInEditor} from './record-editor-helper.js';
 const cars='Year,Make,Model,Description,Price\n1997,Ford,E350,"ac, abs, moon",3000.00\n1999,Chevy,"Venture ""Extended Edition""",,4900.00\n1999,Chevy,"Venture ""Extended Edition, Very Large""",,5000.00\n1996,Jeep,Grand Cherokee,"MUST SELL!\nair, moon roof, loaded",4799.00';
+// The tabular importer belongs to the figure editor of a record that is being written for the first time.
 test('mixed source data can be reviewed, mapped, grouped and saved without replacing the figure during preview',async({page})=>{
- const directory=await mkdtemp(path.join(await workDirectory('test-work'),'figure-import-')),root=path.join(directory,'notebook'),book=sampleNotebook(),ws=new Workspace(root);
- await ws.create(book);
- const app=await startServer({root,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];
+ test.setTimeout(120000);page.setDefaultTimeout(20000);
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'figure-import-')),book=sampleNotebook(),errors=[],title='Imported vehicle prices';
+ const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  page.on('pageerror',error=>errors.push(error.message));
  try{
-  await page.goto(app.url);
-  await page.locator('[data-action="edit-entry"][data-id="'+book.entries[0].id+'"]').first().click();
+  await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
+  await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[0].id);
+  await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create observation',exact:true}).click();
+  await page.getByLabel('Record title',{exact:true}).fill(title);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add figure',exact:true}),'Evidence and results')).click();
   const figure=page.locator('.figure-workbench').first(),importer=figure.locator('.figure-import');
+  await expect(figure.locator('[data-figure-preview]')).toBeVisible();
   const original=await figure.locator('[data-figure-preview]').innerHTML();
   await importer.locator(':scope>summary').click();
   await importer.getByLabel('Data to import',{exact:true}).fill(cars);
@@ -37,22 +44,23 @@ test('mixed source data can be reviewed, mapped, grouped and saved without repla
   await page.setViewportSize({width:1440,height:1000});
   await importer.getByRole('button',{name:'Use mapped data',exact:true}).click();
   await expect(figure.locator('[data-figure-series] option')).toHaveText(['Ford','Chevy','Jeep']);
-  await page.getByRole('button',{name:'Save record',exact:true}).click();
-  await expect(page.locator('#notice')).toContainText('Changes saved.');
-  const saved=(await ws.read()).book.entries[0].figures[0];
-  expect(saved.kind).toBe('scatter');expect(saved.x.label).toBe('Year');expect(saved.y.label).toBe('Price');
-  expect(saved.series[1].points.map(p=>p.y)).toEqual([4900,5000]);
-  await page.reload();
-  await expect(page.locator('.figure-workbench').first().locator('[data-figure-series] option')).toHaveText(['Ford','Chevy','Jeep']);
-  const restored=page.locator('.figure-workbench').first();
-  const fileImport=restored.locator('.figure-import');
-  await fileImport.locator(':scope>summary').click();
+  // A reviewed file that would add series stays a preview until it is applied.
+  const fileImport=page.locator('.figure-workbench').first().locator('.figure-import');
+  await fileImport.evaluate(node=>node.open=true);
   await fileImport.getByLabel('Open CSV / TSV',{exact:true}).setInputFiles({name:'cars.csv',mimeType:'text/csv',buffer:Buffer.from(cars)});
   await expect(fileImport.getByLabel('Coordinate column',{exact:true})).toHaveValue('0');
   await fileImport.getByLabel('Split series by',{exact:true}).selectOption('1');
   await fileImport.getByLabel('Apply to this figure',{exact:true}).selectOption('append');
   await expect(fileImport.getByRole('button',{name:'Add mapped series',exact:true})).toBeEnabled();
-  expect((await ws.read()).book.entries[0].figures[0].series).toHaveLength(3);
+  await expect(figure.locator('[data-figure-series] option')).toHaveText(['Ford','Chevy','Jeep']);
+  await page.locator('.section-save [data-action=save]').click();
+  await expect(page.locator('.record-editing')).toContainText(title);
+  const record=(await f.workspace.read()).book.entries.find(entry=>entry.title===title),saved=record.figures[0];
+  expect(record.figures).toHaveLength(1);
+  expect(saved.kind).toBe('scatter');expect(saved.x.label).toBe('Year');expect(saved.y.label).toBe('Price');
+  expect(saved.series.map(series=>series.name)).toEqual(['Ford','Chevy','Jeep']);
+  expect(saved.series[1].points.map(p=>p.y)).toEqual([4900,5000]);
+  await page.reload();await expect(page.locator('.record-reader')).toContainText(title,{timeout:20000});
   expect(errors).toEqual([]);
- }finally{await new Promise(resolve=>app.server.close(resolve));}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
