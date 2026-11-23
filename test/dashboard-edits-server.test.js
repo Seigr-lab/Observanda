@@ -59,7 +59,11 @@ test('conflicting settings remain visible after lock and unlock without repeated
 });
 
 test('opening an older copy does not move pending settings out of their original workspace',async t=>{
- const f=await fixture(t),initial=await readWorkspaceDashboard(f.workspace),destination=await copyWorkspaceTo(f.workspace.root,path.join(f.directory,'older-copy'),{vault:f.vault,activateCatalogue:true});
+ const f=await fixture(t);
+ // Opening the workspace starts its website library upkeep, which writes to the workspace;
+ // a copy taken while that runs is rightly refused as changed, so take it once the upkeep is done.
+ await until(async()=>{const {preparation}=await f.call('/api/website-files/preparation',{});return preparation?.state==='ready'&&preparation.library&&preparation.library.state!=='preparing';});
+ const initial=await readWorkspaceDashboard(f.workspace),destination=await copyWorkspaceTo(f.workspace.root,path.join(f.directory,'older-copy'),{vault:f.vault,activateCatalogue:true});
  const settings=structuredClone(initial.settings),other=structuredClone(initial.settings);settings.enabledModules.push('planning');other.enabledModules.push('resources');await writeWorkspaceDashboard(f.workspace,other,initial.etag);
  const pending=await f.call('/api/dashboard/pending',{action:'save',id:randomUUID(),settings,etag:initial.etag});
  await until(async()=>(await f.call('/api/dashboard/pending')).pending?.error==='DASHBOARD_CHANGED');
