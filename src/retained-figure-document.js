@@ -365,7 +365,7 @@ export class RetainedFigureReader{
   const same=(a,b)=>revisionText(a)===revisionText(b),check=()=>signal?.throwIfAborted();
   const requirePolicy=async header=>{
    if(header.projection?.version!==2&&header.computation===undefined||typeof this.storage.workspace.storageKind!=='function'||await this.storage.workspace.storageKind()!=='catalogue')return;
-   if(header.projection?.version===2){const {catalogueFormat,catalogueRequiresFigureProjectionPolicies}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db)))throw new AppError('CATALOGUE_DAMAGED');});}
+   if(header.projection?.version===2){const {catalogueFormat,catalogueRequiresFigureProjectionPolicies}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}
    if(header.computation!==undefined){const {assertApproximateCalculatorFormat}=await import('./approximate-calculator-format.js');await assertApproximateCalculatorFormat(this.storage.workspace);}
   };
   const rootHeader=await this.tree.read(this.presentation.header);validateHeader(rootHeader);await requirePolicy(rootHeader);await this.validateLinkedAxes({signal});
@@ -427,7 +427,7 @@ export class RetainedFigureReader{
   let runsAdmitted=false;
   for await(const block of this.blocks({signal})){if(block.kind==='value'){if(block.node?.type==='member-run'){memberRunMembers(block.node);
    // A catalogue holding member runs records them in its format generation.
-   if(!runsAdmitted&&typeof this.storage.workspace.storageKind==='function'&&await this.storage.workspace.storageKind()==='catalogue'){const {catalogueFormat,catalogueRequiresMemberRuns}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresMemberRuns(await catalogueFormat(store.db)))throw new AppError('CATALOGUE_DAMAGED');});}runsAdmitted=true;
+   if(!runsAdmitted&&typeof this.storage.workspace.storageKind==='function'&&await this.storage.workspace.storageKind()==='catalogue'){const {catalogueFormat,catalogueRequiresMemberRuns}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresMemberRuns(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}runsAdmitted=true;
   }else await this.tree.node(block.revision);}}
   return {...this.document.counts};
  }

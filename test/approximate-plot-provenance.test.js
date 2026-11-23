@@ -11,6 +11,7 @@ import {renderFigure,figureTable} from '../src/web/figure-renderer.js';
 import {retainedFigureSVG} from '../src/web/retained-figure-svg.js';
 import {retainedFigureTable,retainedFigureCSV} from '../src/web/retained-figure-data.js';
 import {publicFigureReader} from '../src/publication-figure-renderer.js';
+import {configurationCatalogueGeneration,configurationCatalogueFeatures} from '../src/catalogue-format.js';
 const marker={version:1,kind:'approximate-inputs'},recipe={kind:'analysis',id:randomUUID(),revision:'a'.repeat(64)},approximate={computation:{version:1,kind:'approximate',recipe}};
 const collect=async chunks=>{let text='';for await(const chunk of chunks)text+=chunk;return text;};
 const mapping={x:0,group:1,operation:'raw',values:[{column:2,error:3,xLower:4,xUpper:5,yLower:6,yUpper:7,count:8}]};
@@ -52,10 +53,12 @@ test('direct retained figure verification requires approximation admission for r
  const values=new Map(),workspace={readMetadata:async key=>values.get(key)??null,writeMetadata:async(key,value)=>values.set(key,value)},documents=new RetainedFigureDocuments(workspace),exact=createFigure();
  exact.series[0].points=[{x:1,y:2,error:null}];const approximate={...structuredClone(exact),id:randomUUID(),computation:marker};
  const ordinary=await documents.retain(exact),single=await documents.retain(approximate),composition=await documents.retain(createComposition([exact,approximate]));
- let generation=122;workspace.storageKind=async()=> 'catalogue';workspace.catalogue=async operation=>operation({catalogueDb:{all:async sql=>{assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:String(generation)}];}},db:{all:async()=>{throw new Error('Figure admission must use the parent catalogue');}}});
+ // Figures hold member runs, so their catalogue records member runs; approximation is the feature under test.
+ const withRuns=configurationCatalogueGeneration({...configurationCatalogueFeatures(122),memberRuns:true}),withApproximation=configurationCatalogueGeneration({...configurationCatalogueFeatures(withRuns),approximateCalculator:true});
+ let generation=withRuns;workspace.storageKind=async()=> 'catalogue';workspace.catalogue=async operation=>operation({catalogueDb:{all:async sql=>{assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:String(generation)}];}},db:{all:async()=>{throw new Error('Figure admission must use the parent catalogue');}}});
  await (await documents.open(ordinary)).verify();
  for(const retained of [single,composition]){
-  generation=122;await assert.rejects((await documents.open(retained)).verify(),{code:'CATALOGUE_DAMAGED'});
-  generation=1610612736+122;await (await documents.open(retained)).verify();
+  generation=withRuns;await assert.rejects((await documents.open(retained)).verify(),{code:'CATALOGUE_DAMAGED'});
+  generation=withApproximation;await (await documents.open(retained)).verify();
  }
 });
