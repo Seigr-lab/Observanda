@@ -10,6 +10,7 @@ import {defaultColumn} from '../src/web/dataset-schema.js';
 import {blankAnalysisSource,validAnalysisSource} from '../src/web/analysis-model.js';
 import {validCalculation,calculateStep} from '../src/web/dataset-calculation-model.js';
 import {loadDatasetColumnWindow} from '../src/web/dataset-column-picker.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 const ref=()=>({kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)});
 const column=(name,representation='integer')=>({...defaultColumn({label:name}),representation});
 function fixture(){
@@ -29,11 +30,12 @@ test('aggregation reads only declared wide columns and keeps exact group values'
 });
 test('comparison observes selected source coordinates and refuses descriptor coercion',async()=>{
  const f=fixture(),source=blankAnalysisSource(f.reference);source.columns.value=2;source.columns.condition=9000;assert.equal(validAnalysisSource(source),true);
- const observations=[];for await(const item of analysisObservations(f.materials,{sources:[source]}))observations.push(item);
+ const observations=[];for await(const item of analysisObservations(f.materials,{sources:[source],resourcePolicy:defaultDatasetResourcePolicy()}))observations.push(item);
  assert.equal(observations[0].condition,'A');assert.equal(observations[0].locator.selector.column,2);assert.deepEqual(observations[1].exact,{numerator:'4',denominator:'1'});
- const comparison={sources:[source],expected:{source:0,dataset:f.reference,key:9000,actualKey:9000,value:2,rationale:'Exact retained readings'}};
+ const comparison={sources:[source],resourcePolicy:defaultDatasetResourcePolicy(),expected:{source:0,dataset:f.reference,key:9000,actualKey:9000,value:2,rationale:'Exact retained readings'}};
  const result=await new AnalysisComparisons(f.materials).verifyExpected(comparison,{});assert.equal(result.correct,2);assert.equal(result.unmatched,0);
- f.raw[0].set(2,{format:'dataset-cell',version:1,characters:20000});await assert.rejects(async()=>{for await(const item of analysisObservations(f.materials,{sources:[source]}))void item;},{code:'DATASET_CELL_SCALAR_REQUIRED'});
+ // A stored cell longer than the policy allows is refused, never shortened into a value.
+ f.raw[0].set(2,{format:'dataset-cell',version:1,characters:20000});await assert.rejects(async()=>{for await(const item of analysisObservations(f.materials,{sources:[source],resourcePolicy:defaultDatasetResourcePolicy()}))void item;},{code:'DATASET_CALCULATION_RESOURCE'});
 });
 test('versioned calculation projections preserve order and original cell locators',async()=>{
  const f=fixture(),calculation={version:2,source:f.reference,projection:[9999,2],view:'observations',joins:[],steps:[],where:null,selectionReason:'',calibration:null,note:''},service=new DatasetCalculations(f.materials),command={recordId:randomUUID(),title:'Selected readings',calculation};
