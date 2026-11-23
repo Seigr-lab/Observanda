@@ -133,7 +133,7 @@ test('first publication review initializes discovery before pinning its read and
 
 
 test('empty publication analysis scopes need no temporary database and honour cancellation',async()=>{
- const workspace={root:path.join(os.tmpdir(),'observanda-empty-analysis'),storageKind:async()=> 'file'},materials=new ResearchMaterials(workspace);
+ const workspace={root:path.join(os.tmpdir(),'observanda-empty-analysis')},materials=new ResearchMaterials(workspace);
  materials.readSnapshot=operation=>operation(null);materials.headEntries=async function*(){assert.fail('Empty publication scope scanned material heads');};
  const book={id:'empty-analysis',entries:Array.from({length:12},(_,index)=>({id:'record-'+index,figures:[]}))};
  assert.deepEqual(await materials.releaseSources(book,book.entries.map(record=>record.id)),{sources:[],warnings:[]});

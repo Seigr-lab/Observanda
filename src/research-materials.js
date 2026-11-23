@@ -152,7 +152,6 @@ export class ResearchMaterials {
  names(relative){return this.workspace.metadataNames('.observanda/materials/'+relative);}
  async assertOwner(recordId,{write=false}={}){
   if(!researchId(recordId))fail();
-  if(await this.workspace.storageKind()!=='catalogue'){await this.owner(recordId);return;}
   await this.workspace.catalogue(async store=>{
    const head=await store.head(),check=async()=>{
     const snapshot=await store.snapshot(head),row=await store.member(snapshot,recordId);if(!row)fail();
@@ -167,11 +166,10 @@ export class ResearchMaterials {
  }
  async owner(recordId){
   if(!researchId(recordId))fail();
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const manifest=await store.snapshot(),member=await store.member(manifest,recordId);if(!member)fail();
    return {...manifest.metadata,entries:[await store.record(member.id,member.revision)]};
   });
-  const {book}=await this.workspace.read();if(!book.entries.some(r=>r.id===recordId))fail();return book;
  }
  async retainRecord(record){
   const revision=recordRevision(record),file=this.metadataFile('records/'+record.id+'/'+revision+'.json');
@@ -180,35 +178,23 @@ export class ResearchMaterials {
  }
  async recordSummary(id){
   if(!researchId(id))fail();
-  if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const snapshot=await store.snapshot(),row=await store.member(snapshot,id);if(!row)fail();
    return {workspaceId:snapshot.metadata.id,...await materialRecordSummary(store,row)};
   });
-  const book=await this.owner(id),record=book.entries.find(value=>value.id===id);
-  return {workspaceId:book.id,id,notebookId:record.notebookId,title:record.title,revision:recordRevision(record)};
  }
  // Automatic acquisition capture already holds the writer lock. It pins the
  // current version atomically with the upload or file-set receipt.
  async retainCurrentRecordLocked(id){
-  if(await this.workspace.storageKind()==='catalogue'){
-   const ref=await new RetainedRecordDocuments(this.workspace).pinLocked(id);if(ref)return {kind:ref.kind,id:ref.id,revision:ref.revision};
-  }
-  const book=await this.owner(id);return this.retainRecord(book.entries.find(record=>record.id===id));
+  const ref=await new RetainedRecordDocuments(this.workspace).pinLocked(id);return {kind:ref.kind,id:ref.id,revision:ref.revision};
  }
  async pinRecord(id,expectedRevision){
   if(!revisionId(expectedRevision))fail('MATERIAL_INVALID');
-  return this.workspace.withLock(async()=>{
-   if(await this.workspace.storageKind()==='catalogue'){
-    const pinned=await new RetainedRecordDocuments(this.workspace).pinLocked(id,expectedRevision);if(pinned)return pinned;
-   }
-   const book=await this.owner(id),record=book.entries.find(r=>r.id===id),revision=recordRevision(record);
-   if(expectedRevision!==revision)fail('RECORD_CHANGED');
-   return {...await this.retainRecord(record),workspaceId:book.id};
-  });
+  return this.workspace.withLock(()=>new RetainedRecordDocuments(this.workspace).pinLocked(id,expectedRevision));
  }
  async read(ref){
   const doc=await this.readStored(ref);
-  if(ref.kind==='record'&&await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(store=>assertRecordOwnerRevisionVisible(store,ref.id,ref.revision));
+  if(ref.kind==='record')await this.workspace.catalogue(store=>assertRecordOwnerRevisionVisible(store,ref.id,ref.revision));
   if(ref.kind!=='record'){const head=await this.current(ref.id,{includeStaged:true});if(!await materialReferenceVisible(this.workspace,ref,head))fail('MATERIAL_INCOMPLETE');}
   return doc;
  }
@@ -217,10 +203,10 @@ export class ResearchMaterials {
  async readStored(ref){
   if(!materialRef(ref))fail();
   await this.assertReferenceWorkspace(ref);
-  if(ref.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).value(ref,{raw:true});
-  const doc=await this.json(this.metadataFile((ref.kind==='record'?'records/':'objects/')+ref.id+'/'+ref.revision+'.json'));
-  if((ref.kind==='record'?recordRevision(doc):digest(revisionText(doc)))!==ref.revision)fail('MATERIAL_MISSING');
-  if(ref.kind!=='record'&&(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id))fail('MATERIAL_MISSING');
+  if(ref.kind==='record')return new RetainedRecordDocuments(this.workspace).value(ref,{raw:true});
+  const doc=await this.json(this.metadataFile('objects/'+ref.id+'/'+ref.revision+'.json'));
+  if(digest(revisionText(doc))!==ref.revision)fail('MATERIAL_MISSING');
+  if(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id)fail('MATERIAL_MISSING');
   if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace,doc);
   if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
   if(statisticalUncertaintyMaterial(doc))await assertStatisticalUncertaintyFormat(this.workspace);
@@ -239,7 +225,7 @@ export class ResearchMaterials {
  async referenceAddress(ref){return await this.externalReference(ref)??materialReference(ref);}
  async checkReference(ref,{signal}={}){
   await this.assertReferenceWorkspace(ref);
-  if(ref?.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).check(ref,{signal});
+  if(ref?.kind==='record')return new RetainedRecordDocuments(this.workspace).check(ref,{signal});
   await this.read(ref);
  }
  async *headEntries({includeStaged=false}={}){
@@ -510,7 +496,7 @@ export class ResearchMaterials {
   };
   // Visibility, schema and selected cells belong to one bounded response. Reuse
   // its authenticated snapshot instead of reopening storage for every child.
-  return await this.workspace.storageKind()==='catalogue'?this.workspace.catalogue(readPage):readPage();
+  return this.workspace.catalogue(readPage);
  }
  datasetRowPosition(doc,options){return datasetRowPosition(this,doc,options);}
  async retainedDatasetPage(doc,page,{columns,metadataOnly=false}={}){
@@ -546,7 +532,6 @@ export class ResearchMaterials {
   if(set.schemaInputsIndex)for await(const item of this.sequences.items(set.schemaInputsIndex)){if(!materialRef(item))fail('MATERIAL_MISSING');yield item;}
  }
  async readSnapshot(operation){
-  if(await this.workspace.storageKind()!=='catalogue')return operation();
   // Build derived discovery state before pinning the repeatable read. A writer
   // opened from inside that read cannot make new index markers visible to it.
   await this.index.ensure();return this.workspace.catalogue(operation);
@@ -568,7 +553,7 @@ export class ResearchMaterials {
   });
  }
  async describeReferences(page){
-  const items=[];for(const ref of page.items){const external=await this.externalReference(ref);if(external){items.push({...external,title:external.id,unavailable:true});continue;}const doc=ref.kind==='record'&&await this.workspace.storageKind()==='catalogue'?await new RetainedRecordDocuments(this.workspace).summary(ref):await this.read(ref);items.push({...ref,title:doc.title});}return {...page,items};
+  const items=[];for(const ref of page.items){const external=await this.externalReference(ref);if(external){items.push({...external,title:external.id,unavailable:true});continue;}const doc=ref.kind==='record'?await new RetainedRecordDocuments(this.workspace).summary(ref):await this.read(ref);items.push({...ref,title:doc.title});}return {...page,items};
  }
  async retainReferences(items,{outputs=false,checkReference=ref=>this.checkReference(ref),write=fn=>fn()}={}){
   if(!Array.isArray(items))fail();
@@ -629,19 +614,9 @@ export class ResearchMaterials {
  }
  async cleanPlotWork(id,attempt,write=fn=>this.workspace.withLock(fn)){
   const prefix=this.plotWork(id,attempt);
-  if(await this.workspace.storageKind()==='catalogue'){
-   for(;;){
-    const batch=await this.workspace.metadataPage(prefix,{limit:50});if(!batch.items.length)return;
-    await write(async()=>{for(const {name} of batch.items)await this.workspace.removeMetadata(prefix+'/'+name);});
-   }
-  }else{
-   const folder=this.workspace.metadataPath(prefix);
-   if(!await assertRegular(folder,{directory:true,missing:true}))return;
-   for(const name of await readdir(folder)){
-    if(!attempt&&researchId(name))await this.cleanPlotWork(id,name,write);
-    else if(/^\d+(?:-\d+)?\.json$/.test(name))await write(()=>this.workspace.removeMetadata(prefix+'/'+name));
-    else fail('UNSAFE');
-   }
+  for(;;){
+   const batch=await this.workspace.metadataPage(prefix,{limit:50});if(!batch.items.length)return;
+   await write(async()=>{for(const {name} of batch.items)await this.workspace.removeMetadata(prefix+'/'+name);});
   }
  }
  async preparePlot(command,{signal,progress=async()=>{},writePage,attempt=randomUUID(),jobId=command.id??randomUUID()}={}){
@@ -680,8 +655,7 @@ export class ResearchMaterials {
   await this.assertOwner(recordId);
   return this.readSnapshot(async store=>{
   const listing=await this.list({recordId,cursor,limit,signal}),heads=listing.items;
-  const book=store?null:await this.owner(recordId),snapshot=store?await store.snapshot():null;
-  const owner=store?await store.member(snapshot,recordId):null;if(store&&!owner)fail();
+  const snapshot=await store.snapshot(),owner=await store.member(snapshot,recordId);if(!owner)fail();
   // Dependency traversal has its own progress request. An unchecked item must
   // not imply that its retained inputs still match their current revisions.
   const statuses=[];
@@ -689,9 +663,8 @@ export class ResearchMaterials {
    signal?.throwIfAborted();
    let figure=null;
    if(head.figureId){
-    if(store){const position=await new RecordMemberCollections(store).position(owner,'figures',head.figureId);if(position>=0)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>(await document.field(['figures',String(position)],{signal})).value);
-     else if(!owner.collections&&!owner.cardItems)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>{for await(const item of document.items(['figures'])){signal?.throwIfAborted();if((await document.tree.selected(item.value,['id'])).value===head.figureId)return document.tree.read(item.value);}return null;});}
-    else figure=book.entries.find(r=>r.id===recordId)?.figures.find(f=>f.id===head.figureId);
+    const position=await new RecordMemberCollections(store).position(owner,'figures',head.figureId);if(position>=0)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>(await document.field(['figures',String(position)],{signal})).value);
+    else if(!owner.collections&&!owner.cardItems)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>{for await(const item of document.items(['figures'])){signal?.throwIfAborted();if((await document.tree.selected(item.value,['id'])).value===head.figureId)return document.tree.read(item.value);}return null;});
    }
    const file=head.kind==='artifact'?(await this.read(head)).content:null;
    statuses.push({...head,...(file?{file:{name:file.name,size:file.size,sha256:file.sha256,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(file.sourcePurpose?{sourcePurpose:file.sourcePurpose}:{})}}:{}),changed:[],changedCount:null,dependencyStatus:'unchecked',figureState:head.figureHash?figure?figureFingerprint(figure)===head.figureHash?'matches':'edited':'not-attached':null});
@@ -720,7 +693,6 @@ export class ResearchMaterials {
     // Explicit sources are checked below. Discovery only recovers older
     // calculations for a selected top-level figure without its own source.
     if(!unbound.length)return;
-    if(await materials.workspace.storageKind()!=='catalogue'){yield* materials.headEntries();return;}
     for(const record of unbound){let cursor=null;do{signal?.throwIfAborted();const page=await materials.list({recordId:record.id,kind:'analysis',cursor,signal});yield* page.items;cursor=page.next;}while(cursor);}
    }
    // Empty scopes need no traversal table. Actual reviews reuse at most two
@@ -782,11 +754,10 @@ export class ResearchMaterials {
    const check=ref=>traversal.walk([ref],async(ref,enqueue)=>{
     const external=await this.externalReference(ref);if(external){if(await references.add('external:'+materialReferenceKey(external)))externalReferences++;return;}
     if(ref.kind==='record'){
-     if(await this.workspace.storageKind()==='catalogue'){
-      const retained=new RetainedRecordDocuments(this.workspace);
-      if(await references.has('history:'+materialReferenceKey(ref)))await retained.open(ref,async(document,row)=>{const encoded=await document.encoding();if(encoded.contentRevision!==ref.revision||row.revision&&encoded.revision!==row.revision)fail('MATERIAL_MISSING');},{history:true,raw:true,legacy:()=>{}});
-      else await retained.check(ref,{raw:true});
-     }else await this.checkReference(ref);return;
+     const retained=new RetainedRecordDocuments(this.workspace);
+     if(await references.has('history:'+materialReferenceKey(ref)))await retained.open(ref,async(document,row)=>{const encoded=await document.encoding();if(encoded.contentRevision!==ref.revision||row.revision&&encoded.revision!==row.revision)fail('MATERIAL_MISSING');},{history:true,raw:true,legacy:()=>{}});
+     else await retained.check(ref,{raw:true});
+     return;
     }
     const doc=await this.read(ref);
     if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
@@ -799,12 +770,12 @@ export class ResearchMaterials {
   if(cusumMaterial(doc))await assertCusumFormat(this.workspace);if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
     if(calculatorResultMaterial(doc)){await assertCalculatorResultFormat(this.workspace,doc);await new CalculatorResults(this).verify(doc);}
     const checkIntervalFormat=intervalFormatCheck(this.workspace);if(intervalUncertaintyMaterial(doc,{opaqueCompatible:true}))await checkIntervalFormat();
-    const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
+    const checkNumericalFormat=async()=>{await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();
-    const checkClockFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeClockModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeClockModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
+    const checkClockFormat=async()=>{await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeClockModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeClockModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeClockMaterial(doc))await checkClockFormat();
-    if(clockDerivationMaterial(doc)&&await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresClockDerivations}=await import('./catalogue-format.js');if(!catalogueRequiresClockDerivations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    const checkDomainFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeDomainValues}=await import('./catalogue-format.js');if(!catalogueRequiresNativeDomainValues(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
+    if(clockDerivationMaterial(doc))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresClockDerivations}=await import('./catalogue-format.js');if(!catalogueRequiresClockDerivations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    const checkDomainFormat=async()=>{await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeDomainValues}=await import('./catalogue-format.js');if(!catalogueRequiresNativeDomainValues(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
@@ -874,7 +845,7 @@ export class ResearchMaterials {
    const {verifyFigurePresentationReceipts}=await import('./retained-figure-presentation.js');await verifyFigurePresentationReceipts(this);
    await this.drafts.verify(check);await this.intakes.verify(check,{verified:originals});
    const {verifyLocalIntakeFinalizations}=await import('./intake/finalization.js');await verifyLocalIntakeFinalizations(this.workspace,check);await this.associations.verify(check);await new EvidenceCorrections(this).verify(check);
-   if(await this.workspace.storageKind()==='catalogue')await this.index.verify({initialize:!readOnly});
+   await this.index.verify({initialize:!readOnly});
    return {revisions:traversal.size,originalBytes:bytes,pendingImports,receivedBytes,...(externalReferences?{externalReferences}:{})};
   }));}catch(error){if(error.code==='ENOENT')fail('MATERIAL_MISSING');throw error;}
  }

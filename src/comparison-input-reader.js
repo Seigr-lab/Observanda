@@ -4,7 +4,6 @@ import {AppError} from './errors.js';
 import {ResearchMaterials} from './research-materials.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
 import {materialRecordSummary} from './material-record-summary.js';
-import {recordRevision} from './research.js';
 import {validMaterialReference,materialReference} from './web/material-reference.js';
 import {researchId} from './web/research-reference.js';
 
@@ -37,7 +36,7 @@ export function createComparisonInputReader(localMaterials,{workspaceId,access,s
   reference(doc){check();const reference=documents.get(doc);if(!reference)throw new AppError('MATERIAL_INVALID');return materialReference(reference);},
   async read(reference){return use(reference,async(materials,canonical)=>{
    let doc;
-   if(canonical.kind==='record'&&await materials.workspace.storageKind()==='catalogue'){
+   if(canonical.kind==='record'){
     doc=await new RetainedRecordDocuments(materials.workspace).open(canonical,async document=>({kind:'record',id:canonical.id,revision:canonical.revision,title:(await document.field(['title'])).value}),{history:true,signal,legacy:value=>({kind:'record',id:canonical.id,revision:canonical.revision,title:value.title})});
    }else doc=await materials.read(canonical);
    documents.set(doc,canonical);return doc;
@@ -60,8 +59,7 @@ export function createComparisonInputReader(localMaterials,{workspaceId,access,s
    if(canonical.kind!=='record'){
     const head=await materials.current(canonical.id);if(head&&head.kind!==canonical.kind)throw new AppError('MATERIAL_MISSING');revision=head?.revision??null;
    }else if(recordHead&&canonical.workspaceId===workspaceId)revision=await recordHead(canonical.id);
-   else if(await materials.workspace.storageKind()==='catalogue')revision=await materials.workspace.catalogue(async store=>(await materialRecordSummary(store,await store.member(await store.snapshot(),canonical.id)))?.revision??null);
-   else try{revision=recordRevision((await materials.owner(canonical.id)).entries.find(record=>record.id===canonical.id));}catch(error){if(error.code!=='MATERIAL_INVALID')throw error;revision=null;}
+   else revision=await materials.workspace.catalogue(async store=>(await materialRecordSummary(store,await store.member(await store.snapshot(),canonical.id)))?.revision??null);
    return {revision,workspaceId:canonical.workspaceId,local:canonical.workspaceId===workspaceId};
   });},
   async head(reference,options){return (await reader.current(reference,options)).revision;},

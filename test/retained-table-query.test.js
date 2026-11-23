@@ -78,8 +78,3 @@ test('backward cursors cross excluded pages and changed page sizes stop at the s
  const small=await retainedTablePage(m,{ref,table,limit:8}),second=await retainedTablePage(m,{ref,table,cursor:small.nextCursor,limit:8}),back=await retainedTablePage(m,{ref,table,cursor:second.previousCursor,limit:32});assert.equal(back.offset,0);assert.equal(back.table.rows.length,8);assert.equal(back.previousCursor,null);assert.ok(back.cursor);assert.equal(back.next,8);
  const forward=await retainedTablePage(m,{ref,table,cursor:back.nextCursor,limit:32});assert.equal(forward.offset,8);assert.equal(forward.table.rows.length,32);
 });
-
-test('legacy inline table reads do not require a native encrypted connection scope',async()=>{
- const column=defaultColumn({label:'Exact'}),m={workspace:{storageKind:async()=>'json',withCatalogueConnections(){assert.fail('Legacy reader entered native scope');}},read:async()=>({content:{}}),datasetColumns:async()=>[column],async *iterateDataset(){yield {cells:['0001.2300'],valueKinds:['number']};}};
- const table=await retainedTable(m,{ref,selection:{columns:[0],offset:0,count:1,includeExcluded:false},version:1});assert.equal(table.rows[0].cells[0],'0001.2300');assert.equal(table.version,1);
-});

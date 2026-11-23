@@ -11,7 +11,7 @@ import {clockSynchronizationContextText} from './web/measurement-clock-context.j
 import {computationLabel,resolveCellComputation,perCellComputation,effectiveCellColumn} from './web/measurement-computation.js';
 import {AppError} from './errors.js';
 import {readTableCursor,tableCursors} from './retained-table-cursor.js';
-const tableReads=async(materials,operation)=>materials.workspace?.withCatalogueConnections&&await materials.workspace.storageKind?.()==='catalogue'?materials.workspace.withCatalogueConnections(operation):operation();
+const tableReads=async(materials,operation)=>materials.workspace?.withCatalogueConnections?materials.workspace.withCatalogueConnections(operation):operation();
 import {measurementRef} from './web/measurement-model.js';
 import {validTableSelection,validRetainedTable} from './web/retained-table-model.js';
 export const hasPagedResultTables=results=>results?.statements?.some(statement=>statement?.table?.version===3||statement?.tableSelection!==undefined&&!validTableSelection(statement.tableSelection))??false;

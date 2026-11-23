@@ -19,7 +19,7 @@ const policy=resources=>({...defaultDatasetResourcePolicy(),resources:{...defaul
 const column=(name,resources)=>({...defaultColumn({label:name}),representation:'integer',...(resources?{resourcePolicy:policy(resources)}:{})});
 function fixture(){
  const objects=new Map(),docs=new Map(),tables=new Map(),heads=new Map(),workspaceId=randomUUID(),recordId=randomUUID();
- const workspace={storageKind:async()=>'memory',outline:async()=>({metadata:{id:workspaceId}}),withLock:fn=>fn(),readMetadata:async key=>objects.get(key)??null,writeMetadata:async(key,text)=>objects.set(key,text),removeMetadata:async key=>objects.delete(key)};
+ const workspace={storageKind:async()=>'memory',catalogue:async operation=>operation({}),outline:async()=>({metadata:{id:workspaceId}}),withLock:fn=>fn(),readMetadata:async key=>objects.get(key)??null,writeMetadata:async(key,text)=>objects.set(key,text),removeMetadata:async key=>objects.delete(key)};
  const m={workspace,sequences:new MaterialSequence(workspace),assertOwner:async()=>{},current:async id=>heads.get(id)??null,read:async ref=>{const doc=docs.get(ref.revision);if(!doc)throw Error('Unknown retained input');return doc;},datasetColumn:async(doc,index)=>doc.content.columns[index],datasetPageCount:doc=>doc.content.pages.length,
   retainedDatasetPage:async(doc,page,{columns}={})=>({rows:tables.get(doc.content.pages[page]).map(row=>({...row,cells:columns.map(index=>row.cells[index]),valueKinds:row.valueKinds?columns.map(index=>row.valueKinds[index]):undefined,columnIndices:columns}))}),
   async *iterateDataset(ref,options){const doc=await this.read(ref);for(let page=0;page<this.datasetPageCount(doc);page++)yield*(await this.retainedDatasetPage(doc,page,options)).rows;},

@@ -63,7 +63,6 @@ export async function stageRecordOwnerMaterialIdentity(workspace,receipt,ref,doc
  await store.putObject(identity,{version:1,kind:ref.kind,id:ref.id,recordId:doc.recordId,transferId:receipt.id});
 }
 export async function materialReferenceVisible(workspace,ref,head){
- if(await workspace.storageKind()!=='catalogue')return !head||materialHeadVisible(workspace,head);
  return workspace.catalogue(async store=>{
   const key='record-owner-evidence-identity:'+ref.kind+':'+ref.id,value=await store.object(key);
   if(value){
@@ -87,7 +86,6 @@ export async function materialReferenceVisible(workspace,ref,head){
  });
 }
 export async function materialReturnState(workspace,id){
- if(await workspace.storageKind()!=='catalogue')return null;
  return workspace.catalogue(async store=>{
   const value=await store.object(returnKey(id));if(!value)return null;
   if(value.version!==1||value.id!==id||!researchId(value.recordId)||!researchId(value.transferId)||typeof value.settled!=='boolean'||value.head!==null&&(!validMaterialReference(value.head)||value.head.id!==id||value.head.recordId!==value.recordId||value.head.ownerTransfer!==value.transferId||value.head.stagedBatch!==undefined))damaged();

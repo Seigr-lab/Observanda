@@ -21,7 +21,7 @@ export class AnalysisComparisons{
  constructor(materials,{inputs=materials}={}){this.materials=materials;this.inputs=inputs;}
  async verifyInputs(){if(this.inputs!==this.materials)await this.inputs.verify();}
  async snapshot(operation){
-  const workspace=this.materials.workspace;if(await workspace.storageKind()!=='catalogue')return operation();
+  const workspace=this.materials.workspace;
   return workspace.catalogue(async store=>{
    if(store.readCache)return operation();
    const cache=new CatalogueReadCache({maxRows:16384,maxBytes:16*1024*1024});store.readCache=cache;

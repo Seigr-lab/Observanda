@@ -35,7 +35,6 @@ export class EvidenceCorrections{
   else if(command.replacementRecordId!==null)fail();
  }
  async plan(command){
-  if(await this.workspace.storageKind()!=='catalogue')fail('FORMAT');
   this.validate(command);await this.materials.assertOwner(command.recordId);
   const doc=await this.materials.read(command.ref);if(doc.recordId!==command.recordId)fail();
   if(command.metadata?.sourcePath&&command.metadata.sourcePath.split('/').at(-1)!==doc.content.name)fail();

@@ -97,5 +97,5 @@ export async function projectDatasetRows(materials,doc,rows,columns){
   const {cellIndex,...metadata}=row;result.push({...metadata,cells,valueKinds,cellPointers,cellSources,cellLineages,cellComputations,...(cellCoordinateAlignments.some(Boolean)?{cellCoordinateAlignments}:{}),columnIndices:columns});
  }
  return {rows:result,columnIndices:columns};};
- return materials.workspace?.catalogue&&await materials.workspace.storageKind()==='catalogue'?materials.workspace.catalogue(project):project();
+ return materials.workspace?.catalogue?materials.workspace.catalogue(project):project();
 }

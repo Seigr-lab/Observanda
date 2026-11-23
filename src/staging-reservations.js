@@ -7,7 +7,6 @@ import {diskCapacity} from './disk-capacity.js';
 import {uuid,exact} from './modules/validation.js';
 import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
-import {unseal} from './encryption.js';
 import {setImmediate as nextTurn} from 'node:timers/promises';
 import {AsyncLocalStorage} from 'node:async_hooks';
 
@@ -42,16 +41,9 @@ export async function withStagingAuthority(workspace,operation,{signal,createInt
   function current(claim){controls.check();if(Date.now()>=claim.expiresAt)throw new AppError('COLLABORATION_EXPIRED');}
   async function remaining(ledger){let bytes=0;for(const claim of ledger.claims){bytes+=stagingRemaining(claim);if(!safe(bytes))throw new AppError('STORAGE_FULL');}return bytes;}
   async function namedStage(claim){const found=await scope.member(path.join(workspace.root,stagePrefix(claim.id)),(parent,name)=>parent.stat(name,{folder:true}));if(found.identity!==claim.stageIdentity)damaged();}
-  async function clearMetadata(claim,stage){
-   const prefix=stagePrefix(claim.id);if(await workspace.storageKind()==='catalogue'){
-    const page=await workspace.metadataPage(prefix,{limit:32});for(const item of page.items){if(!/^(?:items\/\d+|names\/[a-f0-9]{64})\.json$/.test(item.name))damaged();await workspace.removeMetadata(prefix+'/'+item.name);}return page.items.length>0;
-   }else{
-    let count=0;
-    for(const name of ['items','names']){const directory=await stage.directory(name,{missing:true});if(!directory)continue;const directoryIdentity=directory.identity;
-     try{for await(const entry of directory.entries()){if(count++===32)return true;if(entry.directory||!(name==='items'?/^\d+\.json$/:/^[a-f0-9]{64}\.json$/).test(entry.name))damaged();const saved=await directory.read(entry.name,{limit:4096});try{JSON.parse(unseal(saved.bytes,controls.key,workspace.fileAAD(path.join(workspace.root,prefix,name,entry.name))).toString('utf8'));}catch{damaged();}await directory.remove(entry.name,{identity:saved.identity});}}finally{await directory.close();}
-     await stage.remove(name,{folder:true,identity:directoryIdentity});
-    }
-   }
+  async function clearMetadata(claim){
+   const prefix=stagePrefix(claim.id),page=await workspace.metadataPage(prefix,{limit:32});
+   for(const item of page.items){if(!/^(?:items\/\d+|names\/[a-f0-9]{64})\.json$/.test(item.name))damaged();await workspace.removeMetadata(prefix+'/'+item.name);}return page.items.length>0;
   }
   const authority={
    workspace,scope,controls,
@@ -105,7 +97,7 @@ export async function withStagingAuthority(workspace,operation,{signal,createInt
       if(!preserve&&stage){let matched=0;for(const name of [proof.temporary,proof.name]){const stat=await stage.stat(name,{missing:true});if(!stat)continue;if(proof.identity===null){if(name!==proof.temporary||stat.bytes!==0)damaged();}else if(stat.identity!==proof.identity||stat.bytes>proof.bytes||++matched>1)damaged();await stage.remove(name,{identity:stat.identity});}}
       await files.remove(entry.name,{identity:saved.identity});
      }
-     if(!preserve){if((stage||await workspace.storageKind()==='catalogue')&&await clearMetadata(found,stage))return true;if(stage){for await(const _entry of stage.entries())damaged();const stageIdentity=stage.identity;await stage.close();await scope.member(path.join(workspace.root,stagePrefix(found.id)),(parent,name)=>parent.remove(name,{folder:true,identity:stageIdentity}));}}else await stage?.close();
+     if(!preserve){if(await clearMetadata(found))return true;if(stage){for await(const _entry of stage.entries())damaged();const stageIdentity=stage.identity;await stage.close();await scope.member(path.join(workspace.root,stagePrefix(found.id)),(parent,name)=>parent.remove(name,{folder:true,identity:stageIdentity}));}}else await stage?.close();
      if(files){const filesIdentity=files.identity;await files.close();await directory.remove('files',{folder:true,identity:filesIdentity});}await lease?.close();
      if(directory){const owner=await directory.stat('owner',{missing:true});if(owner){if(owner.identity!==found.leaseIdentity)damaged();await directory.remove('owner',{identity:found.leaseIdentity});}for await(const _entry of directory.entries())damaged();const directoryIdentity=directory.identity;await directory.close();await namespace.directory.remove(found.id,{folder:true,identity:directoryIdentity});}
      ledger.claims=ledger.claims.filter(value=>value.id!==found.id);await save();return false;

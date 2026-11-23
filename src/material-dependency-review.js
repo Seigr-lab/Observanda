@@ -1,7 +1,6 @@
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {materialReference,validMaterialReference} from './web/material-reference.js';
-import {recordRevision} from './research.js';
 import {materialRecordSummary} from './material-record-summary.js';
 import {withMaterialTraversal} from './material-traversal.js';
 import {withDatabaseRequest} from './database-request-context.js';
@@ -15,8 +14,7 @@ export async function reviewMaterialDependencies(materials,recordId,{refs,signal
  signal?.throwIfAborted();await materials.assertOwner(recordId);signal?.throwIfAborted();
  if(!refs.length)return {items:[]};
  return materials.readSnapshot(async store=>{
-  const book=store?null:await materials.owner(recordId),snapshot=store?await store.snapshot():null;
-  const recordHeads=new Map(book?.entries.map(record=>[record.id,recordRevision(record)])??[]),heads=new Map();
+  const snapshot=await store.snapshot(),recordHeads=new Map(),heads=new Map();
   const current=async ref=>{
    signal?.throwIfAborted();
    if(ref.kind!=='record'){
@@ -25,8 +23,7 @@ export async function reviewMaterialDependencies(materials,recordId,{refs,signal
    }
    if(!recordHeads.has(ref.id)){
     if(recordHeads.size===64)recordHeads.delete(recordHeads.keys().next().value);
-    if(store){const member=await store.member(snapshot,ref.id);recordHeads.set(ref.id,(await materialRecordSummary(store,member))?.revision??null);}
-    else{try{recordHeads.set(ref.id,recordRevision((await materials.owner(ref.id)).entries.find(record=>record.id===ref.id)));}catch(error){if(error.code!=='MATERIAL_INVALID')throw error;recordHeads.set(ref.id,null);}}
+    const member=await store.member(snapshot,ref.id);recordHeads.set(ref.id,(await materialRecordSummary(store,member))?.revision??null);
    }
    return recordHeads.get(ref.id);
   };
