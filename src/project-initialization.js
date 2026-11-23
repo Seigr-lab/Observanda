@@ -12,6 +12,7 @@ import {authenticateKeyring} from './security/keyring.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {catalogueContext,catalogueDescriptor} from './research-catalogue.js';
 import {validateNotebook} from './model.js';
+import {withProjectModuleInitialization} from './project-module-initialization.js';
 import {withWriterLease} from './writer-lease.js';
 import {AppError} from './errors.js';
 const intentName='.observanda/project-creation.observanda',receiptName='project:initialization';
@@ -64,6 +65,8 @@ export async function initializeProjectLocation(input,projectId,book,access,vaul
     if(!head){
      await store.put(book);
      for(const [relative,text] of Object.entries(metadata))await store.putObject('metadata:'+relative,{text});
+     // Every project owns its module domains, as workspaces and lab books do.
+     await withProjectModuleInitialization(store,book.id,async()=>{});
      if(populate)await populate(storage);
      await store.putObject(receiptName,{fingerprint});
     }else if((await store.object(receiptName))?.fingerprint!==fingerprint)throw new AppError('CONFLICT');

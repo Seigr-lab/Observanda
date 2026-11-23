@@ -5,7 +5,6 @@ import {validateStorageName,requireStorageName,storageCreationPath} from './stor
 // A creation request survives both service restart and a lost HTTP reply.
 // Its workspace journal owns only the request and wrapped access grants; all
 // project content, originals and database files belong to the selected root.
-import {withProjectModuleInitialization} from './project-module-initialization.js';
 import path from 'node:path';
 import {readdir,unlink} from 'node:fs/promises';
 import {ACCESS_LIMIT} from './security/keyring.js';
@@ -27,7 +26,7 @@ export class ProjectCreation{
    const file=this.file(id,completed);if(!await assertRegular(path.dirname(file),{directory:true,missing:true}))continue;const stat=await assertRegular(file,{missing:true});if(!stat)continue;if(stat.size>intentLimit+256)throw new AppError('FORMAT');let intent;
    try{intent=JSON.parse(await this.workspace.readFile(file,'utf8'));}catch(error){if(error instanceof SyntaxError)throw new AppError('FORMAT');throw error;}
    if(!intent||!['prepared','attached'].includes(intent.phase)||!researchId(intent.projectId)||!/^[a-f0-9]{64}$/.test(intent.fingerprint??''))throw new AppError('FORMAT');
-   if(intent.version===1){if(intent.configuration!==undefined&&!validCreationConfiguration(intent.configuration))throw new AppError('FORMAT');if(intent.moduleLayout!==undefined&&intent.moduleLayout!=='domains-and-authoring-v1'||!intent.book||intent.book.projects?.length!==1||intent.book.projects[0].id!==intent.projectId||!path.isAbsolute(intent.root??'')||path.resolve(intent.root)!==intent.root||intent.parentId!==null&&!researchId(intent.parentId)||!researchId(intent.access?.vaultId)||!researchId(intent.book.id))throw new AppError('FORMAT');}
+   if(intent.version===1){if(intent.configuration!==undefined&&!validCreationConfiguration(intent.configuration))throw new AppError('FORMAT');if(intent.moduleLayout!=='domains-and-authoring-v1'||!intent.book||intent.book.projects?.length!==1||intent.book.projects[0].id!==intent.projectId||!path.isAbsolute(intent.root??'')||path.resolve(intent.root)!==intent.root||intent.parentId!==null&&!researchId(intent.parentId)||!researchId(intent.access?.vaultId)||!researchId(intent.book.id))throw new AppError('FORMAT');}
    else if(intent.version!==2||intent.phase!=='attached'||!researchId(intent.namespaceId)||!researchId(intent.vaultId))throw new AppError('FORMAT');
    return {intent,file,completed};
   }
@@ -119,7 +118,8 @@ export class ProjectCreation{
      });
     }
     await check();
-    const populate=intent.moduleLayout==='domains-and-authoring-v1'||intent.configuration?{populateId:'project-domains-and-authoring-v1'+(intent.configuration?':configuration:'+digest(serialize(intent.configuration)):''),populate:async storage=>{if(intent.moduleLayout==='domains-and-authoring-v1')await storage.catalogue(store=>withProjectModuleInitialization(store,intent.book.id,async()=>{}));if(intent.configuration)await populateCreationConfiguration(storage,this.workspace,intent.configuration,{commandId:command.id,projectId:intent.projectId,notebookId:null,slot:'labBookTemplate',withConfigurationSource:this.withConfigurationSource,check});}}:{};
+    // Every project gets its module domains from initializeProjectLocation; the populate step adds only a chosen configuration.
+    const populate={populateId:'project-domains-and-authoring-v1'+(intent.configuration?':configuration:'+digest(serialize(intent.configuration)):''),populate:async storage=>{if(intent.configuration)await populateCreationConfiguration(storage,this.workspace,intent.configuration,{commandId:command.id,projectId:intent.projectId,notebookId:null,slot:'labBookTemplate',withConfigurationSource:this.withConfigurationSource,check});}};
     const project=await initializeProjectLocation(intent.root,intent.projectId,intent.book,intent.access,vault,populate);
     await check();const entry=await this.registry.describe(project,intent.parentId);
     return await withProjectMembership(this.registry,[intent.parentId],async()=>{
