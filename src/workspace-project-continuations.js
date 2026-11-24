@@ -21,7 +21,7 @@ export async function retainCopiedProjectCommands(target,id,{checkpoint=async()=
    if(!entry.name.endsWith('.obsv')||!researchId(projectId)||stat.size>32768)throw new AppError('STORAGE_COPY');
    const raw=await target.readFile(file,'utf8');let value;
    try{value=JSON.parse(raw);}catch{throw new AppError('STORAGE_COPY');}
-   if(!researchId(value?.id)||value.projectId!==projectId||![1,2].includes(value.version)||typeof value.phase!=='string')throw new AppError('STORAGE_COPY');
+   if(!researchId(value?.id)||value.projectId!==projectId||value.version!==1||typeof value.phase!=='string')throw new AppError('STORAGE_COPY');
    await retainCopiedProjectCommand(target,id,kind,path.posix.join('.observanda',folder,entry.name),{checkpoint});
   }
  }

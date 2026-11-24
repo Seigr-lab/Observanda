@@ -16,7 +16,7 @@ export function projectCopyBoundaries(root,roots=[]){
  return boundaries.sort();
 }
 export function retainedCopyRoots(receipt){
- const boundaries=receipt.version===1?[]:receipt.boundaries;
+ const boundaries=receipt.boundaries;
  if(!Array.isArray(boundaries)||boundaries.some(relative=>typeof relative!=='string'||relative.split('/').some(part=>!part||part==='.'||part==='..')||/[\\:\u0000]/.test(relative)))throw new AppError('STORAGE_COPY');
  const roots=boundaries.map(relative=>path.resolve(receipt.source,...relative.split('/')));
  if(JSON.stringify(projectCopyBoundaries(receipt.source,roots))!==JSON.stringify(boundaries))throw new AppError('STORAGE_COPY');

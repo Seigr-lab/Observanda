@@ -35,16 +35,9 @@ const retired=receipt=>path.join(path.dirname(receipt.source),'.observanda-move-
 const receiptStatus=receipt=>({id:receipt.id,source:receipt.source,destination:receipt.destination,phase:receipt.phase,error:receipt.error??null});
 const within=(a,b)=>{const relative=path.relative(a,b);return relative===''||!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative);};
 async function save(receipt){await atomicWrite(path.join(receipt.destination,MOVE_RECEIPT),serialize(receipt));}
-async function ownedFolder(root,projectRoots=[]){
+async function ownedFolder(root){
  const descriptor=path.basename(await workspaceFile(root));
- const relativeRoots=projectRoots.map(project=>{if(!within(root,project)||project===root)throw new AppError('STORAGE_MOVE_STATE');return path.relative(root,project).split(path.sep).join('/');});
- async function empty(directory){await assertRegular(directory,{directory:true});for await(const item of await opendir(directory)){if(!item.isDirectory())throw new AppError('STORAGE_MOVE_CONTENTS');await empty(path.join(directory,item.name));}}
- // Retired project containers may remain after their independent child owners
- // moved. Only empty directories can be claimed by the workspace cleanup.
- for(const project of projectRoots)if(await assertRegular(project,{directory:true,missing:true}))await empty(project);
- for(const name of await readdir(root))if(!['.observanda',descriptor].includes(name)){
-  if(!relativeRoots.some(relative=>relative===name||relative.startsWith(name+'/')))throw new AppError('STORAGE_MOVE_CONTENTS');await empty(path.join(root,name));
- }
+ for(const name of await readdir(root))if(!['.observanda',descriptor].includes(name))throw new AppError('STORAGE_MOVE_CONTENTS');
 }
 // A workspace moves as one folder, cluster included, when its new parent is on
 // the same volume; otherwise it is copied into a new cluster (server move route).
@@ -113,10 +106,10 @@ async function retireSource(receipt,vault){
  if(await assertRegular(target,{directory:true,missing:true})){await persistRename(receipt.source,target);return;}
  if(!await assertRegular(receipt.source,{directory:true,missing:true}))throw new AppError('STORAGE_MOVE_STATE');
  if(await realpath(receipt.source)!==receipt.source)throw new AppError('UNSAFE');
- await ownedFolder(receipt.source,receipt.projectRoots??[]);
+ await ownedFolder(receipt.source);
  // The owner's key proves the folder-bound query cache and staging namespace,
  // which the verified copy left out of the same inventory.
- await workspaceInventory(receipt.source,receipt.inventorySalt,{expectedFiles:receipt,projectRoots:receipt.projectRoots??[],vault});
+ await workspaceInventory(receipt.source,receipt.inventorySalt,{expectedFiles:receipt,vault});
  const marker=await moveSource(receipt.source);
  if(marker&&(marker.id!==receipt.id||marker.destination!==receipt.destination))throw new AppError('STORAGE_MOVE_STATE');
  await atomicWrite(path.join(receipt.source,MOVE_SOURCE),serialize({id:receipt.id,destination:receipt.destination}));
@@ -235,8 +228,8 @@ async function moveOwnedWorkspace(plan,{vault,activate}){
   // The marker was persisted while the source writer lock was held. Recheck
   // only the files here: its database is deliberately stopped and frozen.
   const marker=await moveSource(plan.source);if(marker?.id!==plan.id)throw new AppError('STORAGE_MOVE_STATE');
-  await workspaceInventory(plan.source,plan.inventorySalt,{expectedFiles:plan,projectRoots:plan.projectRoots??[],vault});
-  await workspaceInventory(plan.destination,plan.inventorySalt,{expectedFiles:plan,projectRoots:(plan.projectRoots??[]).map(root=>path.resolve(plan.destination,path.relative(plan.source,root))),vault});
+  await workspaceInventory(plan.source,plan.inventorySalt,{expectedFiles:plan,vault});
+  await workspaceInventory(plan.destination,plan.inventorySalt,{expectedFiles:plan,vault});
   await verifyDatabaseRetention(new Workspace(plan.destination,vault),plan.databaseRetention);
   if(!receipt.sourceIdentity){receipt.sourceIdentity=await withNativeTree(plan.source,root=>root.identity);await save(receipt);}
   await authorizeWorkspaceMove(new Workspace(plan.destination,vault),receipt);

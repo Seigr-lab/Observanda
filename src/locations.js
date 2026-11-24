@@ -127,7 +127,7 @@ export async function initializeLocation(input,book,access,suppliedVault,{dashbo
 }
 const within=(parent,child)=>{const relative=path.relative(parent,child);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
 async function reviewedInventory(plan,options){
- const current=await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],...options});
+ const current=await workspaceInventory(plan.source,plan.inventorySalt,{...options});
  if(current.fingerprint!==plan.fingerprint||current.fileCount!==plan.fileCount||current.bytes!==plan.bytes)throw new AppError('CONFLICT');
  return current;
 }
@@ -170,7 +170,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     operationTransfer({phase:'checking',files:0,bytes:0,totalFiles:plan.transferFiles??plan.fileCount,totalBytes:plan.fileBytes??plan.bytes});
     let destination,marker;
     await new Workspace(plan.source,vault).catalogue(store=>assertRecordOwnerReclamationSettled(store));
-    await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,vault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+    await workspaceInventory(plan.source,plan.inventorySalt,{excludeProject,vault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
      Object.assign(plan,inventory);
      ({destination,marker}=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination));
      operationTransfer({phase:'copying',totalFiles:inventory.transferFiles,totalBytes:inventory.fileBytes});
@@ -236,7 +236,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
       await assertInventoryObligationsSettled(source);
       if(beforeSnapshot)await beforeSnapshot();
       await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
-      await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,vault:sourceVault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+      await workspaceInventory(plan.source,plan.inventorySalt,{excludeProject,vault:sourceVault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
         Object.assign(plan,inventory);
         publication=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination);
         const priorAccess=await readAccess(plan.destination);
