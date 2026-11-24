@@ -145,3 +145,12 @@ test('Linux Git preparation preserves and admits an internal relative HTTPS-help
   verifyGit:async directory=>assert.equal(await readFile(path.join(directory,'bin/git-remote-https')).then(bytes=>bytes.equals(f.elf)),true)
  });assert.deepEqual(await readFile(path.join(out,'github/git/bin/git-remote-https')),f.elf);
 });
+
+test('Linux runtimes may use the C library\'s own vector maths library from the system',async t=>{
+ const f=await fixture(t),system=await write(f.directory,'system/libmvec.so.1','Synthetic C library part');
+ await verifyLinuxGitRuntime(f.git,{execute:async(file,args,options)=>{
+  if(file==='/usr/bin/readelf')return {stdout:'(NEEDED) Shared library: [libmvec.so.1]'};
+  if(file==='/usr/bin/ldd')return {stdout:'libmvec.so.1 => '+system+' (0x1000)'};
+  return f.execute(file,args,options);
+ }});
+});

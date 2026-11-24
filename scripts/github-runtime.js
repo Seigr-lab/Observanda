@@ -55,7 +55,9 @@ export async function verifyLinuxRuntime(directory,{executables=[],execute=execu
  for(const name of executables){
   const file=await realpath(path.join(base,name));if(!binaries.includes(file)||process.platform==='linux'&&((await lstat(file)).mode&0o111)===0)throw Error('Missing executable Linux binary: '+name);
  }
- const systemLibrary=/^(?:ld-linux-x86-64\.so\.2|lib(?:c|m|pthread|dl|rt|resolv|util)\.so\.[0-9]+|libgcc_s\.so\.1|libstdc\+\+\.so\.6)$/;
+ // The C library's own parts (libmvec is glibc's vector maths library, shipped in
+// the same Ubuntu package as libc and libm) and the compiler runtime.
+const systemLibrary=/^(?:ld-linux-x86-64\.so\.2|lib(?:c|m|mvec|pthread|dl|rt|resolv|util)\.so\.[0-9]+|libgcc_s\.so\.1|libstdc\+\+\.so\.6)$/;
  await withRuntimeProbeEnvironment(async probeOptions=>{
  const options={...probeOptions,maxBuffer:1024*1024};
  for(const file of binaries){
