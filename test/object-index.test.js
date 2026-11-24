@@ -145,18 +145,16 @@ test('ordinary and fresh-key backups retain objects and can edit their indexes i
  assert.deepEqual(await snapshot(ws),before);assert.deepEqual(await values(ws),expected);
 });
 
-test('flat indexes update in place atomically while unknown index versions fail closed',async t=>{
+test('interrupted writes leave the index unchanged while flat and unknown index heads fail closed',async t=>{
  const {ws}=await fixture(t),expected=new Map([[key(1),{take:'first'}],[key(2),{take:'second'}]]);
- await write(ws,async s=>{
-  for(const [id,value] of expected)await s.putObject(id,value);
-  await s.db.run("DELETE FROM state WHERE starts_with(slot,'object-index:')");
-  await s.db.run("UPDATE state SET payload=$1 WHERE slot='objects'",s.encode('state','objects',{entries:[...expected].map(([id,value])=>({id,revision:hash(value)}))}));
- });
+ await write(ws,async s=>{for(const [id,value] of expected)await s.putObject(id,value);});
  const before=await snapshot(ws);assert.deepEqual(await values(ws),expected);
- await assert.rejects(write(ws,async s=>{await s.putObject(key(3),{take:'interrupted'});throw Error('Interrupted upgrade');}),/Interrupted upgrade/);
+ await assert.rejects(write(ws,async s=>{await s.putObject(key(3),{take:'interrupted'});throw Error('Interrupted write');}),/Interrupted write/);
  assert.deepEqual(await snapshot(ws),before);
  await write(ws,s=>s.putObject(key(3),{take:'third'}));expected.set(key(3),{take:'third'});
  assert.deepEqual(await values(ws),expected);assert.equal((await ws.catalogue(s=>new ObjectIndex(s).head())).formatVersion,2);
+ await write(ws,s=>s.db.run("UPDATE state SET payload=$1 WHERE slot='objects'",s.encode('state','objects',{entries:[...expected].map(([id,value])=>({id,revision:hash(value)}))})));
+ await assert.rejects(ws.catalogue(s=>s.object(key(1))),{code:'CATALOGUE_DAMAGED'});
  await write(ws,s=>s.db.run("UPDATE state SET payload=$1 WHERE slot='objects'",s.encode('state','objects',{formatVersion:999,root:null})));
  await assert.rejects(ws.catalogue(s=>s.object(key(1))),{code:'CATALOGUE_DAMAGED'});
  await assert.rejects(write(ws,s=>s.putObject(key(1),{})),{code:'CATALOGUE_DAMAGED'});

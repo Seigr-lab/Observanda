@@ -88,9 +88,6 @@ class MetadataBatchIndex extends ObjectIndex{
  async head(){return this.current??=await super.head();}
  async update(head,id,revision){
   if(head!==this.current||typeof id!=='string'||!id||revision!==null&&!/^[a-f0-9]{64}$/.test(revision))throw new AppError('INVALID');
-  if(head.legacy){
-   await super.update(head,id,revision);this.current=await super.head();return;
-  }
   this.current={formatVersion:2,root:await this.change(head.root,id,revision)};
   if(++this.edits===256||this.pendingBytes>=4*1024*1024)await this.save();
  }

@@ -94,18 +94,17 @@ test('index mutation invalidates the old reader head before subsequent object re
  assert.deepEqual(await f.store.object('sample'),value);assert.equal(f.headDecodes,2);
 });
 
-test('uncacheable, empty, legacy and malformed heads preserve their admission checks',async()=>{
+test('uncacheable, empty, earlier-format and malformed heads preserve their admission checks',async()=>{
  for(const large of [false,true]){
   const f=fixture(large?undefined:{maxBytes:128});
   if(large)f.setHead({formatVersion:2,root:f.root,unused:'x'.repeat(300*1024)});
   await new ObjectIndex(f.store).head();await new ObjectIndex(f.store).head();
   assert.equal(f.headDecodes,2);assert.equal(f.cache.node('objects'),null);assert.ok(f.cache.nodeBytes<=f.cache.maxBytes);
  }
- const legacy=fixture();legacy.setHead({entries:[{id:'sample',revision:hash(legacy.value)}]});
- const first=await new ObjectIndex(legacy.store).head();first.legacy[0].id='changed';
- assert.equal((await new ObjectIndex(legacy.store).head()).legacy[0].id,'sample');assert.equal(legacy.headDecodes,2);assert.equal(legacy.cache.node('objects'),null);
- for(const malformed of [{formatVersion:3,root:legacy.root},{formatVersion:2,root:{...legacy.root,extra:true}},{entries:[{id:'sample',revision:hash(legacy.value)},{id:'sample',revision:hash(legacy.value)}]}]){
-  legacy.setHead(malformed);legacy.cache.clear();await assert.rejects(new ObjectIndex(legacy.store).head(),{code:'CATALOGUE_DAMAGED'});
+  // Flat entry lists were never written by a released version; they are refused like any malformed head.
+ const earlier=fixture();
+ for(const malformed of [{entries:[{id:'sample',revision:hash(earlier.value)}]},{formatVersion:3,root:earlier.root},{formatVersion:2,root:{...earlier.root,extra:true}}]){
+  earlier.setHead(malformed);earlier.cache.clear();await assert.rejects(new ObjectIndex(earlier.store).head(),{code:'CATALOGUE_DAMAGED'});
  }
  const empty=fixture();empty.objects.clear();empty.state.clear();empty.setHead({formatVersion:2,root:null});
  await new ObjectIndex(empty.store).head();await new ObjectIndex(empty.store).head();assert.equal(empty.emptyChecks,4);assert.equal(empty.cache.node('objects'),null);

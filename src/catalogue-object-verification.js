@@ -43,7 +43,7 @@ import {operationAdvance,operationTotal} from './operation-progress.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export async function* verifiedCatalogueObjects(store){
  const index=new ObjectIndex(store,{cacheReads:true,scanAhead:true}),head=await index.head();await index.checkCounts(head);
- operationTotal(head.legacy?.length??head.root?.count??0);
+ operationTotal(head.root?.count??0);
  const batch=[];let scientificUnitAdmission,publicationOperationAdmission,weightedFitAdmission,coordinateAlignmentAdmission,spectralMethodsAdmission,topologyAdmission,sequenceAdmission,cusumAdmission,numericalExecutionAdmission,spectrumAdmission,computedCellAdmission,coordinateFrameAdmission,segmentedClockAdmission,statisticalUncertaintyAdmission,policyAdmission,resultAdmission,scalarAdmission,domainAlgebraAdmission,structuredAdmission,approximateAdmission,clockSynchronizationAdmission,tensorAdmission,quantileAdmission,axisPermutationAdmission,pairedStatisticsAdmission;
  async function* values(){
   const rows=new Map((await store.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[]) AND octet_length(payload)<=16384',batch.map(entry=>entry.id))).map(row=>[row.id,row.payload]));

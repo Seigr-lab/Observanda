@@ -147,11 +147,6 @@ export class ObjectIndex{
   const key=cache?.encryptionKey(this.store.workspace.vault.key),aad=cache?this.store.aad('state','objects'):null,cached=cache?.node('objects'),proof=cached&&authenticatedHeads.get(cached);
   if(proof?.key===key&&proof?.aad===aad)return {formatVersion:2,root:{...cached.root}};
   const value=this.store.decode('state','objects',row.payload);
-  if(value?.formatVersion===undefined&&Array.isArray(value?.entries)){
-   if(!value.entries.every(e=>e&&identifier(e.id)&&revision(e.revision))||new Set(value.entries.map(e=>e.id)).size!==value.entries.length)fail();
-   if(!value.entries.length)await this.assertEmpty();
-   return {legacy:value.entries};
-  }
   if(value?.formatVersion!==2||!validRef(value.root))fail();
   if(value.root===null)await this.assertEmpty();
   else if(cache){
@@ -183,7 +178,6 @@ export class ObjectIndex{
   this.authenticate(node,ref.hash);this.pending.set(ref.hash,node);this.writes.set(this.slot(ref),node);return ref;
  }
  async find(head,id){
-  if(head.legacy)return head.legacy.find(e=>e.id===id)??null;
   let ref=head.root,lower=null,upper=null;
   while(ref){const node=await this.node(ref,lower,upper);if(id===node.id)return node;if(id<node.id){upper=node.id;ref=node.left;}else{lower=node.id;ref=node.right;}}
   return null;
@@ -191,8 +185,8 @@ export class ObjectIndex{
  async prefetchKeys(head,ids,{signal}={}){
   signal?.throwIfAborted();
   if(this.nodeStorage||!this.immutable&&!this.cacheReads||!Array.isArray(ids)||ids.length>32||ids.some(id=>!identifier(id)))throw new AppError('INVALID');
-  if(!head.legacy&&!validRef(head.root))fail();
-  if(head.legacy||!head.root||!ids.length)return;
+  if(!validRef(head.root))fail();
+  if(!head.root||!ids.length)return;
   // Only the selected search paths share a read. Each frontier has at most
   // thirty-two nodes; oversized payloads retain the ordinary point-read path.
   // Authentication and bounds remain identical to subsequent find/change calls.
@@ -231,7 +225,6 @@ export class ObjectIndex{
   signal?.throwIfAborted();
  }
  async rank(head,boundary){
-  if(head.legacy)return head.legacy.reduce((n,e)=>n+Number(e.id<boundary),0);
   let ref=head.root,total=0,lower=null,upper=null;
   while(ref){const node=await this.node(ref,lower,upper);
    if(node.id<boundary){total+=1+count(node.left);lower=node.id;ref=node.right;}
@@ -240,7 +233,6 @@ export class ObjectIndex{
  }
  async entryAt(head,ordinal){
   if(!Number.isSafeInteger(ordinal)||ordinal<0)throw new AppError('INVALID');
-  if(head.legacy)return [...head.legacy].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0)[ordinal]??null;
   let ref=head.root,lower=null,upper=null;
   while(ref){
    const node=await this.node(ref,lower,upper),left=count(node.left);
@@ -254,10 +246,9 @@ export class ObjectIndex{
   let end=prefix.length;
   while(end&&prefix.charCodeAt(end-1)===65535)end--;
   const upper=end?prefix.slice(0,end-1)+String.fromCharCode(prefix.charCodeAt(end-1)+1):null;
-  return (upper===null?head.legacy?.length??count(head.root):await this.rank(head,upper))-await this.rank(head,prefix);
+  return (upper===null?count(head.root):await this.rank(head,upper))-await this.rank(head,prefix);
  }
  async *entries(head,prefix='',after=null){
-  if(head.legacy){for(const entry of [...head.legacy].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0))if(entry.id.startsWith(prefix)&&(after===null||entry.id>after))yield entry;return;}
   yield* this.walk(head.root,prefix,after);
  }
  // Compare retained roots directly. Matching authenticated subtrees have the
@@ -306,7 +297,6 @@ export class ObjectIndex{
   }
  }
  async *reverseEntries(head,prefix='',before=null){
-  if(head.legacy){for(const entry of [...head.legacy].sort((a,b)=>a.id<b.id?1:a.id>b.id?-1:0))if(entry.id.startsWith(prefix)&&(before===null||entry.id<before))yield entry;return;}
   yield* this.walkReverse(head.root,prefix,before);
  }
  async *walkReverse(ref,prefix,before=null,lower=null,upper=null){
@@ -355,17 +345,7 @@ export class ObjectIndex{
  }
  async update(head,id,revision){
   if(!identifier(id)||revision!==null&&!/^[a-f0-9]{64}$/.test(revision))throw new AppError('INVALID');
-  let root=head.root;
-  if(head.legacy){
-   // Existing flat indexes are replaced in place in the caller's transaction.
-   // Workspace identity, object bytes and references are unchanged.
-   await this.checkCounts(head);
-   const entries=[...head.legacy].sort((a,b)=>a.id<b.id?-1:1);
-   const build=(start,end)=>{if(start===end)return null;const mid=Math.floor((start+end)/2),entry=entries[mid];return this.make(entry.id,entry.revision,build(start,mid),build(mid+1,end));};
-   root=build(0,entries.length);
-  }
-  root=await this.change(root,id,revision);
-  await this.persist(root);
+  await this.persist(await this.change(head.root,id,revision));
  }
  async persist(root){
   // Independent final node versions share bounded SQL messages. No plaintext
@@ -382,6 +362,6 @@ export class ObjectIndex{
  }
  async checkCounts(head){
   const objects=await catalogueIndexedCount(this.store.db,'objects'),nodes=await catalogueIndexedCount(this.store.db,'state','object-index:');
-  if(objects!==(head.legacy?.length??count(head.root))||nodes!==(head.legacy?0:count(head.root)))fail();
+  if(objects!==count(head.root)||nodes!==count(head.root))fail();
  }
 }
