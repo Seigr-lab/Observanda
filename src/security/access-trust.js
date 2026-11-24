@@ -1,8 +1,5 @@
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {readFile,chmod} from 'node:fs/promises';
-import {execFile} from 'node:child_process';
-import {promisify} from 'node:util';
+import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createPersistentDirectory as mkdir} from '../filesystem-persistence.js';
@@ -11,8 +8,9 @@ import {withWriterLease} from '../writer-lease.js';
 import {validateKeyring,authenticateKeyring} from './keyring.js';
 import {AppError} from '../errors.js';
 import {refuseNewerFormat} from '../stored-format.js';
+import {preparePrivateDirectory} from './private-directory.js';
 
-const execute=promisify(execFile),uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
+const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const canonical=value=>Array.isArray(value)?'['+value.map(canonical).join(',')+']':value&&typeof value==='object'?'{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+canonical(value[key])).join(',')+'}':JSON.stringify(value);
 export const keyringFingerprint=value=>createHash('sha256').update(canonical(value)).digest('hex');
 
@@ -28,12 +26,7 @@ export class AccessTrustStore{
  }
  async prepare(){
   if(this.preparing)return this.preparing;
-  const pending=(async()=>{
-   await mkdir(this.directory,{recursive:true,mode:0o700});const info=await assertRegular(this.directory,{directory:true});
-   if(process.platform==='win32'){
-    try{await execute(path.join(process.env.SystemRoot??'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./private-directory.ps1',import.meta.url)),'-Directory',this.directory],{windowsHide:true,timeout:15000,maxBuffer:8192});}catch{throw new AppError('DEVICE_UNAVAILABLE');}
-   }else{if(info.uid!==process.getuid())throw new AppError('UNSAFE');await chmod(this.directory,0o700);}
-  })();this.preparing=pending;
+  const pending=preparePrivateDirectory(this.directory);this.preparing=pending;
   try{await pending;}catch(error){if(this.preparing===pending)this.preparing=null;throw error;}
  }
  folder(id){if(!uuid(id))throw new AppError('ACCESS_FORMAT');return path.join(this.directory,id);}
