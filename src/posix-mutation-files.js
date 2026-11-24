@@ -34,5 +34,5 @@ export async function posixMutationFiles(){
   }finally{signal?.removeEventListener('abort',abort);}
  }
  const call=(command,options)=>{const pending=serial.then(()=>execute(command,options));serial=pending.catch(()=>{});return pending;};
- return mutationFilesClient((command,options)=>failed&&command.operation==='close'?Promise.resolve():call(command,options),async()=>{await serial;if(worker.connected)worker.disconnect();await exited;});
+ return mutationFilesClient((command,options)=>failed&&command.operation==='close'?Promise.resolve():call(command,options),async()=>{await serial;if(worker.connected)worker.disconnect();await exited;},active=>{worker[active?'ref':'unref']();worker.channel?.[active?'ref':'unref']?.();});
 }

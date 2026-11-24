@@ -51,5 +51,5 @@ export async function windowsMutationFiles(){
   }finally{signal?.removeEventListener('abort',abort);}
  }
  const call=async(command,options)=>{const task=serial.then(()=>execute(command,options));serial=task.catch(()=>{});try{return await task;}catch(cause){if(!(cause instanceof AppError))throw cause;const error=new AppError(cause.code);error.code=cause.code;error.cause=cause;if(['EBUSY','EACCES'].includes(error.code))nativeStorageError(error,command.operation);throw error;}};
- return mutationFilesClient((command,options)=>failed&&command.operation==='close'?Promise.resolve():call(command,options),()=>closing??=(async()=>{await serial;child.stdin.end();await exited;})());
+ return mutationFilesClient((command,options)=>failed&&command.operation==='close'?Promise.resolve():call(command,options),()=>closing??=(async()=>{await serial;child.stdin.end();await exited;})(),active=>{for(const stream of [child,child.stdin,child.stdout,child.stderr])stream?.[active?'ref':'unref']?.();});
 }

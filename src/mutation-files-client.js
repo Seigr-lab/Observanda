@@ -4,7 +4,7 @@ import {atomicReplace} from './atomic-replace.js';
 const missing=(error,allowed)=>{if(allowed&&error.code==='ENOENT')return null;throw error;};
 const name=value=>{if(typeof value!=='string'||!value||value==='.'||value==='..'||/[\\/\0]/.test(value))throw new AppError('UNSAFE');return value;};
 const binary=value=>Buffer.isBuffer(value)?value:typeof value==='string'?Buffer.from(value,'base64'):Buffer.from(value);
-export function mutationFilesClient(call,stop){
+export function mutationFilesClient(call,stop,hold=()=>{}){
  const handles=new Set();let closing;
  class Handle{
   constructor({id,identity}){this.id=id;this.identity=identity;this.closed=false;handles.add(this);}
@@ -36,5 +36,8 @@ export function mutationFilesClient(call,stop){
   link(member,target,targetName,options){return this.move('link',member,target,targetName,options);}
   remove(member,{folder=false,links=false,identity}={}){return this.request('delete',{name:name(member),folder,links,...(identity?{identity}:{})});}
  }
- return {async open(root){if(typeof root!=='string'||!path.isAbsolute(root))throw new AppError('UNSAFE');return new Directory(await call({operation:'root',path:root}));},close:()=>closing??=(async()=>{try{for(const handle of [...handles])await handle.close();}finally{await stop();}})()};
+ return {async open(root){if(typeof root!=='string'||!path.isAbsolute(root))throw new AppError('UNSAFE');return new Directory(await call({operation:'root',path:root}));},close:()=>closing??=(async()=>{try{for(const handle of [...handles])await handle.close();}finally{await stop();}})(),
+  // An idle helper keeps no directory open and does not keep the application running.
+  async rest(){for(const handle of [...handles])await handle.close();hold(false);},
+  wake(){hold(true);}};
 }
