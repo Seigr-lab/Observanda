@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {datasetMapping} from '../src/dataset-reader.js';
 import {readPagedDataset} from '../src/dataset-paged-reader.js';
+import {retainedFigureRequest} from '../src/retained-figures.js';
 import {pagedDataset} from './fixtures/paged-dataset.js';
 import {packedMapping,packedSource} from './fixtures/packed-dataset.js';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -58,7 +59,10 @@ test('packed mapping and source references survive retained revisions, inspectio
  }
  const revised=await materials.dataset({...command,id:dataset.id,expectedRevision:dataset.revision,baseDataset:dataset,exclusions:{[page.rows[0].id]:'Declared exclusion'}});
  const plot=await materials.plot({recordId,title:'Native packed timings',dataset:revised,base:createFigure(),mapping:{x:0,xKind:'number',values:[{column:2,error:null}],group:null,operation:'raw',order:'source',kind:'scatter',numericPolicy:'safe'}});
- assert.equal(plot.figure.series[0].points.length,7);assert.equal(plot.figure.series[0].points.at(-1).y,100019);assert.deepEqual((await materials.read(plot.ref)).content.inputs,[revised]);
+ // Plots are retained figure documents; read their points through the figure export.
+ const exported=await retainedFigureRequest(materials,{ref:plot.ref,format:'json'},{exporting:true,download:async({chunks})=>{let text='';for await(const chunk of chunks)text+=Buffer.from(chunk).toString('utf8');return JSON.parse(text);}});
+ assert.equal(plot.figure.document.counts.points,7);assert.equal(exported.series[0].points.length,7);assert.equal(exported.series[0].points.at(-1).y,100019);assert.deepEqual((await materials.read(plot.ref)).content.inputs,[revised]);
  const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));await restored.verify();
- assert.deepEqual((await restored.read(revised)).content.sourceMapping,packedMapping(4));assert.deepEqual((await restored.datasetPage(revised)).rows,(await materials.datasetPage(revised)).rows);
+ // Paged datasets keep their fields in the schema; the stored mapping records that.
+ const {fields:_fields,...storedMapping}=packedMapping(4);assert.deepEqual((await restored.read(revised)).content.sourceMapping,{...storedMapping,fieldsInSchema:true});assert.deepEqual((await restored.datasetPage(revised)).rows,(await materials.datasetPage(revised)).rows);
 });
