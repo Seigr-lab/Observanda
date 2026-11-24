@@ -20,8 +20,8 @@ async function step(name,operation){
 }
 
 const version=JSON.parse(await readFile(path.join(service,'package.json'),'utf8')).version;
-const [{DeviceStore,WindowsProtector},{seal,unseal,clearVault},{WorkspaceDatabases},{installDatabaseProvider},{createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess},{initializeLocation},{Workspace},{sampleNotebook},{ResearchRecords},{MediaStore},{ProjectRegistry},{ProjectCreation},{ProjectStorage},{LabBookCreation},{LabBookDirectory},{LabBookStorage},{ResearchMaterials},{workspaceModules},{readWorkspaceDashboard,writeWorkspaceDashboard},{WebsiteFileStore,websiteSourceId},{PdfDocuments},{pdfLayoutPreset}]=await Promise.all([
- 'security/device-store.js','encryption.js','workspace-databases.js','workspace-database-context.js','access.js','locations.js','storage.js','sample.js','research.js','media.js','project-registry.js','project-creation.js','project-storage.js','lab-book-creation.js','lab-book-directory.js','lab-book-storage.js','research-materials.js','modules/index.js','security/dashboard-storage.js','website-file-store.js','pdf-documents.js','web/pdf-layout-model.js'
+const [{DeviceStore,WindowsProtector},{seal,unseal,clearVault},{WorkspaceDatabases},{installDatabaseProvider},{createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess},{initializeLocation},{Workspace},{sampleNotebook},{ResearchRecords},{MediaStore},{ProjectRegistry},{ProjectCreation},{ProjectStorage},{LabBookCreation},{LabBookDirectory},{LabBookStorage},{ResearchMaterials},{workspaceModules},{readWorkspaceDashboard,writeWorkspaceDashboard},{WebsiteFileStore,websiteSourceId},{PdfDocuments},{pdfLayoutPreset},{executeMaterialRequest},{workspaceJobs},{enqueueDataset}]=await Promise.all([
+ 'security/device-store.js','encryption.js','workspace-databases.js','workspace-database-context.js','access.js','locations.js','storage.js','sample.js','research.js','media.js','project-registry.js','project-creation.js','project-storage.js','lab-book-creation.js','lab-book-directory.js','lab-book-storage.js','research-materials.js','modules/index.js','security/dashboard-storage.js','website-file-store.js','pdf-documents.js','web/pdf-layout-model.js','material-requests.js','workspace-jobs.js','dataset-jobs.js'
 ].map(load));
 
 // The device key is protected the way the test device store protects it:
@@ -80,6 +80,27 @@ try{
   const derived=await materials.dataset({recordId,title:'Upgrade grouped readings',aggregation:{version:1,source:dataset,keys:[0],values:[{column:1,operation:'median',name:'Median'}],missing:'skip',note:''}});
   const cells=async ref=>(await materials.datasetPage(ref,0)).rows.map(row=>row.cells);
   Object.assign(ids,{artifact,dataset,derived,datasetCells:await cells(dataset),derivedCells:await cells(derived)});
+ });
+
+ await step('derive datasets from a calculation recipe and a calculation graph',async()=>{
+  const materials=new ResearchMaterials(ws),recordId=ids.runRecordId,source=ids.dataset,cells=async ref=>(await materials.datasetPage(ref,0)).rows.map(row=>row.cells);
+  // A stored calculation recipe: one step multiplying the readings by a constant.
+  const recipe={version:1,source,view:'observations',joins:[],steps:[{name:'Doubled reading',operation:'multiply',left:{column:1},right:{constant:'2',unit:''},unit:'',condition:null}],where:null,selectionReason:'',calibration:null,note:''};
+  const calculated=await materials.dataset({recordId,title:'Upgrade calculated readings',calculation:recipe});
+  // A calculation graph (column, constant, scalar operation, one output), retained as a dataset by the dataset job.
+  const request=(operation,data)=>executeMaterialRequest(ws,{material:operation},data);
+  let graph=(await request('calculation-graph-create',{recordId,title:'Upgrade graph',source})).ref;
+  const binding=(await request('calculation-graph-page',{ref:graph,collection:'bindings'})).items[0],nodes=[{id:randomUUID(),kind:'column',binding:{id:binding.id,position:0},column:1},{id:randomUUID(),kind:'constant',value:{constant:'3',representation:'integer',radix:10,unit:''}}];
+  const address=position=>({id:nodes[position].id,position});nodes.push({id:randomUUID(),kind:'scalar',operation:'multiply',left:address(0),right:address(1),condition:null,unit:''});
+  for(const [offset,item] of nodes.entries())graph=(await request('calculation-graph-change',{ref:graph,collection:'nodes',offset,item})).ref;
+  const output={id:randomUUID(),name:'Tripled reading',node:address(2)};graph=(await request('calculation-graph-change',{ref:graph,collection:'outputs',offset:0,item:output})).ref;
+  const jobs=workspaceJobs(ws),jobId=randomUUID(),calculation={version:4,graph};
+  await enqueueDataset(materials,jobs.queue,{recordId,title:'Upgrade graph result',calculation},jobId);
+  const job=await jobs.queue.claim();let pulse=Promise.resolve(),failure;
+  const heartbeat=setInterval(()=>{pulse=pulse.then(()=>jobs.queue.pulse(job.id,job.lease.token)).catch(error=>{failure=error;});},jobs.queue.leaseMs/3);
+  let completed;try{completed=await jobs.queue.complete(job.id,job.lease.token,await jobs.queue.definition(job).prepare(job,{}));await pulse;if(failure)throw failure;}finally{clearInterval(heartbeat);await pulse;}
+  const graphResult=completed.result;
+  Object.assign(ids,{recipe,calculated,calculatedCells:await cells(calculated),graph,graphCalculation:calculation,graphResult,graphCells:await cells(graphResult)});
  });
 
  const modules=workspaceModules(ws),execute=(action,payload)=>modules.execute({workspaceId:book.id,commandId:randomUUID(),action,payload});

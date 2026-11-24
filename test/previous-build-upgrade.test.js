@@ -32,6 +32,8 @@ import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../src/security/da
 import {WebsiteFileStore} from '../src/website-file-store.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {PdfDocuments} from '../src/pdf-documents.js';
+import {workspaceJobs} from '../src/workspace-jobs.js';
+import {enqueueDataset} from '../src/dataset-jobs.js';
 
 const previous=process.env.OBSERVANDA_PREVIOUS_SERVICE,writer=fileURLToPath(new URL('./upgrade/previous-build-writer.js',import.meta.url));
 const skip=previous?false:'Set OBSERVANDA_PREVIOUS_SERVICE to the service folder of a previous Observanda build to run the upgrade test.';
@@ -48,6 +50,15 @@ function runWriter(work,signal){
    try{resolve(JSON.parse(line));}catch{reject(Error('The previous build writer printed no result:\n'+stderr.slice(-8000)));}
   });
  });
+}
+
+// Runs one dataset job to completion in this process, keeping its lease alive.
+async function runDatasetJob(materials,command){
+ const jobs=workspaceJobs(materials.workspace),id=randomUUID();await enqueueDataset(materials,jobs.queue,command,id);
+ const job=await jobs.queue.claim();assert.equal(job.id,id);let pulse=Promise.resolve(),failure;
+ const heartbeat=setInterval(()=>{pulse=pulse.then(()=>jobs.queue.pulse(job.id,job.lease.token)).catch(error=>{failure=error;});},jobs.queue.leaseMs/3);
+ try{const completed=await jobs.queue.complete(job.id,job.lease.token,await jobs.queue.definition(job).prepare(job,{}));await pulse;if(failure)throw failure;return completed.result;}
+ finally{clearInterval(heartbeat);await pulse;}
 }
 
 // The current product's complete check of one catalogue owner, as the command line validates a workspace.
@@ -107,6 +118,11 @@ test('a workspace written by the previous build opens, verifies and stays editab
  assert.deepEqual((await materials.datasetPage(ids.dataset,0)).rows.map(item=>item.cells),ids.datasetCells);
  assert.deepEqual((await materials.datasetPage(ids.derived,0)).rows.map(item=>item.cells),ids.derivedCells);
  assert.equal(ids.datasetCells.length,3);assert.equal(ids.derivedCells.length,2);
+ // Calculated datasets: a stored recipe and a retained calculation graph.
+ const cellsOf=async ref=>(await materials.datasetPage(ref,0)).rows.map(item=>item.cells);
+ assert.deepEqual((await materials.read(ids.calculated)).content.calculation,ids.recipe);assert.deepEqual(await cellsOf(ids.calculated),ids.calculatedCells);assert.equal(ids.calculatedCells.length,3);
+ assert.deepEqual((await materials.read(ids.graphResult)).content.calculation,ids.graphCalculation);assert.deepEqual(await cellsOf(ids.graphResult),ids.graphCells);assert.equal(ids.graphCells.length,3);
+ assert.equal((await materials.read(ids.graph)).id,ids.graph.id);
 
  // Module entities: inventory and laboratory.
  const reader=new ModuleReader(ws),selected=async id=>(await reader.selected({workspaceId:ids.workspaceId,id})).entity;
@@ -127,6 +143,9 @@ test('a workspace written by the previous build opens, verifies and stays editab
  await new ResearchRecords(ws,media).save({workspaceId:ids.workspaceId,changes:[{id:run.id,expectedRevision:recordRevision(run),record:{...run,title:'Observation edited after upgrade'}}]});
  await new ResearchRecords(labBook,new MediaStore(labBook)).save({workspaceId:ids.labBookNamespaceId,changes:[{id:labRecord.id,expectedRevision:recordRevision(labRecord),record:{...labRecord,title:'Lab book record edited after upgrade'}}]});
  const counted=await materials.dataset({recordId:ids.runRecordId,title:'Counts after upgrade',aggregation:{version:1,source:ids.dataset,keys:[0],values:[{column:1,operation:'count',name:'Count'}],missing:'skip',note:''}});
+ // Reapply the stored recipe as a new revision of its dataset, and run the retained graph again.
+ const recalculated=await materials.dataset({recordId:ids.runRecordId,title:'Calculated readings after upgrade',id:ids.calculated.id,expectedRevision:ids.calculated.revision,calculation:ids.recipe});
+ const rerun=await runDatasetJob(materials,{recordId:ids.runRecordId,title:'Graph result after upgrade',calculation:ids.graphCalculation});
  const execute=(action,payload)=>workspaceModules(ws).execute({workspaceId:ids.workspaceId,commandId:randomUUID(),action,payload});
  await execute('resource.save',{id:resource.id,expectedRevision:resource.revision,data:{...resource.data,name:'Reagent renamed after upgrade'}});
  await execute('lab-entry.save',{id:sample.id,expectedRevision:sample.revision,data:{...sample.data,notes:'Noted after upgrade'}});
@@ -138,6 +157,8 @@ test('a workspace written by the previous build opens, verifies and stays editab
  const edited=(await ws.read()).book;assert.equal(edited.entries.find(entry=>entry.id===ids.runRecordId).title,'Observation edited after upgrade');assert.equal(edited.entries.find(entry=>entry.id===ids.methodRecordId).title,'Upgrade method');
  assert.equal((await labBook.read()).book.entries.find(entry=>entry.id===ids.labBookRecordId).title,'Lab book record edited after upgrade');
  assert.deepEqual((await materials.datasetPage(counted,0)).rows.map(item=>item.cells[0]),ids.derivedCells.map(cells=>cells[0]));
+ assert.notEqual(recalculated.revision,ids.calculated.revision);assert.deepEqual(await cellsOf(recalculated),ids.calculatedCells);assert.deepEqual(await cellsOf(ids.calculated),ids.calculatedCells);
+ assert.notEqual(rerun.id,ids.graphResult.id);assert.deepEqual(await cellsOf(rerun),ids.graphCells);
  assert.equal((await selected(ids.resourceId)).data.name,'Reagent renamed after upgrade');assert.equal((await selected(ids.sampleId)).data.notes,'Noted after upgrade');
  assert.equal((await readWorkspaceDashboard(ws)).settings.views.find(view=>view.id===ids.dashboardViewId).name,'Dashboard after upgrade');
  assert.match((await sites.open(ids.siteId)).html,/Introduction edited after upgrade/);
