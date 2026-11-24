@@ -10,19 +10,19 @@ import {attemptReferences} from './web/attempt-model.js';
 
 // A revision-bound derivative for cards and links, never a research original.
 // Selection is checked by the caller before exposing this private index value.
-export function publicationDescriptor(record,metadata,options){
- return {...publicationDescriptorDetails(record,metadata,options),revision:recordRevision(record)};
+export function publicationDescriptor(record,metadata){
+ return {...publicationDescriptorDetails(record,metadata),revision:recordRevision(record)};
 }
 // Internal projection owners already possess their exact canonical identity.
 // The placeholder preserves descriptor property order when they attach it.
-export function publicationDescriptorDetails(record,metadata,{legacy=false}={}){
+export function publicationDescriptorDetails(record,metadata){
  // Existing signed query cards used a generic placeholder for an unavailable
  // embedded figure. Keep that spelling when reconstructing their text.
  const placeholderBody=!record.publication?.website?.hiddenFigures?.length&&publicationPartAllowed(record,'body')?record.body:null;
- if(!legacy)record=sourcePublicationRecord(record);
+ record=sourcePublicationRecord(record);
  const card=publicationCard({...record,body:publicationRecordText(placeholderBody??record.body,record,()=>null)});card.attachments=card.attachments.filter(a=>a.share);
  if(metadata){const choice=metadata.website.presentation.covers.find(c=>c.entryId===record.id),image=choice?card.attachments.find(a=>a.id===choice.attachmentId):card.attachments[0];card.attachments=image?[image]:[];}
- return {...(legacy?{}:{sourcePermissionVersion:SOURCE_PUBLICATION_VERSION}),...card,journey:readingJourney(record),selectors:bookSelectors({...record,attachments:record.attachments.filter(a=>a.share)}),share:legacy||record.share===true,revision:null,outcome:record.outcome??'',relations:[...record.relations.map(({role,target})=>({role:role??'related',target})),...[record.body,...record.sections.map(s=>s.body)].flatMap(proseReferences).map(target=>({role:'mention',target}))],
+ return {sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,...card,journey:readingJourney(record),selectors:bookSelectors({...record,attachments:record.attachments.filter(a=>a.share)}),share:record.share===true,revision:null,outcome:record.outcome??'',relations:[...record.relations.map(({role,target})=>({role:role??'related',target})),...[record.body,...record.sections.map(s=>s.body)].flatMap(proseReferences).map(target=>({role:'mention',target}))],
   references:attemptReferences(record.attempt).filter(r=>r.kind==='record').map(({workspaceId,kind,id,revision})=>({workspaceId,kind,id,revision})),
   media:record.attachments.filter(a=>a.share).map(({id,kind})=>({id,kind,share:true}))};
 }

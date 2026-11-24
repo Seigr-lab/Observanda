@@ -15,7 +15,7 @@ import {SnapshotIndex} from '../src/snapshot-index.js';
 import {verifyRecordDocument} from '../src/record-document-verification.js';
 import {publicationDescriptor} from '../src/publication-record-descriptor.js';
 
-test('verify original pre-consent and current publication query fields in both stored query formats',async t=>{
+test('current publication query fields verify while unmarked pre-consent fields are refused in both stored query formats',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-historical-projection-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(dir,book);
  t.after(async()=>{await clearVault(f.vault);await rm(dir,{recursive:true,force:true,maxRetries:10});});
  const prior=(await f.workspace.read()).book.entries[0],next=structuredClone(prior);next.attachments=[];next.figures=[];next.sections=Array.from({length:30},(_,i)=>({id:randomUUID(),title:'Test '+i,body:'Historical observation '.repeat(118)}));
@@ -25,7 +25,8 @@ test('verify original pre-consent and current publication query fields in both s
   assert.ok(row.bytes>65535);const source={slot:'record-query:'+row.id+':'+row.queryRevision,revision:row.queryRevision},saved=await store.db.get('SELECT payload FROM state WHERE slot=$1',source.slot);
   const query=await withQueryValue(store,store.decode('state',source.slot,saved.payload),source,row,({tree,value})=>tree?tree.read(value.root):value);
   assert.equal(query.publicationDescriptor.sourcePermissionVersion,1);assert.equal(query.editionInventory.sourcePermissionVersion,1);
-  query.publicationDescriptor=publicationDescriptor(record,undefined,{legacy:true});
+  // Query fields without the source permission marker were written only before the first release.
+  const {sourcePermissionVersion:_,...unmarked}=publicationDescriptor(record);query.publicationDescriptor=unmarked;
   const {id,title,sections,template,attachments,figures}=record;
   const fields=template?.fields??[];
   query.editionInventory={
@@ -56,7 +57,6 @@ test('verify original pre-consent and current publication query fields in both s
   const {snapshot,row,old,damaged,future}=fixtures,summaries=await new SnapshotIndex(store).validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:[],relations:row.runOf.map(target=>({role:'run-of',target}))}]);
   const verify=r=>verifyRecordDocument(store,r,snapshot.metadata,summaries,null);
   await verify(row);
-  for(const historical of old)await verify(historical);
-  for(const invalid of [damaged,future])await assert.rejects(verify(invalid),{code:'CATALOGUE_DAMAGED'});
+  for(const invalid of [...old,damaged,future])await assert.rejects(verify(invalid),{code:'CATALOGUE_DAMAGED'});
  });
 });

@@ -25,14 +25,9 @@ import {attemptReferenceGroups} from './record-attempt-query.js';
 const collections=['sections','contributors','relations','figures','attachments','tags'];
 const depends=(collection,...fields)=>({collection:Array.isArray(collection)?collection:[collection],fields});
 export function retainedQueryProjection(document,revision,options={}){
- return buildProjection(document,revision,options,false);
+ return buildProjection(document,revision,options);
 }
-// Only the integrity reader reconstructs the original spelling of pre-consent
-// private query fields. Publishing and authoring always use the current shape.
-export function historicalQueryProjection(document,revision,{signal}={}){
- return buildProjection(document,revision,{signal},true);
-}
-async function buildProjection(document,revision,{signal,previous,searchText:retainedText,referenceTargets:retainedReferences},historical){
+async function buildProjection(document,revision,{signal,previous,searchText:retainedText,referenceTargets:retainedReferences}){
  if(previous&&(await previous.tree.selected(previous.root,['publicationDescriptor','sourcePermissionVersion'])).value!==SOURCE_PUBLICATION_VERSION)previous=null;
  // Every public projection depends on consent, including collection-derived
  // selectors and inventory rows that otherwise retain their old references.
@@ -42,7 +37,7 @@ async function buildProjection(document,revision,{signal,previous,searchText:ret
   signal?.throwIfAborted();
   Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await attemptDocumentHeader(document,{signal}):name==='results'?await resultDocumentHeader(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true});
  }
- const empty={...header,body:'',attempt:undefined},plain={...recordQueryDocument(header),publication:recordPublicationSummary(header),publicationCard:publicationCard(header),publicationDescriptor:null,editionInventory:recordEditionInventory(header,revision,{legacy:historical}),recordRevision:revision};
+ const empty={...header,body:'',attempt:undefined},plain={...recordQueryDocument(header),publication:recordPublicationSummary(header),publicationCard:publicationCard(header),publicationDescriptor:null,editionInventory:recordEditionInventory(header,revision),recordRevision:revision};
  const object=async(value,references={})=>{
   const builder=new RecordContainerBuilder(blocks,'object');
   for(const name of Object.keys(value)){signal?.throwIfAborted();await builder.add({name,value:references[name]??await tree.retain(value[name])});}
@@ -71,7 +66,7 @@ async function buildProjection(document,revision,{signal,previous,searchText:ret
   for await(const item of items('figures',['id']))if(placed.has(item.id))figureContext.figures.push(item);
   for await(const item of items('attachments',['id','kind','caption','alt','share']))if(placed.has(item.id))figureContext.attachments.push(item);
  }
- plain.publicationDescriptor=publicationDescriptorDetails(figureContext,undefined,{legacy:historical});
+ plain.publicationDescriptor=publicationDescriptorDetails(figureContext,undefined);
  async function* searchParts(){
   yield header.title;yield proseText(header.body);yield header.outcome??'';yield* items('tags');
   for await(const item of items('sections',['title','body'])){yield item.title;yield proseText(item.body);}
@@ -103,11 +98,11 @@ async function buildProjection(document,revision,{signal,previous,searchText:ret
  const images=await filtered(['publicationCard','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image',item=>item);
  const sharedImages=await filtered(['publicationDescriptor','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image'&&item.share,item=>item);
  const grouped=(path,owners,groups)=>reuse(path,owners,()=>groupRecordProjection(document,previous,{path,groups},{signal}));
- const allowed=key=>historical||publicationPartAllowed(header,key);
- const hiddenFigures=new Set(historical?[]:header.publication?.website?.hiddenFigures);
+ const allowed=key=>publicationPartAllowed(header,key);
+ const hiddenFigures=new Set(header.publication?.website?.hiddenFigures);
  const figureVisible=item=>allowed('figures')&&!hiddenFigures.has(item.id);
  const inventoryFigures=(path,fields,project)=>!allowed('figures')?tree.retain([]):hiddenFigures.size?filtered(path,'figures',fields,figureVisible,project):mapped(path,'figures',fields,project);
- const sectionVisible=item=>historical||item.share!==false;
+ const sectionVisible=item=>item.share!==false;
  const selectors=()=>grouped(['publicationDescriptor','selectors'],[depends('sections','id','title','body','share'),depends('figures','id','title'),depends('attachments','id','kind','caption','alt','share'),['body']],[
   {collection:['sections'],fields:['id','title','share'],project:item=>!sectionVisible(item)?[]:[{version:1,kind:'section',id:item.id,label:item.title}]},
   {collection:['figures'],fields:['id','title'],project:item=>figureVisible(item)?[{version:1,kind:'figure',id:item.id,label:item.title}]:[]},
@@ -138,7 +133,7 @@ async function buildProjection(document,revision,{signal,previous,searchText:ret
   }),
   sections:await filtered(['editionInventory','sections'],'sections',['id','title','share'],sectionVisible,({id,title})=>({id,title})),
   fields:header.template&&allowed('template')?await mapped(['editionInventory','fields'],['template','fields'],['key','label'],item=>({id:item.key,title:item.label})):await tree.retain([]),
-  attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>historical||item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
+  attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
   figures:await inventoryFigures(['editionInventory','figures'],['id','title'],item=>item)
  });
  const root=await object(plain,{
