@@ -34,7 +34,7 @@ test('HTTP creation and authoring select dedicated nested book databases during 
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0];
  const context=(await result(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}}))).contextId;
  const call=(route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(45000),method:'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},body:JSON.stringify(data)});
- const projectId=randomUUID(),project=(await result(await call('/api/projects/create',{id:randomUUID(),path:path.join(root,'Field Project 1'),username:'',password:'',project:{id:projectId,title:'Field Project 1',description:'',share:false,logoId:null}}))).project;
+ const projectId=randomUUID(),project=(await result(await call('/api/projects/create',{id:randomUUID(),username:'',password:'',project:{id:projectId,title:'Field Project 1',description:'',share:false,logoId:null}}))).project;
  const base='/api/projects/'+projectId+'/lab-books',make=title=>call(base+'/create',{id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title}}).then(result);
  const a=(await make('Field Book 1')).book,b=(await make('Field Book 2')).book;
  assert.equal(a.root,path.join(project.root,'Field Book 1'));assert.equal(b.root,path.join(project.root,'Field Book 2'));assert.equal((await catalogueBinding(a.root)).placement,'lab-book');assert.equal((await catalogueBinding(b.root)).placement,'lab-book');

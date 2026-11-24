@@ -39,5 +39,6 @@ test('directory admission reuses connections without inheriting a pinned snapsho
   assert.equal(registry.directoryOwner.access.current,current);
   assert.equal(await registry.version(),after,'A failed read rolls back and can reopen');
  });
- assert.ok(opened.length>=3);assert.ok(opened.every(item=>item.closed),'All retained and failed connections close');
+ // The snapshot read and the admission each open one connection; the read after a failure may reuse an idle one.
+ assert.ok(opened.length>=2,String(opened.length));assert.ok(opened.every(item=>item.closed),'All retained and failed connections close');
 });
