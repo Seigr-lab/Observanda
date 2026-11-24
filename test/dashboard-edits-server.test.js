@@ -67,9 +67,9 @@ test('opening an older copy does not move pending settings out of their original
  const settings=structuredClone(initial.settings),other=structuredClone(initial.settings);settings.enabledModules.push('planning');other.enabledModules.push('resources');await writeWorkspaceDashboard(f.workspace,other,initial.etag);
  const pending=await f.call('/api/dashboard/pending',{action:'save',id:randomUUID(),settings,etag:initial.etag});
  await until(async()=>(await f.call('/api/dashboard/pending')).pending?.error==='DASHBOARD_CHANGED');
- const opened=await f.call('/api/storage/open',{path:destination});assert.ok(opened.contextId);
+ const opened=await f.call('/api/storage/open',{path:destination});assert.equal(opened.root,destination);const openedContext=(await f.call('/api/activity')).contextId;assert.ok(openedContext);
  assert.equal((await f.call('/api/dashboard/pending')).code,'WORKSPACE_CHANGED');
- f.changeContext(opened.contextId);assert.equal((await f.call('/api/dashboard/pending')).pending,null);assert.deepEqual((await f.call('/api/dashboard')).settings,initial.settings);
+ f.changeContext(openedContext);assert.equal((await f.call('/api/dashboard/pending')).pending,null);assert.deepEqual((await f.call('/api/dashboard')).settings,initial.settings);
  const returned=await f.call('/api/storage/open',{path:f.workspace.root});f.changeContext(returned.contextId);
  assert.equal((await f.call('/api/dashboard/pending')).pending.id,pending.accepted.id);assert.deepEqual((await readWorkspaceDashboard(f.workspace)).settings,other);
 });

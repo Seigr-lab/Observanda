@@ -116,7 +116,10 @@ test('default transactional workspace saves, reopens in the same folder and rest
  }
  try{
   await unlock();
-  const initial=await manifest(root);
+  // Website library upkeep starts when the workspace opens and writes its own files;
+  // compare only once it has settled.
+  let initial=await manifest(root);
+  await expect.poll(async()=>{const next=await manifest(root),settled=JSON.stringify(next)===JSON.stringify(initial);initial=next;return settled;},{timeout:30000,intervals:[1000]}).toBe(true);
   await preferences(page,'Storage & access');
   await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Upgrade into a new copy',exact:true})).toHaveCount(0);
