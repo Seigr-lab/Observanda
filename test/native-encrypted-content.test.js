@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,rename,symlink,rm,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {randomBytes,randomUUID} from 'node:crypto';
+import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {Workspace,digest} from '../src/storage.js';
 import {FileContent,writeContent} from '../src/file-content.js';
-import {closeIdleMutationFiles,withMutationFilesSession} from '../src/mutation-files.js';
+import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
 const BLOCK=1024*1024;
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-encrypted-anchor-')),outside=path.join(root,'outside');await mkdir(outside);await writeFile(path.join(outside,'sentinel'),'outside');
@@ -28,11 +28,14 @@ test('unknown-length finalization and publication stay on the admitted parent',{
 });
 test('encrypted publication stays anchored if the parent is replaced after closing the staged file',async t=>{
  const f=await fixture(t),bytes=randomBytes(BLOCK+31),target=path.join(f.target.root,'original');let replaced=false;
- await withMutationFilesSession(async service=>{const open=service.open;service.open=async root=>{const directory=await open.call(service,root);if(root===f.target.root){const publish=directory.rename;directory.rename=async function(...args){if(!replaced){replaced=true;await rename(root,path.join(f.root,'opened-target'));await symlink(f.outside,root,'junction');}return publish.apply(this,args);};}return directory;};try{await writeContent(f.target,target,[bytes]);}finally{service.open=open;}});
+ // The staged file is closed; replace its parent path just before publication.
+ const expected={size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+ const capacity=async()=>({write:async(size,write)=>write(),release:async()=>{},beforePublish:async()=>{replaced=true;await rename(f.target.root,path.join(f.root,'opened-target'));await symlink(f.outside,f.target.root,'junction');}});
+ await writeContent(f.target,target,[bytes],{expected,capacity});
  assert.equal(replaced,true);const restored=new Workspace(path.join(f.root,'opened-target'),f.target.vault);assert.deepEqual(await restored.readFile(path.join(restored.root,'original')),bytes);assert.deepEqual(await readdir(f.outside),['sentinel']);
 });
 test('successful small encrypted writes reuse one idle helper and release it explicitly',async t=>{
  const f=await fixture(t),sink=new OperationalDiagnostics();await closeIdleMutationFiles();
  await withDiagnostics(sink,async()=>{for(let i=0;i<16;i++)await writeContent(f.target,path.join(f.target.root,'item-'+i),[Buffer.from('small original '+i)]);diagnostic('request',{route:'storage',method:'POST'});});
- assert.equal((await sink.snapshot()).entries.at(-1).nativeFilesystemStarts,1);assert.equal((await readdir(f.target.root)).length,16);await sink.close();await closeIdleMutationFiles();
+ assert.equal((await sink.snapshot()).entries.at(-1).nativeFilesystemStarts,1);assert.equal((await readdir(f.target.root)).filter(name=>name!=='.observanda').length,16);await sink.close();await closeIdleMutationFiles();
 });
