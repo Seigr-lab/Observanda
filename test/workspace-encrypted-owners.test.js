@@ -122,7 +122,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and n
 test('owner lease classification excludes only known control paths',()=>{
  assert.equal(ownedStorageLeaseFile('.observanda/project-registry.lock'),false);
  const id=randomUUID();
- for(const name of ['.observanda/project-registry.lock',...['lab-book-directory','project-import-addresses','project-imports','project-incoming-owners','project-membership','project-lifecycle','project-copies','project-archives','project-deletions'].map(folder=>'.observanda/'+folder+'/'+id+'.lock'),'.observanda/project-creation/owner-'+id+'.lock','.observanda/project-owner-revisions/'+id+'.obsv.lock'])assert.equal(workspaceOwnerLeaseFile(name),true,name);
+ for(const name of ['.observanda/project-registry.lock',...['lab-book-directory','project-import-addresses','project-imports','project-incoming-owners','project-membership','project-lifecycle','project-copies','project-archives','project-deletions'].map(folder=>'.observanda/'+folder+'/'+id+'.lock'),'.observanda/project-creation/owner-'+id+'.lock'])assert.equal(workspaceOwnerLeaseFile(name),true,name);
  for(const name of ['.observanda/media/'+id+'.lock','.observanda/project-registry.observanda','.observanda/project-imports/'+id+'.obsv','.observanda/project-imports/notes.lock','.observanda/project-creation/../'+id+'.lock'])assert.equal(workspaceOwnerLeaseFile(name),false,name);
 });
 

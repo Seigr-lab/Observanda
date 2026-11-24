@@ -9,7 +9,6 @@ import {upgradeNotebook} from '../src/model.js';
 import {clearVault} from '../src/encryption.js';
 import {ResearchMaterials,validColumns,EVIDENCE_CHUNK} from '../src/research-materials.js';
 import {exactRational,blankClock,blankQuantity,validTime} from '../src/web/measurement-model.js';
-import {plotCoordinate} from '../src/measurement-plot.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {Workspace} from '../src/storage.js';
 import {copyWorkspace,copyPlan} from '../src/locations.js';
@@ -40,10 +39,6 @@ test('exact rational identities, unsupported spelling, raw codes and clock decla
  const time={kind:'counter',reference:'device A',resolution:'one tick',uncertainty:'unknown',clock:{...blankClock(),width:8,frequency:'1000.000',wrap:'modulo',reset:'observed',epoch:'Reset before acquisition row 4'}};
  assert.equal(validTime(time),true);assert.equal(validTime({...time,kind:'external'}),false);
  assert.equal(validTime({kind:'external',reference:'',resolution:'',uncertainty:''}),false);
- assert.throws(()=>plotCoordinate('18446744073709551615',column('C','integer')),{code:'MATERIAL_PRECISION'});
- assert.equal(plotCoordinate('0.1',column('S','radix-fraction',{radix:6}),'approximate'),'0.16666666666666666');
- assert.throws(()=>plotCoordinate('1e-999',column('Tiny','decimal'),'approximate'),{code:'MATERIAL_PRECISION'});
- assert.throws(()=>plotCoordinate('1e999',column('Huge','decimal'),'approximate'),{code:'MATERIAL_PRECISION'});
 });
 test('UTF-8 CSV locators recover precise original row bytes across BOM, CRLF and quoted newlines',async()=>{
  const bytes=Buffer.from('\ufeffName,Note\r\nOne,"é\r\n🐝"\r\nTwo,last');

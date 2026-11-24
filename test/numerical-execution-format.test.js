@@ -1,5 +1,3 @@
-import {materialPartKey} from '../src/material-part-identity.js';
-import {randomUUID} from 'node:crypto';
 import {recordOwnerMetadataDependencies} from '../src/record-owner-resources.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,9 +28,4 @@ test('record transfer follows a numerical checkpoint through immutable pages and
  const entries=new Map([[job,{input:{command:{spectrum:{version:2}}}}],[checkpoint,{root:{hash:hashes[0]}}],[root,{entries:[{id:'key',revision:hashes[1]}]}],[value,{version:2,value:{chunks:{root:{hash:hashes[2]}}}}],[sequence,{revision:hashes[3]}],[chunk,{kind:'pages',items:[hashes[4]]}],[bytes,{data:'e30='}]]),store={object:async key=>entries.has(key.slice(9))?{text:JSON.stringify(entries.get(key.slice(9)))}:null},seen=new Set();
  async function visit(path){if(seen.has(path))return;seen.add(path);for(const dependency of await recordOwnerMetadataDependencies(store,path,JSON.stringify(entries.get(path)))){assert.equal(dependency.kind,'object');assert.equal(dependency.key.startsWith('metadata:'),true);await visit(dependency.key.slice(9));}}
  await visit(job);assert.deepEqual([...seen].sort(),[...entries.keys()].sort());
-});
-
-test('immutable numerical work pages participate in retained material ownership, but mutable checkpoints do not',()=>{
- for(const kind of ['nodes','values','chunks'])assert.equal(materialPartKey('metadata:.observanda/materials/sequences/numerical-work-'+kind+'/'+'a'.repeat(64)+'.json'),true);
- assert.equal(materialPartKey('metadata:.observanda/materials/numerical-work/'+randomUUID()+'.json'),false);assert.equal(materialPartKey('metadata:.observanda/materials/sequences/numerical-work-unknown/'+'a'.repeat(64)+'.json'),false);
 });

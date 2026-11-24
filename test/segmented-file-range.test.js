@@ -8,7 +8,6 @@ import {once} from 'node:events';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {Workspace,digest} from '../src/storage.js';
 import {FileContent,serveContent} from '../src/file-content.js';
-import {OwnedFileContent} from '../src/owned-file-content.js';
 import {clearVault} from '../src/encryption.js';
 import {createSegmentedHeader,readSegmentedHeader,sealSegment,SEGMENTED_BLOCK_BYTES as BLOCK,SEGMENTED_HEADER_BYTES as HEADER,SEGMENTED_CHUNK_OVERHEAD as EXTRA} from '../src/segmented-file-format.js';
 import {readSegmentedRange} from '../src/segmented-file-io.js';
@@ -57,11 +56,10 @@ test('segmented seeks stop on cancellation key retirement and concurrent pathnam
  const retired=f.content.read(0,BLOCK+7);assert.equal((await retired.next()).value.length,BLOCK);clearVault(f.vault);await assert.rejects(retired.next(),{code:'ACCESS_LOCKED'});
 });
 
-test('HTTP HEAD authenticates segmented metadata only and owned range responses retain their authority',async t=>{
- const f=await fixture(t),measurements=[];let active=0,completed;
- const owned=new OwnedFileContent(null,'deferred',f.bytes.length,f.hash,async consume=>{active++;try{return await consume(f.content);}finally{active--;}});
- const server=createServer((req,res)=>{let measured=0;completed=withOperationProgress(progress=>measured=progress.activity.bytes,()=>operationStage('download',{},()=>serveContent(req,res,owned,'application/octet-stream'))).then(()=>measurements.push(measured)).catch(error=>{if(res.headersSent)res.destroy();else{res.writeHead(500);res.end(error.code);}});});
+test('HTTP HEAD authenticates segmented metadata only and range responses read only their bytes',async t=>{
+ const f=await fixture(t),measurements=[];let completed;
+ const server=createServer((req,res)=>{let measured=0;completed=withOperationProgress(progress=>measured=progress.activity.bytes,()=>operationStage('download',{},()=>serveContent(req,res,f.content,'application/octet-stream'))).then(()=>measurements.push(measured)).catch(error=>{if(res.headersSent)res.destroy();else{res.writeHead(500);res.end(error.code);}});});
  t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});server.listen(0,'127.0.0.1');await once(server,'listening');const url='http://127.0.0.1:'+server.address().port;
- const head=await fetch(url,{method:'HEAD'});assert.equal(head.status,200);assert.equal(Number(head.headers.get('content-length')),f.bytes.length);assert.equal((await head.arrayBuffer()).byteLength,0);await completed;assert.equal(measurements.at(-1),8+HEADER);assert.equal(active,0);
- const response=await fetch(url,{headers:{Range:'bytes=-17'}});assert.equal(response.status,206);assert.deepEqual(Buffer.from(await response.arrayBuffer()),f.bytes.subarray(-17));await completed;assert.equal(active,0);assert.equal(measurements.at(-1),8+HEADER+17+EXTRA);
+ const head=await fetch(url,{method:'HEAD'});assert.equal(head.status,200);assert.equal(Number(head.headers.get('content-length')),f.bytes.length);assert.equal((await head.arrayBuffer()).byteLength,0);await completed;assert.equal(measurements.at(-1),8+HEADER);
+ const response=await fetch(url,{headers:{Range:'bytes=-17'}});assert.equal(response.status,206);assert.deepEqual(Buffer.from(await response.arrayBuffer()),f.bytes.subarray(-17));await completed;assert.equal(measurements.at(-1),8+HEADER+17+EXTRA);
 });

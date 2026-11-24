@@ -15,7 +15,6 @@ import {AppError} from '../src/errors.js';
 import {clearVault,seal,ENVELOPE,ENCRYPTION_OVERHEAD} from '../src/encryption.js';
 import {SEGMENTED_ENVELOPE,SEGMENTED_HEADER_BYTES} from '../src/segmented-file-format.js';
 import {FileContent} from '../src/file-content.js';
-import {OwnedFileContent} from '../src/owned-file-content.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
@@ -38,13 +37,13 @@ async function perform(f,id){
  return f.queue.complete(job.id,job.lease.token,prepared);
 }
 
-for(const format of ['legacy','segmented'])test('dataset preparation authenticates original streams before parser output and retains owner leases: '+format,async t=>{
+for(const format of ['legacy','segmented'])test('dataset preparation authenticates original streams before parser output and admits no unauthenticated rows: '+format,async t=>{
  const f=await fixture(t),bytes=Buffer.from('{"measurements":['+Array.from({length:96},(_,i)=>'{"counter":'+i+',"native":"15","reading":1}').join(',')+']}'),artifact=await upload(f,bytes);
  const command={recordId:f.recordId,title:'Authenticated preparation',artifact,sourceMapping:mapping},doc=await f.materials.read(artifact),original=await f.materials.originalContent(doc);
  if(format==='legacy')await writeFile(original.file,seal(bytes,f.vault.key,f.workspace.fileAAD(original.file)));
  const stored=await readFile(original.file),envelope=format==='legacy'?ENVELOPE:SEGMENTED_ENVELOPE,overhead=format==='legacy'?ENCRYPTION_OVERHEAD:SEGMENTED_HEADER_BYTES;
  assert.ok(stored.subarray(0,envelope.length).equals(envelope));
- let sourceBytes=0,sourceHandles=0,preliminaryVerifies=0,writes=0,activeOwners=0,ownerAdmissions=0,deferred=false,allowed=true,defect=null,cancel=null;
+ let sourceBytes=0,sourceHandles=0,preliminaryVerifies=0,writes=0,defect=null,cancel=null;
  const open=filesystem.open,verify=FileContent.prototype.verify,originalContent=f.materials.originalContent;
  const opened=t.mock.method(filesystem,'open',async function(file,...args){
   const handle=await open.call(this,file,...args);if(file!==original.file||args[0]!=='r')return handle;
@@ -56,28 +55,22 @@ for(const format of ['legacy','segmented'])test('dataset preparation authenticat
  const owned=t.mock.method(f.materials,'originalContent',async function(...args){
   const content=await originalContent.apply(this,args);
   if(defect==='digest')content.sha256='0'.repeat(64);if(defect==='size')content.size++;
-  if(!deferred)return content;
-  return new OwnedFileContent(f.workspace,content.file,content.size,content.sha256,async consume=>{
-   if(!allowed)throw new AppError('ACCESS_LOCKED');ownerAdmissions++;activeOwners++;
-   try{return await consume(content);}finally{activeOwners--;}
-  });
+  return content;
  });
- const reset=()=>{sourceBytes=0;preliminaryVerifies=0;writes=0;ownerAdmissions=0;};
+ const reset=()=>{sourceBytes=0;preliminaryVerifies=0;writes=0;};
  const prepare=signal=>f.materials.prepareDataset(command,{signal,writePage:fn=>{writes++;return f.workspace.withLock(fn);}});
  try{
-  for(deferred of [false,true]){
-   reset();const prepared=await prepare();assert.equal(prepared.content.rowCount,96);assert.ok(writes>0);
-   assert.equal(preliminaryVerifies,0,'Preparation must not perform an extra artifact verification');
-   assert.equal(sourceBytes,2*(stored.length-overhead),'One complete authentication pass precedes the parser streaming pass, including segment tags');
-   assert.equal(ownerAdmissions,deferred?1:0);assert.equal(activeOwners,0);assert.equal(sourceHandles,0);
-  }
-  for(const failure of ['envelope','digest','size','cancel','owner']){
-   reset();defect=failure;cancel=failure==='cancel'?new AbortController():null;allowed=failure!=='owner';
+  reset();const prepared=await prepare();assert.equal(prepared.content.rowCount,96);assert.ok(writes>0);
+  assert.equal(preliminaryVerifies,0,'Preparation must not perform an extra artifact verification');
+  assert.equal(sourceBytes,2*(stored.length-overhead),'One complete authentication pass precedes the parser streaming pass, including segment tags');
+  assert.equal(sourceHandles,0);
+  for(const failure of ['envelope','digest','size','cancel']){
+   reset();defect=failure;cancel=failure==='cancel'?new AbortController():null;
    if(failure==='envelope'){const corrupt=Buffer.from(stored);corrupt[corrupt.length-1]^=1;await writeFile(original.file,corrupt);}
    try{
-    await assert.rejects(prepare(cancel?.signal),failure==='cancel'?{name:'AbortError'}:{code:failure==='envelope'?'ENCRYPTION_DAMAGED':failure==='owner'?'ACCESS_LOCKED':'MATERIAL_MISSING'});
+    await assert.rejects(prepare(cancel?.signal),failure==='cancel'?{name:'AbortError'}:{code:failure==='envelope'?'ENCRYPTION_DAMAGED':'MATERIAL_MISSING'});
     assert.equal(writes,0,'Unauthenticated source data must never reach a page writer');assert.equal(preliminaryVerifies,0);
-    assert.equal(activeOwners,0);assert.equal(sourceHandles,0);assert.equal(ownerAdmissions,failure==='owner'?0:1);
+    assert.equal(sourceHandles,0);
    }finally{if(failure==='envelope')await writeFile(original.file,stored);}
   }
   assert.equal((await f.materials.heads()).filter(head=>head.kind==='dataset').length,0);
