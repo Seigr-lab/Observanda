@@ -20,7 +20,7 @@ import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {importOrder} from '../src/migration/import-plan.js';
-import {initialMapping,mappedId} from '../src/migration/import-model.js';
+import {initialMapping} from '../src/migration/import-model.js';
 import {importedArtifactId} from '../src/migration/import-evidence.js';
 import {recordCopies} from './fixtures/record-copies.js';
 import {importContent} from '../src/migration/content.js';
@@ -178,28 +178,26 @@ test('exact dependency cycles and links to exclusions require explicit mapped di
  rows[0].mapping.links[0]={mode:'omit',role:'',reason:'Excluded historical dependency'};assert.deepEqual(importOrder(rows),[1,0]);
 });
 
-test('reviewed evidence repair restores legacy shared-file associations in bounded pages without editing records',async t=>{
+test('reviewed evidence repair restores missing shared-file associations in bounded pages without editing records',async t=>{
  const f=await fixture(t),base=f.declared.manifest.objects[0],raw=JSON.stringify(Object.fromEntries(Array.from({length:22},(_,i)=>['r'+i,{note:'Shared apparatus return '+i}]))),files=[];
  for(const name of ['current-return/analysis.json','historical-input/analysis.json','validation.json'])files.push(await sourceFile(f,name,raw));
  const startIndex=f.declared.manifest.objects.length;f.declared.manifest.objects.push(...Array.from({length:22},(_,i)=>({...base,id:'run-'+i,title:'Run '+i,files:files.map(file=>({...file,selector:{kind:'json-pointer',value:'/r'+i}})),links:[]})));await repin(f);const batch=await ready(f);await f.service.commit({...f.command,review:batch.review});const repairCommand={...f.command,index:startIndex};
  const materials=new ResearchMaterials(f.workspace),before=await f.workspace.read(),records=before.book.entries.filter(r=>r.title.startsWith('Run '));assert.equal(records.length,22);
- // Reproduce the old hash-only identity: one shared original attached once.
+ // Remove every imported association; the shared originals stay stored.
  await f.workspace.withLock(async()=>{
-  let first=true;
   for(const record of records)for(const file of files){
-   const id=importedArtifactId(f.book.id,record.id,file),head=await materials.current(id),doc=await materials.read(head);
-   if(first){const legacy=structuredClone(doc);delete legacy.content.sourcePath;await materials.commit({...legacy,id:mappedId(f.book.id,'import-original',file.sha256)});first=false;}
+   const id=importedArtifactId(f.book.id,record.id,file),head=await materials.current(id);
    await materials.index.removeHead(head);await f.workspace.removeMetadata('.observanda/materials/objects/'+id+'/head.json');
   }
  });
- let plan=await f.service.run('evidenceReview',repairCommand);assert.equal(plan.items.length,50);assert.ok(plan.next.file>0);assert.equal(plan.missing,49);assert.ok(plan.items[0].existing);
+ let plan=await f.service.run('evidenceReview',repairCommand);assert.equal(plan.items.length,50);assert.ok(plan.next.file>0);assert.equal(plan.missing,50);assert.equal(plan.items[0].existing,null);
  await assert.rejects(f.service.run('evidenceRepair',{...f.command,...plan.start,review:'0'.repeat(64)}),{code:'IMPORT_CHANGED'});
  const cancelled=new AbortController();cancelled.abort();await assert.rejects(f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review},{signal:cancelled.signal}));assert.equal((await f.service.run('evidenceReview',repairCommand)).review,plan.review);
  const original=await f.service.store.original(files[0].sha256),savedBytes=await readFile(original.file),corrupt=Buffer.from(savedBytes);corrupt[corrupt.length-1]^=1;
  await writeFile(original.file,corrupt);
  try{await assert.rejects(f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review}),{code:'ENCRYPTION_DAMAGED'});assert.equal((await f.service.run('evidenceReview',repairCommand)).review,plan.review);}
  finally{await writeFile(original.file,savedBytes);}
- const first=await f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review});assert.equal(first.repaired,49);assert.deepEqual(await f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review}),first);
+ const first=await f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review});assert.equal(first.repaired,50);assert.deepEqual(await f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review}),first);
  assert.equal((await f.service.run('evidenceReview',repairCommand)).missing,0);
  plan=await f.service.run('evidenceReview',{...f.command,...plan.next});assert.equal(plan.missing,16);assert.equal(plan.next,null);
  await f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review});assert.equal((await f.workspace.read()).etag,before.etag);

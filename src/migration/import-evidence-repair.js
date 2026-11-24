@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {AppError} from '../errors.js';
 import {recordRevision} from '../research.js';
-import {importHash,mappedId,hashValue} from './import-model.js';
+import {importHash,hashValue} from './import-model.js';
 import {attachImportedEvidence,importedArtifactId} from './import-evidence.js';
 
 // An explicit, bounded repair of associations in an already applied batch.
@@ -23,12 +23,8 @@ export class ImportEvidenceRepair{
     const original=await this.store.read('originals/'+file.sha256);
     if(original.sha256!==file.sha256||original.bytes!==file.bytes)throw new AppError('IMPORT_DAMAGED');
     const matches=doc=>doc.kind==='artifact'&&doc.recordId===record.id&&doc.content.name===name&&doc.content.size===file.bytes&&doc.content.sha256===file.sha256;
-    let existing=head;
+    const existing=head;
     if(head){const doc=await this.materials.read(head);if(!matches(doc)||doc.content.sourcePath!==file.path)throw new AppError('IMPORT_COLLISION');}
-    if(!existing){
-     const legacy=await this.materials.current(mappedId(batch.workspaceId,'import-original',file.sha256));
-     if(legacy){const doc=await this.materials.read(legacy);if(matches(doc)&&(doc.content.sourcePath===file.path||doc.content.sourcePath===undefined&&doc.content.provenance===batch.source.namespace+' / '+file.path))existing=legacy;}
-    }
     items.push({index,file:fileIndex,path:file.path,name,bytes:file.bytes,sha256:file.sha256,storageId:original.storageId,recordId:record.id,title:record.title,available,acquisitionRevision:recordRevision(record),artifactId:id,existing:existing?{kind:existing.kind,id:existing.id,revision:existing.revision}:null});
    }
    if(fileIndex===row.source.files.length){index++;fileIndex=0;rows++;}
