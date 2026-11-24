@@ -343,6 +343,20 @@ export class ObjectIndex{
   const right=await this.change(node.right,successor.id,null,node.id,upper);
   return this.balance(successor.id,successor.revision,node.left,right);
  }
+ // A mutable tree keeps its changed nodes until they are written. A command that
+ // changes many keys writes each node's final version once, in bounded groups,
+ // instead of rewriting the same upper nodes after every key.
+ async writePending({whenLarge=false}={}){
+  if(this.immutable||this.nodeStorage)throw new AppError('INVALID');
+  if(whenLarge&&this.writes.size<4096&&this.pendingBytes<8*1024*1024)return;
+  const store=this.store;
+  function* rows(writes){for(const [key,node] of writes)yield [key,node===null?null:store.encode('state',key,node)];}
+  await writeCatalogueRows(store.db,'state',rows(this.writes));
+  for(const node of this.writes.values())if(node)this.cacheNode({key:digest(node.id),hash:hash(node)},node);
+  this.pending.clear();this.pendingBytes=0;this.writes.clear();
+ }
+ // A failed command's unwritten nodes must never reach a later command.
+ discardPending(){this.pending.clear();this.pendingBytes=0;this.writes.clear();}
  async update(head,id,revision){
   if(!identifier(id)||revision!==null&&!/^[a-f0-9]{64}$/.test(revision))throw new AppError('INVALID');
   await this.persist(await this.change(head.root,id,revision));

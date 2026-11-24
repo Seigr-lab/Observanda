@@ -3,7 +3,6 @@ import {catalogueIndexedCount} from '../postgres-indexes.js';
 // indexes. Its root is pinned by the module head; each member pins the original
 // and its derived facts. No lookup needs a workspace-sized identity array.
 import {ObjectIndex,validIndexRef} from '../object-index.js';
-import {writeCatalogueRows} from '../catalogue-writes.js';
 import {digest,serialize} from '../storage-format.js';
 import {AppError} from '../errors.js';
 import {uuid} from './validation.js';
@@ -58,10 +57,9 @@ export class ModuleMemberIndex{
  async put(root,member){
   const slot='module-member:'+member.id;
   await this.store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',slot,this.store.encode('state',slot,member));
-  const next=await this.tree.change(root,member.id,hash(member)),store=this.store;
-  function* rows(writes){for(const [key,node] of writes)yield [key,node===null?null:store.encode('state',key,node)];}
-  await writeCatalogueRows(store.db,'state',rows(this.tree.writes));
-  for(const node of this.tree.writes.values())if(node)this.tree.cacheNode({key:digest(node.id),hash:hash(node)},node);
-  this.tree.pending.clear();this.tree.pendingBytes=0;this.tree.writes.clear();return next;
+  const next=await this.tree.change(root,member.id,hash(member));await this.tree.writePending({whenLarge:true});return next;
  }
+ // The writer calls this once its changes are complete, before publishing the root.
+ async flush(){await this.tree.writePending();}
+ discardPending(){this.tree.discardPending();}
 }

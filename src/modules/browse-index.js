@@ -1,5 +1,4 @@
 import {ObjectIndex,validIndexRef} from '../object-index.js';
-import {writeCatalogueRows} from '../catalogue-writes.js';
 import {digest,serialize} from '../storage-format.js';
 import {AppError} from '../errors.js';
 import {moduleBrowsePoint as point} from './browse-order.js';
@@ -14,23 +13,19 @@ export class ModuleBrowseIndex{
  static valid(value){return value?.version===1&&Object.keys(value).sort().join()==='root,version'&&validIndexRef(value.root);}
  check(head){const value=head.browseIndex;if(value!==undefined&&(!ModuleBrowseIndex.valid(value)||(value.root?.count??0)!==(head.memberVersion===1?head.root?.count??0:head.entities.length)*4))fail();}
  async flush(){
-  const {tree,store}=this;
-  function* rows(){for(const [key,node] of tree.writes)yield [key,node===null?null:store.encode('state',key,node)];}
-  await writeCatalogueRows(store.db,'state',rows());
-  for(const node of tree.writes.values())if(node)tree.cacheNode({key:digest(node.id),hash:hash(node)},node);
-  tree.pending.clear();tree.pendingBytes=0;tree.writes.clear();
+  await this.tree.writePending();
  }
  async replace(root,before,after,member){
   const next=after?new Set(keys(after)):new Set();
   if(before)for(const key of keys(before))if(!next.has(key))root=await this.tree.change(root,key,null);
   for(const key of next)root=await this.tree.change(root,key,hash(member));
-  await this.flush();return root;
+  await this.tree.writePending({whenLarge:true});return root;
  }
  async prepare(head){
   this.check(head);if(head.browseIndex)return head.browseIndex.root;
   // Upgrade inside the existing command transaction. Reading an old layout
   // never mutates it, and an interrupted first update cannot publish a root.
-  let root=null;for await(const member of this.catalogue.members(head))root=await this.replace(root,null,await this.catalogue.view(head,member),member);return root;
+  let root=null;for await(const member of this.catalogue.members(head))root=await this.replace(root,null,await this.catalogue.view(head,member),member);await this.flush();return root;
  }
  async plan(head,{types=null,sort='title',after=null,status='',kind=null,tags=[],tagMode='all',signal}={}){
   if(status||kind||tags.length)return new ModuleFacetBrowseIndex(this.catalogue).plan(head,{types,sort,after,status,kind,tags,tagMode,signal});

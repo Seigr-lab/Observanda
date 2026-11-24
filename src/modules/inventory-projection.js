@@ -69,23 +69,21 @@ export class InventoryProjection{
   for(let at=lower;at<upper;at++){signal?.throwIfAborted();const entry=await this.tree.entryAt(index,at);if(!entry?.id.startsWith(prefix))fail();yield {id:entry.id,value:await this.value(entry)};}
  }
  async flush(){
-  const {tree,store}=this;function* rows(){for(const [key,node] of tree.writes)yield [key,node===null?null:store.encode('state',key,node)];}
-  await writeCatalogueRows(store.db,'state',rows());for(const node of tree.writes.values())if(node)tree.cacheNode({key:digest(node.id),hash:hash(node)},node);
-  tree.pending.clear();tree.pendingBytes=0;tree.writes.clear();
+  await this.tree.writePending();
  }
  async replace(root,before,after,workspaceId){
   const change=async(id,update)=>{
    const prior=await this.value(await this.tree.find({root},id)),value=update(prior),slot='module-stock-value:'+digest(id),wrapped=value===null?null:{id,value};
    await writeCatalogueRows(this.store.db,'state',[[slot,wrapped===null?null:this.store.encode('state',slot,wrapped)]]);
-   root=await this.tree.change(root,id,wrapped===null?null:hash(wrapped));if(this.tree.writes.size>=128||this.tree.pendingBytes>=1024*1024)await this.flush();
+   root=await this.tree.change(root,id,wrapped===null?null:hash(wrapped));await this.tree.writePending({whenLarge:true});
   };
   if(before)for(const item of inventoryContributions(before,workspaceId))await applyInventoryContribution(change,item,-1);
   if(after)for(const item of inventoryContributions(after,workspaceId))await applyInventoryContribution(change,item,1);
-  await this.flush();return root;
+  await this.tree.writePending({whenLarge:true});return root;
  }
  async prepare(head){
   this.check(head);if(head.stockIndex)return head.stockIndex.root;
-  let root=null;for await(const member of this.catalogue.members(head))root=await this.replace(root,null,await this.catalogue.constraint(head,member),head.workspaceId);return root;
+  let root=null;for await(const member of this.catalogue.members(head))root=await this.replace(root,null,await this.catalogue.constraint(head,member),head.workspaceId);await this.flush();return root;
  }
  async verify(head){
   this.check(head);if(!head.stockIndex)return;

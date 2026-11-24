@@ -165,6 +165,7 @@ export class ModuleCatalogue{
   });
  }
  async writeChanges(previous,entities,event){
+  this.membersIndex.discardPending();
   if(entities.some(usesResourceQuality))await requireResourceQualityFormat(this.store);
   await this.store.assertModuleWrite?.(entities,event);
   const db=this.store.catalogueDb??this.store.db;
@@ -218,6 +219,8 @@ export class ModuleCatalogue{
    stockRoot=await stock.replace(stockRoot,previousConstraint,constraint,previous.workspaceId);
    await s.db.run('INSERT INTO module_entities VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,payload=excluded.payload',e.id,e.revision,s.encode('module-entity',e.id+'/'+e.revision,e));
   }
+  // Write every index's remaining nodes before the head that publishes their roots.
+  await this.membersIndex.flush();await browse.flush();await facets.flush();await stock.flush();
   const data={workspaceId:previous.workspaceId,revision:previous.revision+1,historyVersion:1,memberVersion:1,root,totalBytes,browseIndex:{version:1,root:browseRoot},facetIndex,stockIndex:{version:1,root:stockRoot}};
   if(previous.currentVersion===1||empty)data.currentVersion=1;
   if(previous.viewVersion===1||empty)data.viewVersion=1;

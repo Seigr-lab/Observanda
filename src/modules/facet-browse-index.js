@@ -1,5 +1,4 @@
 import {ObjectIndex,validIndexRef} from '../object-index.js';
-import {writeCatalogueRows} from '../catalogue-writes.js';
 import {digest,serialize} from '../storage-format.js';
 import {AppError} from '../errors.js';
 import {resourceTagKey,validResourceTags} from '../web/modules/resource-tags.js';
@@ -29,14 +28,12 @@ export class ModuleFacetBrowseIndex{
   if(!value||value.version!==1||Object.keys(value).sort().join()!=='root,types,version'||!validIndexRef(value.root)||!Array.isArray(value.types)||value.types.some(type=>!moduleDomainOf(type))||new Set(value.types).size!==value.types.length||value.types.join()!==[...value.types].sort().join()||entries<count*2||entries>count*54||!count&&value.types.length||count&&!value.types.length)fail();
  }
  async flush(){
-  const {tree,store}=this;function* rows(){for(const [key,node] of tree.writes)yield [key,node===null?null:store.encode('state',key,node)];}
-  await writeCatalogueRows(store.db,'state',rows());for(const node of tree.writes.values())if(node)tree.cacheNode({key:digest(node.id),hash:hash(node)},node);
-  tree.pending.clear();tree.pendingBytes=0;tree.writes.clear();
+  await this.tree.writePending();
  }
  async replace(index,before,after,beforeConstraint,afterConstraint,member){
   let root=index.root;const next=new Set(keys(after,afterConstraint));
   if(before)for(const key of keys(before,beforeConstraint))if(!next.has(key))root=await this.tree.change(root,key,null);
-  for(const key of next)root=await this.tree.change(root,key,hash(member));await this.flush();
+  for(const key of next)root=await this.tree.change(root,key,hash(member));await this.tree.writePending({whenLarge:true});
   return {version:1,root,types:[...new Set([...index.types,after.type])].sort()};
  }
  async prepare(head){
@@ -45,7 +42,7 @@ export class ModuleFacetBrowseIndex{
   // As with the existing browse projection, the first command upgrades within
   // its fenced transaction. Reads of older layouts remain strictly read-only.
   for await(const member of this.catalogue.members(head)){const view=await this.catalogue.view(head,member),constraint=view.type==='resource'?await this.catalogue.constraint(head,member):null;index=await this.replace(index,null,view,null,constraint,member);}
-  return index;
+  await this.flush();return index;
  }
  async plan(head,{types=null,sort='title',after=null,status='',kind=null,tags=[],tagMode='all',signal}={}){
   this.check(head);if(!head.facetIndex)return null;if(!['title','created-desc'].includes(sort))throw new AppError('INVALID');
