@@ -50,18 +50,12 @@ test('accepted work grows beyond 512 and lease lookup stays bounded after a thou
  t.diagnostic(JSON.stringify({accepted:intents.length,totalMs:Math.round(performance.now()-began),lateClaimJobReads:1,lateClaimIndexPagesAtMost:4}));
 });
 
-test('legacy queues upgrade with their first mutation and roll back an interrupted index build',async t=>{
- const f=await fixture(t),one=f.intent(),two=f.intent('publication.deploy'),now=new Date().toISOString();
- const job=intent=>({format:1,...intent,state:'queued',attempt:0,lease:null,cancelRequested:false,progress:{stage:'queued',done:0,total:0},result:null,error:null,createdAt:now,updatedAt:now});
- await f.workspace.withLock(async()=>{for(const intent of [one,two])await f.workspace.writeMetadata(f.queue.file(intent.id),JSON.stringify(job(intent)));await f.workspace.writeMetadata('.observanda/jobs/queue.json',JSON.stringify([one.id,two.id]));});
- assert.equal(await f.queue.hasActive(['publication.deploy']),true);const write=f.workspace.writeMetadata.bind(f.workspace);let interrupted=false;
- f.workspace.writeMetadata=async(name,...args)=>{if(!interrupted&&name.startsWith('.observanda/jobs/pending/')){interrupted=true;throw new AppError('STORAGE_FULL');}return write(name,...args);};
- await assert.rejects(f.queue.claim(),{code:'STORAGE_FULL'});f.workspace.writeMetadata=write;
- assert.deepEqual(JSON.parse(await f.workspace.readMetadata('.observanda/jobs/queue.json')),[one.id,two.id]);assert.equal((await f.queue.read(one.id)).state,'queued');
- const leased=await f.queue.claim();assert.equal(leased.id,one.id);assert.equal(JSON.parse(await f.workspace.readMetadata('.observanda/jobs/queue.json')).format,2);
- assert.equal((await f.queue.claim()).id,two.id);assert.equal(await f.queue.claim(),null);
- const fresh=f.create(new Workspace(f.workspace.root,f.vault));await fresh.pulse(leased.id,leased.lease.token,{stage:'Working',done:1,total:2});
- await fresh.control(one.id,'cancel');await fresh.release(one.id,leased.lease.token);assert.deepEqual(await fresh.status(),{active:1});
+test('a queue stored as a bare list of job ids is refused without touching the jobs',async t=>{
+ const f=await fixture(t),one=f.intent(),now=new Date().toISOString();
+ const job={format:1,...one,state:'queued',attempt:0,lease:null,cancelRequested:false,progress:{stage:'queued',done:0,total:0},result:null,error:null,createdAt:now,updatedAt:now};
+ await f.workspace.withLock(async()=>{await f.workspace.writeMetadata(f.queue.file(one.id),JSON.stringify(job));await f.workspace.writeMetadata('.observanda/jobs/queue.json',JSON.stringify([one.id]));});
+ await assert.rejects(f.queue.hasActive(),{code:'JOB_DAMAGED'});await assert.rejects(f.queue.claim(),{code:'JOB_DAMAGED'});await assert.rejects(f.queue.status(),{code:'JOB_DAMAGED'});
+ assert.deepEqual(JSON.parse(await f.workspace.readMetadata('.observanda/jobs/queue.json')),[one.id]);assert.equal((await f.queue.read(one.id)).state,'queued');
 });
 
 test('indexed queue rejects a malformed header and a detached scheduling pointer without losing accepted work',async t=>{

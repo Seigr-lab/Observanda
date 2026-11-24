@@ -20,7 +20,7 @@ const same=(a,b)=>digest(serialize(a))===digest(serialize(b));
 const jobWrites=new AsyncLocalStorage();
 export const jobSummary=job=>job&&({...Object.fromEntries(['id','type','scope','state','attempt','progress','result','error','cancelRequested','createdAt','updatedAt'].map(key=>[key,job[key]])),diagnostic:job.diagnostic??null,message:job.state==='relocated'?safeError(new AppError('JOB_RELOCATED')).message:job.error?safeError(new AppError(job.error)).message:null});
 export class DurableJobs{
- constructor(workspace,definitions,{leaseMs=30000,observe=()=>{}}={}){this.workspace=workspace;this.definitions=definitions;this.leaseMs=leaseMs;this.observe=observe;this.pendingWrite=Promise.resolve();this.membership=new JobQueueIndex(workspace,id=>this.read(id));this.relocations=new JobRelocations(workspace);}
+ constructor(workspace,definitions,{leaseMs=30000,observe=()=>{}}={}){this.workspace=workspace;this.definitions=definitions;this.leaseMs=leaseMs;this.observe=observe;this.pendingWrite=Promise.resolve();this.membership=new JobQueueIndex(workspace);this.relocations=new JobRelocations(workspace);}
  file(id){if(!researchId(id))throw new AppError('INVALID');return '.observanda/jobs/'+id+'.json';}
  async now(){return this.workspace.catalogue(async store=>Number((await store.db.get('SELECT extract(epoch FROM clock_timestamp()) * 1000 AS now')).now));}
  async read(id){return this.workspace.catalogue(()=>this.readStored(id));}

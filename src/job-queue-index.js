@@ -10,14 +10,12 @@ const deadline=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0&
 const padded=value=>String(value).padStart(16,'0');
 const active=job=>['queued','running'].includes(job.state);
 export class JobQueueIndex{
- constructor(workspace,readJob){this.workspace=workspace;this.readJob=readJob;}
+ constructor(workspace){this.workspace=workspace;}
  async json(name,limit=4096){const raw=await this.workspace.readMetadata(name,limit);if(raw===null)return null;try{const value=JSON.parse(raw);if(value===null)fail();return value;}catch{fail();}}
  async put(name,value){await this.workspace.writeMetadata(name,JSON.stringify(value));}
  async head(){
   const value=await this.json(file,65536);
   if(value===null)return {format:2,count:0,next:0};
-  // This bounded array is read only to upgrade old installations atomically.
-  if(Array.isArray(value)){if(value.length>512||value.some(id=>!researchId(id))||new Set(value).size!==value.length)fail();return {legacy:value};}
   if(value.format!==2||!ordinal(value.count)||!ordinal(value.next)||value.count>value.next)fail();return value;
  }
  path(member){return member.until===null?root+'/pending/'+padded(member.ticket)+'-'+member.id+'.json':root+'/leases/'+padded(Math.ceil(member.until))+'-'+padded(member.ticket)+'-'+member.id+'.json';}
@@ -26,12 +24,6 @@ export class JobQueueIndex{
  async member(id){const value=await this.json(this.memberFile(id));if(value!==null&&(!this.valid(value)||value.id!==id))fail();return value;}
  async typeCount(type){const value=await this.json(root+'/types/'+digest(type)+'.json');if(value!==null&&(value.type!==type||!ordinal(value.count)||!value.count))fail();return value?.count??0;}
  async changeType(type,delta){const count=await this.typeCount(type)+delta;if(!ordinal(count))fail();const name=root+'/types/'+digest(type)+'.json';if(count)await this.put(name,{type,count});else await this.workspace.removeMetadata(name);}
- async ensure(){
-  const head=await this.head();if(!head.legacy)return head;
-  const next={format:2,count:0,next:0};
-  for(const id of head.legacy){const job=await this.readJob(id);if(!job||!active(job))fail();await this.insert(job,next);}
-  await this.put(file,next);return next;
- }
  async insert(job,head){
   if(!ordinal(head.next+1)||!ordinal(head.count+1)||!active(job)||await this.member(job.id))fail();
   const member={id:job.id,ticket:head.next++,type:job.type,until:job.state==='running'?job.lease.until:null};if(!this.valid(member))fail();
@@ -40,7 +32,7 @@ export class JobQueueIndex{
  // Called in the same writer transaction as the job document. Queue pointers
  // cannot survive a refused commit or refer to an unaccepted command.
  async update(job){
-  const head=await this.ensure(),member=await this.member(job.id);
+  const head=await this.head(),member=await this.member(job.id);
   if(!active(job)){
    if(!member)return;
    if(member.type!==job.type||!head.count)fail();
@@ -60,7 +52,6 @@ export class JobQueueIndex{
  }
  async candidate(now){
   const head=await this.head();
-  if(head.legacy){for(const id of head.legacy){const job=await this.readJob(id);if(!job||!active(job))fail();if(job.state==='queued'||job.lease.until<=now)return id;}return null;}
   if(!head.count)return null;
   // An expired lease is recoverable work. Future leases never require scanning
   // every running job before accepting another pending command.
@@ -69,9 +60,8 @@ export class JobQueueIndex{
  }
  async has(types=null,{except=[]}={}){
   const head=await this.head(),excluded=new Set(except),counted=type=>(types?types.includes(type):true)&&!excluded.has(type);
-  if(head.legacy){if(!types&&!excluded.size)return head.legacy.length>0;for(const id of head.legacy){const job=await this.readJob(id);if(!job||!active(job))fail();if(counted(job.type))return true;}return false;}
   if(!types){let count=head.count;for(const type of excluded)count-=await this.typeCount(type);return count>0;}
   for(const type of types)if(counted(type)&&await this.typeCount(type))return true;return false;
  }
- async status(){const head=await this.head();return {active:head.legacy?.length??head.count};}
+ async status(){const head=await this.head();return {active:head.count};}
 }
