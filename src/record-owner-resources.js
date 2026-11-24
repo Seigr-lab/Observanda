@@ -11,7 +11,7 @@ import path from 'node:path';
 import {lstat,open,unlink} from 'node:fs/promises';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
-import {assertRecordOwnerTransferAuthority,readRecordOwnerTransfer} from './record-owner-transfer-state.js';
+import {assertRecordOwnerTransferAuthority,recordOwnerTransferAuthority,readRecordOwnerTransfer} from './record-owner-transfer-state.js';
 import {checkpointedFileName} from './checkpointed-file-copy.js';
 import {withWriterLease,writerLeaseHeld} from './writer-lease.js';
 import {FileContent} from './file-content.js';
@@ -38,7 +38,7 @@ async function get(store,slot){const row=await store.db.get('SELECT payload FROM
 async function put(store,slot,value){return mutation.run(store,()=>store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',slot,store.encode('state',slot,value)));}
 async function remove(store,slot){return mutation.run(store,()=>store.db.run('DELETE FROM state WHERE slot=$1',slot));}
 async function page(store,prefix,{reverse=false,limit=32}={}){return store.db.all('SELECT slot,payload FROM state WHERE slot COLLATE "C">=$1 AND slot COLLATE "C"<$2 ORDER BY slot COLLATE "C" '+(reverse?'DESC':'ASC')+' LIMIT '+limit,prefix,prefix+'~');}
-function authority(store){try{return assertRecordOwnerTransferAuthority(store)??null;}catch(error){if(error.code!=='RECORD_TRANSFER_BUSY')throw error;return null;}}
+const authority=recordOwnerTransferAuthority;
 function contextLifetime(store){
  const held=catalogueContext.getStore(),workspace=store.workspace;
  // A connection can outlive many commits. Only the exact writer scope or a

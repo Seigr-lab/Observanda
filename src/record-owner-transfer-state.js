@@ -63,8 +63,13 @@ export function recordOwnerTransferStatus(value){
  return {id:value.id,workspaceId:value.command.workspaceId,recordId:value.command.recordId,sourceNotebookId:value.command.sourceNotebookId,expectedStorageRevision:value.command.expectedStorageRevision,sourceOwner:structuredClone(value.sourceOwner),targetOwner:structuredClone(value.targetOwner),targetNotebookId:value.command.targetNotebookId,phase:value.phase,progress:structuredClone(value.progress),canResume:!['complete','cancelled'].includes(value.phase)||recordOwnerReclamationPending(value),canCancel:['copying','verified'].includes(value.phase),result:structuredClone(value.result)};
 }
 
+// Ordinary writes run outside any transfer, so asking whether one is active must
+// not build an error: owner tracking asks this for every retained value.
+export function recordOwnerTransferAuthority(store){
+ const allowed=permitted.getStore();return allowed?.workspace===store.workspace?allowed:null;
+}
 export function assertRecordOwnerTransferAuthority(store){
- const allowed=permitted.getStore();if(allowed?.workspace!==store.workspace)throw new AppError('RECORD_TRANSFER_BUSY');return allowed;
+ const allowed=recordOwnerTransferAuthority(store);if(!allowed)throw new AppError('RECORD_TRANSFER_BUSY');return allowed;
 }
 // A returned identity may reuse only the former owner's completed outgoing
 // authority. The engine additionally proves that exact original at its source.
