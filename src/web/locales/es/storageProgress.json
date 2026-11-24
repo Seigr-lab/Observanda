@@ -50,7 +50,6 @@
   "verify-modules": "Verificando los datos de módulos",
   "verify-domain-objects": "Verificando los metadatos de módulos",
   "verify-module-drafts": "Verificando las modificaciones de módulos sin terminar",
-  "verify-analysis": "Verificando los registros de análisis",
   "verify-reviews": "Verificando los ámbitos de revisión",
   "verify-imports": "Verificando la procedencia de las importaciones",
   "verify-evidence": "Verificando las evidencias y los conjuntos de datos",

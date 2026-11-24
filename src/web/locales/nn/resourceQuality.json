@@ -58,6 +58,5 @@
   "revision": "Oppføringsrevisjon",
   "useLot": "Materialparti",
   "readOnlyLot": "Det lagra partinummeret identifiserer lagerjournalen.",
-  "runInputsUnavailable": "Dette laboratoriet vart oppretta med ein tidlegare versjon av Observanda og kan ikkje registrere parti og utstyr brukte i ei køyring.",
   "heldAtRun": "Elementet var halde tilbake då køyringa vart registrert."
 }

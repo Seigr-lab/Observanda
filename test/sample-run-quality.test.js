@@ -151,11 +151,6 @@ test('printed and issued result sheets show readiness at run start in the reques
  assert.ok((await s.service.report(created.selectedId,reviewed.etag,[],{language:'xx'})).includes('<section lang="en" data-run-quality>'),'Unknown languages fall back to English');
 });
 
-test('laboratory pages say that run inputs can be recorded',async t=>{
- const s=await fixture(t);
- assert.equal((await s.reader.query({workspaceId:s.book.id,view:'samples'})).runInputs,true);
- assert.equal((await s.reader.query({workspaceId:s.book.id,view:'analyses'})).runInputs,true);
-});
 
 test('a blocked run answers 409 with its readiness details',async t=>{
  const s=await fixture(t),equipment=await s.create('Blocked meter','equipment',instrument({policy:policy({run:'block'})}));

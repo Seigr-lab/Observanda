@@ -58,6 +58,5 @@
   "revision": "Item revision",
   "useLot": "Material lot",
   "readOnlyLot": "Saved lot numbers identify their stock ledger.",
-  "runInputsUnavailable": "This laboratory was created by an earlier version of Observanda and cannot record the lots and equipment used in a run.",
   "heldAtRun": "The item was on hold when the run was recorded."
 }

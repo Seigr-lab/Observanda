@@ -1,5 +1,4 @@
 import {sampleAnalysisDomain,sampleAnalysisTransaction} from './sample-analysis-storage.js';
-import { randomUUID } from 'node:crypto';
 import { Workspace, digest, serialize } from './storage.js';
 import { AppError } from './errors.js';
 import { escapeHTML } from './publication.js';
@@ -8,7 +7,6 @@ import {observeRunQuality} from './sample-run-quality.js';
 import {runQualitySection} from './sample-run-quality-report.js';
 import {SampleAnalysisCatalogue} from './sample-analysis-catalogue.js';
 
-import {blank,validateLab,applySampleAnalysisCommand} from './sample-analysis-model.js';
 export {resultFlag} from './sample-analysis-model.js';
 import {resultFlag} from './sample-analysis-model.js';
 import {displaySampleScalar} from './web/sample-result-format.js';
@@ -19,15 +17,14 @@ const recordRevisions=lab=>Object.fromEntries([...lab.samples,...lab.analyses].m
 
 export class Laboratory {
   constructor(root, vault = null) { this.workspace = root instanceof Workspace?root:new Workspace(root,vault); }
+  // Samples and analyses live in the owner's samples domain.
   async catalogue(operation,options={}){
-    const namespaceId=await sampleAnalysisDomain(this.workspace);
-    return namespaceId===null?this.workspace.catalogue(operation):sampleAnalysisTransaction(this.workspace,namespaceId,operation,options);
+    return sampleAnalysisTransaction(this.workspace,await sampleAnalysisDomain(this.workspace),operation,options);
   }
   async read({revisions=true}={}) {
     return this.catalogue(async store=>{
-      const owner=new SampleAnalysisCatalogue(store),source=await owner.source();
-      if(source){const lab=await owner.assemble(source);return {lab,etag:source.etag,recordRevisions:revisions?recordRevisions(lab):{}};}
-      const lab=await store.object('laboratory');return {lab:validateLab(lab),etag:digest(serialize(lab)),recordRevisions:revisions?recordRevisions(lab):{}};
+      const owner=new SampleAnalysisCatalogue(store),source=await owner.source(),lab=await owner.assemble(source);
+      return {lab,etag:source.etag,recordRevisions:revisions?recordRevisions(lab):{}};
     });
   }
   async change(command,{compact=false,commandId=null,signal,check}={}) {
@@ -35,10 +32,8 @@ export class Laboratory {
     const verifyResult = result => verifySampleResultSources(this.workspace,result,{signal});
     const domain=await sampleAnalysisDomain(this.workspace);
     const hasRunInputs=command.action==='create-analysis'&&Object.hasOwn(command.analysis??{},'runInputs');
-    if(domain===null&&hasRunInputs)throw new AppError('ACCESS_UPGRADE');
-    if(domain!==null)return sampleAnalysisTransaction(this.workspace,domain,async(store,inventory)=>{
+    return sampleAnalysisTransaction(this.workspace,domain,async(store,inventory)=>{
       const fingerprint=digest(serialize(command)),receipt=commandId?await store.object('laboratory-command/'+commandId):null,owner=new SampleAnalysisCatalogue(store),source=await owner.source();
-      if(!source)throw new AppError('CATALOGUE_DAMAGED');
       let result;
       if(receipt){if(receipt.fingerprint!==fingerprint)throw new AppError('LAB_STALE');result=receipt.result;}
       else{
@@ -48,58 +43,13 @@ export class Laboratory {
       if(compact)return result;
       const current=await owner.source(),lab=await owner.assemble(current);return {lab,etag:current.etag,recordRevisions:recordRevisions(lab),selectedId:result.selectedId};
     },{write:true,inventory:hasRunInputs,signal,check});
-    const {expectedRecordRevision,...data}=command;
-    return this.workspace.withLock(async () => {
-      const fingerprint=digest(serialize(command));
-      if(commandId){
-        const receipt=await this.catalogue(store=>store.object('laboratory-command/'+commandId));
-        if(receipt){if(receipt.fingerprint!==fingerprint)throw new AppError('LAB_STALE');return compact?receipt.result:{...await this.read(),selectedId:receipt.result.selectedId};}
-      }
-      const changed=await this.catalogue(async store=>{
-        const owner=new SampleAnalysisCatalogue(store),source=await owner.source();if(!source)return null;
-        const next=commandId&&['create-sample','create-analysis'].includes(command.action)?{...command,etag:source.etag}:command;
-        const result=await owner.change(source,next,{verifyResult});
-        if(commandId)await store.putObject('laboratory-command/'+commandId,{fingerprint,result});return result;
-      });
-      if(changed)return compact?changed:{...await this.read(),selectedId:changed.selectedId};
-      const current = await this.read();
-      if(expectedRecordRevision!==undefined){
-        if(!id(data.id)||typeof expectedRecordRevision!=='string'||!/^[a-f0-9]{64}$/.test(expectedRecordRevision)||current.recordRevisions[data.id]!==expectedRecordRevision)throw new AppError('LAB_STALE');
-      }else if (data.etag !== current.etag&&!(commandId&&['create-sample','create-analysis'].includes(data.action))) throw new AppError('LAB_STALE');
-      const lab = structuredClone(current.lab), now = new Date().toISOString();
-      const existing=lab.analyses.find(a=>a.id===data.id),sourceSample=lab.samples.find(s=>s.id===(data.analysis?.sampleId??existing?.sampleId));
-      const {record,actor,reason}=applySampleAnalysisCommand(data,{existing,sourceSample,now});
-      if(record.result?.provenance && !['amend','archive'].includes(data.action))await verifyResult(record.result);
-      if(data.action==='create-sample')lab.samples.push(record);else if(data.action==='create-analysis')lab.analyses.push(record);else lab.analyses[lab.analyses.findIndex(a=>a.id===record.id)]=record;
-      const event = { id: randomUUID(), at: now, action: data.action, recordId: record.id, actor, reason, previous: lab.events.at(-1)?.hash ?? '' };
-      lab.events.push({ ...event, hash: digest(serialize(event)) }); lab.revision++;
-      validateLab(lab);
-      const result={etag:digest(serialize(lab)),selectedId:record.id,recordRevision:digest(serialize(record))};
-      await this.catalogue(async store=>{
-        if(current.etag!=='new')await store.putObject('laboratory-history/'+current.etag,current.lab);
-        await store.putObject('laboratory',lab);
-        if(commandId)await store.putObject('laboratory-command/'+commandId,{fingerprint,result});
-      });
-      return compact?result:{...await this.read(),selectedId:record.id};
-    });
   }
   async snapshot(expectedEtag=null,{retained=true}={}) {
-    const found=await this.catalogue(async store=>{const owner=new SampleAnalysisCatalogue(store),source=await owner.source(expectedEtag,{retained});return source?{lab:await owner.assemble(source),etag:source.etag}:null;});
-    if(found)return found;
-    let current = await this.read({revisions:false});
-    if (expectedEtag !== null && expectedEtag !== current.etag) {
-      if(retained&&expectedEtag==='new')return {lab:blank(),etag:'new',recordRevisions:{}};
-      if(!retained||typeof expectedEtag!=='string'||!/^[a-f0-9]{64}$/.test(expectedEtag))throw new AppError('LAB_STALE');
-      const lab=await this.catalogue(store=>store.object('laboratory-history/'+expectedEtag));
-      if(!lab)throw new AppError('NOT_FOUND');if(digest(serialize(lab))!==expectedEtag)throw new AppError('LAB_INVALID');
-      current={lab:validateLab(lab),etag:expectedEtag};
-    }
-    return current;
+    return this.catalogue(async store=>{const owner=new SampleAnalysisCatalogue(store),source=await owner.source(expectedEtag,{retained});return {lab:await owner.assemble(source),etag:source.etag};});
   }
   async report(id, expectedEtag, blockedValues = [], {retained=false,language='en'}={}) {
-    const selected=await this.catalogue(async store=>{const owner=new SampleAnalysisCatalogue(store),source=await owner.source(expectedEtag,{retained});return source?{analysis:(await owner.selected(source,'analysis',id)).record,revision:source.head.revision}:null;});
-    const current=selected?null:await this.snapshot(expectedEtag,{retained});
-    const a = selected?.analysis??current.lab.analyses.find(item => item.id === id);
+    const selected=await this.catalogue(async store=>{const owner=new SampleAnalysisCatalogue(store),source=await owner.source(expectedEtag,{retained});return {analysis:(await owner.selected(source,'analysis',id)).record,revision:source.head.revision};});
+    const a = selected.analysis;
     if (!a || !['approved', 'archived'].includes(a.status)) throw new AppError('LAB_TRANSITION');
     assertPublicFields([{ field: 'result sheet', value: JSON.stringify(a) }], blockedValues);
     const esc = escapeHTML, s = a.review.sample, r = a.result, runQuality = await runQualitySection(a.runQuality, {language, esc});
@@ -109,6 +59,6 @@ export class Laboratory {
     const roles = {reading:'Result source',method:'Method record',calibration:'Calibration',evidence:'Supporting evidence'};
     const references = Object.entries(r.provenance??{}).map(([role,{ref,cell}]) =>
       `<dt>${roles[role]}</dt><dd>${esc(ref.kind)} <code>${esc(ref.id)}</code> &middot; workspace <code>${esc(ref.workspaceId)}</code> &middot; revision <code>${esc(ref.revision)}</code>${cell ? ` &middot; page ${cell.page+1}, row ${cell.row+1}, column ${cell.column+1}` : ''}</dd>`).join('');
-    return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Result sheet ${esc(a.code)}</title><link rel="stylesheet" href="/report.css"><main><p>Observanda / Laboratory results</p><h1>Result sheet</h1><p>Analysis <strong>${esc(a.code)}</strong> &middot; ${esc(a.status)}</p><dl><dt>Sample</dt><dd>${esc(s.code)}</dd><dt>Material</dt><dd>${esc(s.material)}</dd><dt>Source reference</dt><dd>${esc(s.source || 'Not specified')}</dd><dt>Collected / received</dt><dd>${s.collectedOn} / ${s.receivedOn}</dd><dt>Method and version</dt><dd>${esc(r.method)}</dd>${references}</dl><table><thead><tr><th>Analyte</th><th>Result</th><th>Unit</th><th>Specified interval</th><th>Flag</th></tr></thead><tbody><tr><td>${esc(r.analyte)}</td><td>${reading(r.value)}</td><td>${esc(r.unit)}</td><td>${reading(r.lower)} to ${reading(r.upper)}</td><td>${resultFlag(r)}</td></tr></tbody></table><p>${esc(r.notes)}</p>${runQuality}<h2>Recorded review</h2><p>${esc(a.review.reviewer)} &middot; ${esc(a.review.at)}</p><p>${esc(a.review.comment)}</p><p class="muted">Reviewer names are locally entered acknowledgments. This installation does not authenticate reviewer identity or provide electronic signatures.</p><footer>Result revision: ${a.review.hash}<br>Laboratory revision: ${selected?.revision??current.lab.revision}</footer><p class="screen-only">Use your browser's Print command to print or save this sheet as PDF. This private sheet is excluded from website publication.</p></main></html>`;
+    return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Result sheet ${esc(a.code)}</title><link rel="stylesheet" href="/report.css"><main><p>Observanda / Laboratory results</p><h1>Result sheet</h1><p>Analysis <strong>${esc(a.code)}</strong> &middot; ${esc(a.status)}</p><dl><dt>Sample</dt><dd>${esc(s.code)}</dd><dt>Material</dt><dd>${esc(s.material)}</dd><dt>Source reference</dt><dd>${esc(s.source || 'Not specified')}</dd><dt>Collected / received</dt><dd>${s.collectedOn} / ${s.receivedOn}</dd><dt>Method and version</dt><dd>${esc(r.method)}</dd>${references}</dl><table><thead><tr><th>Analyte</th><th>Result</th><th>Unit</th><th>Specified interval</th><th>Flag</th></tr></thead><tbody><tr><td>${esc(r.analyte)}</td><td>${reading(r.value)}</td><td>${esc(r.unit)}</td><td>${reading(r.lower)} to ${reading(r.upper)}</td><td>${resultFlag(r)}</td></tr></tbody></table><p>${esc(r.notes)}</p>${runQuality}<h2>Recorded review</h2><p>${esc(a.review.reviewer)} &middot; ${esc(a.review.at)}</p><p>${esc(a.review.comment)}</p><p class="muted">Reviewer names are locally entered acknowledgments. This installation does not authenticate reviewer identity or provide electronic signatures.</p><footer>Result revision: ${a.review.hash}<br>Laboratory revision: ${selected.revision}</footer><p class="screen-only">Use your browser's Print command to print or save this sheet as PDF. This private sheet is excluded from website publication.</p></main></html>`;
   }
 }

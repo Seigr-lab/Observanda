@@ -50,7 +50,6 @@
   "verify-modules": "Verifying module data",
   "verify-domain-objects": "Verifying module metadata",
   "verify-module-drafts": "Verifying unfinished module edits",
-  "verify-analysis": "Verifying analysis records",
   "verify-reviews": "Verifying review scopes",
   "verify-imports": "Verifying import provenance",
   "verify-evidence": "Verifying evidence and datasets",

@@ -9,7 +9,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {Laboratory} from '../src/laboratory.js';
 import {SampleAnalysisReader} from '../src/sample-analysis-reader.js';
-import {SampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
+import {SampleAnalysisCatalogue,verifySampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
 import {seedSampleAnalysis} from './sample-analysis-fixture.js';
 import {blank} from '../src/sample-analysis-model.js';
 import {digest,serialize} from '../src/storage-format.js';
@@ -22,18 +22,12 @@ async function fixture(t,count){
  return {...f,book,lab,service,reader:new SampleAnalysisReader(service)};
 }
 
-test('a bounded native sample edit advances an old head without reindexing or changing retained history',async t=>{
- const f=await fixture(t,2);let old,etag;
- await f.service.catalogue(async store=>{old=await store.object('laboratory');old.formatVersion=2;etag=digest(serialize(old));await store.putObject('laboratory',old);},{write:true});
- const prior=await f.reader.query({workspaceId:f.book.id,view:'samples'}),saved=await f.service.change({action:'create-sample',etag,sample:sample('S-new')},{compact:true});
- assert.equal(prior.etag,etag);assert.notEqual(saved.etag,etag);
- await f.service.catalogue(async store=>{
-  const owner=new SampleAnalysisCatalogue(store),current=await owner.source(),retained=await owner.source(etag);
-  assert.equal(current.head.formatVersion,3);assert.deepEqual(retained.head,old);
-  assert.deepEqual((await owner.assemble(retained)).samples,f.lab.samples);
-  await owner.verify(current);await owner.verify(retained);
- });
- assert.deepEqual((await f.reader.query({workspaceId:f.book.id,view:'samples',cursor:prior.cursor})).items,prior.items);
+test('a laboratory head from before version 3 is refused as an earlier format',async t=>{
+ const f=await fixture(t,2);let etag;
+ await f.service.catalogue(async store=>{const old=await store.object('laboratory');old.formatVersion=2;etag=digest(serialize(old));await store.putObject('laboratory',old);},{write:true});
+ await assert.rejects(f.reader.query({workspaceId:f.book.id,view:'samples'}),{code:'ACCESS_UPGRADE'});
+ await assert.rejects(f.service.change({action:'create-sample',etag,sample:sample('S-new')},{compact:true}),{code:'ACCESS_UPGRADE'});
+ await assert.rejects(f.service.catalogue(store=>verifySampleAnalysisCatalogue(store)),{code:'ACCESS_UPGRADE'});
 });
 
 test('more than five thousand retained samples remain editable and directly pageable',async t=>{

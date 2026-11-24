@@ -50,7 +50,6 @@
   "verify-modules": "S'estan verificant les dades dels mòduls",
   "verify-domain-objects": "S'estan verificant les metadades dels mòduls",
   "verify-module-drafts": "S'estan verificant les modificacions inacabades dels mòduls",
-  "verify-analysis": "S'estan verificant els registres d'anàlisi",
   "verify-reviews": "S'estan verificant els àmbits de revisió",
   "verify-imports": "S'està verificant la procedència de les importacions",
   "verify-evidence": "S'estan verificant les evidències i els conjunts de dades",

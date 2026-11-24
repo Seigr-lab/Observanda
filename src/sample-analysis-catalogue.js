@@ -24,13 +24,9 @@ function logicalBytes(head){
 }
 function validHead(head){
  if(!head||Object.keys(head).sort().join()!=='bytes,counts,formatVersion,lastEventHash,revision,root')fail();
- if(!head||![2,3].includes(head.formatVersion)||!Number.isSafeInteger(head.revision)||head.revision<0||!validIndexRef(head.root)||!head.counts||Object.keys(head.counts).sort().join()!==[...countKeys].sort().join()||Object.values(head.counts).some(v=>!Number.isSafeInteger(v)||v<0)||!head.bytes||Object.keys(head.bytes).sort().join()!=='analyses,events,samples'||Object.values(head.bytes).some(v=>!Number.isSafeInteger(v)||v<0)||typeof head.lastEventHash!=='string'||(head.counts.events?!/^[a-f0-9]{64}$/.test(head.lastEventHash):head.lastEventHash!==''))fail();
+ if(!head||head.formatVersion!==3||!Number.isSafeInteger(head.revision)||head.revision<0||!validIndexRef(head.root)||!head.counts||Object.keys(head.counts).sort().join()!==[...countKeys].sort().join()||Object.values(head.counts).some(v=>!Number.isSafeInteger(v)||v<0)||!head.bytes||Object.keys(head.bytes).sort().join()!=='analyses,events,samples'||Object.values(head.bytes).some(v=>!Number.isSafeInteger(v)||v<0)||typeof head.lastEventHash!=='string'||(head.counts.events?!/^[a-f0-9]{64}$/.test(head.lastEventHash):head.lastEventHash!==''))fail();
  if(!Number.isSafeInteger(head.counts.analyses+head.counts.archive)||!Number.isSafeInteger(head.counts.review+head.counts.approved)||head.counts.review+head.counts.approved>head.counts.analyses)fail();
- const size=logicalBytes(head);
- if(head.formatVersion===2){
-  if(head.counts.samples>5000||head.counts.analyses+head.counts.archive>10000||head.counts.events>50000)fail();
-  if(size>16*1024*1024)throw new AppError('LIMIT');
- }
+ logicalBytes(head);
  return head;
 }
 export class SampleAnalysisCatalogue{
@@ -42,7 +38,8 @@ export class SampleAnalysisCatalogue{
    if(etag==='new')return {head:empty(),etag:'new'};
    value=await this.store.object('laboratory-history/'+etag);if(!value)throw new AppError('NOT_FOUND');if(hash(value)!==etag)fail();current=etag;
   }
-  if(value&&![2,3].includes(value.formatVersion))return null;
+  // Heads before version 3 were written only before alpha.29 and are refused as an earlier format.
+  if(value&&value.formatVersion!==3)throw new AppError('ACCESS_UPGRADE');
   return {head:value?validHead(value):empty(),etag:current};
  }
  async retain(value){
@@ -98,9 +95,6 @@ export class SampleAnalysisCatalogue{
   const before=create?null:await this.member(head,kind,data.id);
   if(expectedRecordRevision!==undefined){if(!before||before.revision!==expectedRecordRevision)throw new AppError('LAB_STALE');}
   else if(data.etag!==source.etag)throw new AppError('LAB_STALE');
-  // Existing keys remain canonical; the first successful edit atomically lifts
-  // the old head's corpus limits while retaining its exact immutable history.
-  head.formatVersion=3;
   const existing=before?await this.value(before.revision):null,sampleId=data.analysis?.sampleId??existing?.sampleId;
   const sourceSample=sampleId?await this.selected(source,'sample',sampleId):null;
   const now=new Date().toISOString();let runQuality=null;
@@ -191,7 +185,7 @@ export class SampleAnalysisCatalogue{
 }
 export async function verifySampleAnalysisCatalogue(store){
  const owner=new SampleAnalysisCatalogue(store);
- const check=async(value)=>{if([2,3].includes(value.formatVersion))await owner.verify({head:value,etag:hash(value)});else validateLab(value);operationAdvance();};
+ const check=async(value)=>{if(value.formatVersion!==3)throw new AppError('ACCESS_UPGRADE');await owner.verify({head:value,etag:hash(value)});operationAdvance();};
  const current=await store.object('laboratory');if(current)await check(current);
  for await(const id of store.objectIdEntries('laboratory-history/')){
   const value=await store.object(id);if(!value||id!=='laboratory-history/'+hash(value))fail();await check(value);

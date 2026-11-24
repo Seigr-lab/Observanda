@@ -58,6 +58,5 @@
   "revision": "Revisió de l’element",
   "useLot": "Lot de material",
   "readOnlyLot": "El número de lot desat identifica el seu registre d’existències.",
-  "runInputsUnavailable": "Aquest laboratori es va crear amb una versió anterior d’Observanda i no pot registrar els lots i equips emprats en una execució.",
   "heldAtRun": "L’element estava retingut quan es va registrar l’execució."
 }

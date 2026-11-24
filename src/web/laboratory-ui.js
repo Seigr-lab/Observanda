@@ -89,9 +89,7 @@ export function laboratoryUI({state,api,esc,field,option,showDialog,render,notif
   }
   if(name==='lab-new-analysis'){
    sampleChoice=null;samples.clear();runInputs.reset();if(id){const value=await readSelected(id,'sample');if(!value)return true;sampleChoice=value.record;}selected=null;
-   // Laboratories without project domains cannot join inventory to a run; say so before the author fills the form.
-   const runAvailable=main.page?.runInputs===true,runSection=runAvailable?runInputs.view():`<p class="muted" data-lab-run-unavailable>${esc(qualityText('runInputsUnavailable'))}</p>`;
-   form(tr('recordAnalysis'),'lab-analysis-form',`${field(esc(tr('analysisCode')),'<input name="code" required maxlength="80">')}${field(esc(tr('findSample')),'<input type="search" id="lab-sample-search">')}<div data-lab-surface="samples"></div>${resultFields()}${runSection}`,'saveAnalysis');runInputs.draw();await Promise.all([samples.load(request('samples')),runAvailable?runInputs.load():null]);
+   form(tr('recordAnalysis'),'lab-analysis-form',`${field(esc(tr('analysisCode')),'<input name="code" required maxlength="80">')}${field(esc(tr('findSample')),'<input type="search" id="lab-sample-search">')}<div data-lab-surface="samples"></div>${resultFields()}${runInputs.view()}`,'saveAnalysis');runInputs.draw();await Promise.all([samples.load(request('samples')),runInputs.load()]);
   }
   if(name==='lab-open')await openAnalysis(id,related.page?.items.some(a=>a.id===id)?related.page.etag:main.page?.etag);
   if(name==='lab-history')await history.load(request('events',{recordId:id,limit:20}));

@@ -8,18 +8,16 @@ import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {withCatalogueVerification} from '../src/catalogue-verification.js';
 import {withWorkspaceMetadataBatch} from '../src/metadata-batch.js';
-import {verifySampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
 import {withOperationProgress,operationStage} from '../src/operation-progress.js';
 import {digest,serialize} from '../src/storage-format.js';
 
-test('metadata audit batches all payloads with bounded transport; analysis checks only its own originals',async t=>{
+test('metadata audit batches all payloads with bounded transport',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-object-audit-')),f=await encryptedFixture(directory,sampleNotebook());
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,()=>f.workspace.catalogue(async store=>{
   for(let i=0;i<161;i++)await store.putObject('unrelated/'+i,{value:'Small retained value '+i});
   await store.putObject('unrelated/large',{value:'Oversized for a batch. '.repeat(20000)});
   for(const id of ['unrelated/\uffff','unrelated/\ud83d\udd2c'])await store.putObject(id,{value:id});
-  await store.putObject('laboratory',{formatVersion:1,revision:0,samples:[],analyses:[],events:[]});
  })));
  const audit=async batched=>f.workspace.catalogue(store=>withCatalogueVerification(store,async()=>{
   let queries=0,peakBatchBytes=0;const run=store.db.run,all=store.db.all,result=[];
@@ -36,13 +34,7 @@ test('metadata audit batches all payloads with bounded transport; analysis check
  assert.deepEqual(after.result,before.result);assert.ok(after.queries<before.queries/2,JSON.stringify({before:before.queries,after:after.queries}));
  assert.ok(after.peakBatchBytes<=32*16384);const final=events.findLast(value=>value.stage==='verify-objects');assert.equal(final.completed,after.result.length);assert.equal(final.total,after.result.length);
  t.diagnostic(JSON.stringify({objects:after.result.length,queriesBefore:before.queries,queriesAfter:after.queries,peakBatchBytes:after.peakBatchBytes}));
- await f.workspace.catalogue(async store=>{
-  const decode=store.decode;let other=0;
-  store.decode=function(table,id,...args){if(table==='object'&&id.startsWith('unrelated/'))other++;return decode.call(this,table,id,...args);};
-  await verifySampleAnalysisCatalogue(store);assert.equal(other,0);
- });
- // A later audit must still reject an unrelated payload corruption. Analysis
- // has no authority to accept that payload on behalf of the metadata owner.
+ // A later audit must still reject a payload corruption.
  const id='unrelated/80';let saved;
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{saved=(await store.db.get('SELECT payload FROM objects WHERE id=$1',id)).payload;const damaged=Buffer.from(saved);damaged[damaged.length-1]^=1;await store.db.run('UPDATE objects SET payload=$1 WHERE id=$2',damaged,id);}));
  await assert.rejects(audit(true),{code:'ENCRYPTION_DAMAGED'});

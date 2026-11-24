@@ -58,6 +58,5 @@
   "revision": "Revisión del elemento",
   "useLot": "Lote de material",
   "readOnlyLot": "El número de lote guardado identifica su registro de existencias.",
-  "runInputsUnavailable": "Este laboratorio se creó con una versión anterior de Observanda y no puede registrar los lotes y equipos utilizados en una ejecución.",
   "heldAtRun": "El elemento estaba retenido cuando se registró la ejecución."
 }

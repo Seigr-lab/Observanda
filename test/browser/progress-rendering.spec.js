@@ -106,7 +106,7 @@ test('verification keeps its place in a transfer when the revision bar completes
   const {operationProgress}=await import('/operation-progress-ui.js'),{storageProgressPresentation}=await import('/storage-progress-presentation.js'),{t}=await import('/i18n/index.js');
   window.progress=operationProgress({host:document.querySelector('main'),compact:true,scroll:false,disableControls:false,stageText:key=>t('storageProgress',key),presentation:storageProgressPresentation});
   const steps=names=>names.map(stage=>({stage,state:'pending'}));
-  window.value={stage:'verify-snapshots',stages:['copy-workspace','verify-copy','verify-copy','verify-snapshots'],completed:571,total:571,unit:'snapshots',sequences:[{id:'copy-workspace',steps:steps(['copy-files','verify-copy','activate','remove-original'])},{id:'verify-copy',steps:steps(['verify-snapshots','verify-modules','verify-analysis','verify-reviews','verify-imports','verify-evidence','verify-collaboration','verify-media','verify-publication','verify-drafts','verify-run-receipts','verify-history'])}]};
+  window.value={stage:'verify-snapshots',stages:['copy-workspace','verify-copy','verify-copy','verify-snapshots'],completed:571,total:571,unit:'snapshots',sequences:[{id:'copy-workspace',steps:steps(['copy-files','verify-copy','activate','remove-original'])},{id:'verify-copy',steps:steps(['verify-snapshots','verify-modules','verify-objects','verify-reviews','verify-imports','verify-evidence','verify-collaboration','verify-media','verify-drafts','verify-run-receipts','verify-history'])}]};
   value.sequences[0].steps[0].state='completed';value.sequences[0].steps[1].state='running';value.sequences[1].steps[0].state='running';progress.update(value);
  });
  const sequences=page.locator('.operation-sequence');await expect(sequences).toHaveCount(2);
@@ -114,9 +114,9 @@ test('verification keeps its place in a transfer when the revision bar completes
  await sequences.first().locator('summary').click();await sequences.last().locator('summary').click();
  await page.evaluate(()=>{
   window.rows=[...document.querySelectorAll('.operation-sequence li')];value.sequences[1].steps[0].state='completed';value.sequences[1].steps[1].state='completed';value.sequences[1].steps[2].state='running';
-  value={...value,stage:'verify-analysis',stages:['copy-workspace','verify-copy','verify-copy','verify-analysis'],completed:0,unit:'items'};delete value.total;progress.update(value);
+  value={...value,stage:'verify-objects',stages:['copy-workspace','verify-copy','verify-copy','verify-objects'],completed:0,unit:'items'};delete value.total;progress.update(value);
  });
- await expect(sequences.first().locator('summary')).toContainText('step 2 of 4');await expect(sequences.last().locator('summary')).toContainText('step 3 of 12');
+ await expect(sequences.first().locator('summary')).toContainText('step 2 of 4');await expect(sequences.last().locator('summary')).toContainText('step 3 of 11');
  await expect(sequences.last().locator('li').nth(0)).toHaveAttribute('data-state','completed');
  await expect(sequences.last().locator('li').nth(2)).toHaveAttribute('aria-current','step');
  await expect(sequences.first().locator('li').nth(3)).toHaveAttribute('data-state','pending');

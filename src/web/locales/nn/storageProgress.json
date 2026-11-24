@@ -50,7 +50,6 @@
   "verify-modules": "Kontrollerer moduldata",
   "verify-domain-objects": "Kontrollerer modulmetadata",
   "verify-module-drafts": "Kontrollerer uferdige modulendringar",
-  "verify-analysis": "Kontrollerer analyseoppføringar",
   "verify-reviews": "Kontrollerer gjennomgangsomfang",
   "verify-imports": "Kontrollerer importopphav",
   "verify-evidence": "Kontrollerer dokumentasjon og datasett",
