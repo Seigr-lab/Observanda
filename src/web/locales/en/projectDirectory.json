@@ -15,8 +15,6 @@
   "create": "Create project",
   "legacyParent": "Move this project to dedicated storage before adding a subproject.",
   "inside": "Inside",
-  "newSaved": "Project created.",
-  "folderRequired": "Choose a folder for this project.",
   "templateUnavailable": "This project template is unavailable. Choose another template or enable its lab-book types in Preferences.",
   "placementFailed": "The project could not be placed there.",
   "creating": "Creating project…",

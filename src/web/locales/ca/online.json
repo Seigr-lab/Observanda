@@ -41,7 +41,6 @@
   "creationCreate": "Crea el registre",
   "creationType": "Tipus de registre",
   "creationDate": "Data del registre",
-  "creationChoose": "Tria…",
   "creationYes": "Sí",
   "creationNo": "No",
   "creationHelp": "Tria un tipus del llibre de laboratori de l'amfitrió. El registre nou comença com a esborrany privat. Després de crear-lo, escriviu-ne el resum i les seccions en col·laboració.",
@@ -202,7 +201,6 @@
   "save": "Guarda",
   "changedWorkspace": "L'espai de treball ha canviat. Torna a obrir la col·laboració en línia.",
   "owner": "{name} — {role}",
-  "noConnections": "Encara no hi ha instal·lacions connectades.",
   "recoveryHelp": "Aquest text es va conservar en aquesta instal·lació. Aplicar-lo substitueix l'àrea d'escriptura actual per a tothom; compara primer les dues versions.",
  "publicationOwner": "La visibilitat de publicació es gestiona a l’espai de treball d’origen. Demaneu a qui el gestiona que canviï els permisos de web o PDF."
 }

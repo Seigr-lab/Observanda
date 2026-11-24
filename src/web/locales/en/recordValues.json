@@ -73,7 +73,6 @@
  "mediaKind_audio": "Audio",
  "mediaKind_video": "Video",
  "mediaAvailable": "Available for publication",
- "mediaPrivate": "Private media",
  "mediaHelp": "Describe the media for readers. Changes apply only to this record.",
  "mediaCaption": "Caption",
  "mediaAlt": "Alternative text",

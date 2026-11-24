@@ -55,7 +55,6 @@
   "y": "Value",
   "uncertainty": "Uncertainty",
   "measurement": "Measurement",
-  "resultLimit": "This copy would exceed the record's 64 supporting results. Use a separate record for additional figures.",
   "missingPanelResult": "No supporting result is declared for panel {panel}.",
   "resultAttached": "This figure has supporting results. Retarget or remove those results before removing or replacing the figure."
 }

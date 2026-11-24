@@ -62,7 +62,6 @@
   "copy": "Copy result",
   "copied": "Result copied",
   "copyFailed": "Could not copy the result. Select the result text to copy it.",
-  "emptyResult": "Enter a value or choose a function.",
   "calculating": "Calculating…",
   "timeout": "Calculation exceeded the time limit. Simplify the expression.",
   "engineError": "The calculation engine could not load.",

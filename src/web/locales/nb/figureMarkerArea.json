@@ -10,7 +10,6 @@
   "legendRule": "Areal = telling × {area} kvadratiske SVG-enheter",
   "zero": "Telling 0: ingen markør",
   "countInvalid": "Observasjonstellinger må være ikke-negative sikre heltall.",
-  "needScale": "Erklær en markørarealskala for de tilordna observasjonstellingene.",
   "invalid": "Gi tellingen en etikett og en positiv arealskala som ikke er større enn 65 536.",
   "range": "Markører med størrelse etter telling krever et linje- eller spredningsplott, ei telling for hver måling og et areal på høyst 65 536 kvadratiske SVG-enheter. Reduser arealskalaen for store tellinger.",
   "mapping": "Tellekolonner gjelder enkeltmålinger og må inneholde eksakte ikke-negative heltall."

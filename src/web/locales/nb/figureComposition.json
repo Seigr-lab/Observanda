@@ -55,7 +55,6 @@
   "y": "Verdi",
   "uncertainty": "Usikkerhet",
   "measurement": "Måling",
-  "resultLimit": "Denne kopien ville overskride de 64 støttende resultatene i oppføringen. Bruk ei egen oppføring for flere figurer.",
   "missingPanelResult": "Ingen støttende resultater er erklært for panel {panel}.",
   "resultAttached": "Denne figuren har støttende resultater. Endre målet for eller fjern disse resultatene før du fjerner eller erstatter figuren."
 }

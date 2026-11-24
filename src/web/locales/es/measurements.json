@@ -167,8 +167,6 @@
   "revision": "Revisión",
   "schemaHelp": "La procedencia de columna se aplica a esta revisión conservada del esquema. Las excepciones individuales y localizadores nativos se pueden conservar desde Inspeccionar valor.",
   "sourceValue": "Representación de origen",
-  "notPresent": "Esta celda no tiene ningún valor numérico observado.",
-  "nativeBoundary": "Intervalo nativo o campo estructurado",
   "edit": "Conservar interpretación revisada",
   "unitDeclare": "Declarar dimensiones y conversión de la magnitud",
   "unitKind": "Clase de magnitud",

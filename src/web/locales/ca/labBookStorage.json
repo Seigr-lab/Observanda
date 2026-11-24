@@ -37,7 +37,6 @@
   "password": "Contrasenya del llibre de laboratori",
   "recovery": "Clau de recuperació",
   "importing": "S'està important {name}",
-  "importWorking": "S'està important el llibre de laboratori...",
   "resumeImport": "Acaba d'importar el llibre de laboratori",
   "moreImports": "Més importacions inacabades",
   "imported": "S'ha importat el llibre de laboratori.",

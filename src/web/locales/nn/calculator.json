@@ -62,7 +62,6 @@
   "copy": "Kopier resultat",
   "copied": "Resultatet er kopiert",
   "copyFailed": "Kunne ikkje kopiere resultatet. Merk resultatteksten for å kopiere han.",
-  "emptyResult": "Skriv inn ein verdi eller vel ein funksjon.",
   "calculating": "Reknar ut…",
   "timeout": "Utrekninga overskreid tidsgrensa. Forenkle uttrykket.",
   "engineError": "Utrekningsmotoren kunne ikkje lastast inn.",

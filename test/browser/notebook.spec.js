@@ -3,7 +3,6 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {contentBuffer} from '../../src/file-content.js';
 import {answerConfirmation} from './confirm-helper.js';
 import {sessionRequest} from './session-fixture.js';
-import {task,editorTab,openPageSettings} from './composer-helper.js';
 import {navigate,preferences,editWorkspace,openDefaultWebsite} from './preferences-helper.js';
 import {TestDeviceStore as DeviceStore} from '../device-fixture.js';
 import {readAccess,verifyAccess,createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
@@ -39,13 +38,6 @@ async function encryptedSample(book=sampleNotebook()){
   await initializeLocation(root,book,access,workspaceVault);app=await startServer(serverOptions());
 }
 async function createdWorkspace(name){root=path.join(parent,name);workspaceVault=await verifyAccess(await readAccess(root),'','',{deviceStore});}
-async function includeLabBook(page,projectName,bookName){
-  const sources=page.locator('[data-publication-sources]');
-  await sources.locator('section.website-record').filter({has:page.getByText(projectName,{exact:true})}).getByRole('button',{name:'Lab books',exact:true}).click();
-  await sources.locator('section.website-record').filter({hasText:bookName}).getByRole('button',{name:'Choose content',exact:true}).click();
-  await sources.getByLabel('Include available records in this lab book',{exact:true}).check();
-  await expect(sources.locator('[data-source-record]')).toBeChecked();
-}
 // A new record keeps its parts in collapsible groups; open one before using its controls.
 async function openGroup(page,name){const group=page.locator('main details').filter({has:page.locator(':scope > summary',{hasText:name})}).first();if(!await group.evaluate(node=>node.open))await group.locator(':scope > summary').click();}
 async function saveChanges(page){const save=page.locator('.section-save [data-action=save]');if(await save.isEnabled())await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');}

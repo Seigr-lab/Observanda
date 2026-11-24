@@ -62,7 +62,6 @@
   "copy": "Copia el resultat",
   "copied": "Resultat copiat",
   "copyFailed": "No s'ha pogut copiar el resultat. Selecciona'n el text per copiar-lo.",
-  "emptyResult": "Introdueix un valor o tria una funció.",
   "calculating": "S'està calculant…",
   "timeout": "El càlcul ha superat el límit de temps. Simplifica l'expressió.",
   "engineError": "No s'ha pogut carregar el motor de càlcul.",

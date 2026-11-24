@@ -52,11 +52,8 @@
   "selectMovement": "Velg registrert forbruk",
   "currentUse": "Nåværende status for bruk",
   "atReservation": "Status ved reservasjon",
-  "noExpiry": "Utløpsdato ikke oppgitt",
-  "missingEvidence": "Ingen dokumentasjon valgt",
   "otherItem": "Søk etter andre oppføringer",
   "revision": "Oppføringsrevisjon",
   "useLot": "Materialparti",
-  "readOnlyLot": "Det lagrede partinummeret identifiserer lagerjournalen.",
   "heldAtRun": "Elementet var holdt tilbake da kjøringen ble registrert."
 }

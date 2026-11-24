@@ -73,7 +73,6 @@
  "mediaKind_audio": "Audio",
  "mediaKind_video": "Vídeo",
  "mediaAvailable": "Disponible para publicación",
- "mediaPrivate": "Archivo multimedia privado",
  "mediaHelp": "Describe el archivo multimedia para los lectores. Los cambios solo se aplican a este registro.",
  "mediaCaption": "Pie de figura",
  "mediaAlt": "Texto alternativo",

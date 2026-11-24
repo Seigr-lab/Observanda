@@ -41,7 +41,6 @@
   "creationCreate": "Opprett oppføring",
   "creationType": "Oppføringstype",
   "creationDate": "Oppføringsdato",
-  "creationChoose": "Velg…",
   "creationYes": "Ja",
   "creationNo": "Nei",
   "creationHelp": "Velg en type fra vertens labbok. Den nye oppføringen begynner som et privat utkast. Etter opprettelsen kan dere skrive sammendraget og delene sammen.",
@@ -202,7 +201,6 @@
   "save": "Lagre",
   "changedWorkspace": "Arbeidsområdet er endret. Åpne nettbasert samarbeid på nytt.",
   "owner": "{name} — {role}",
-  "noConnections": "Ingen tilkoblede installasjoner ennå.",
   "recoveryHelp": "Denne teksten er bevart på denne installasjonen. Når du anvender den, erstattes det gjeldende skriveområdet for alle; sammenlign begge versjonene først.",
  "publicationOwner": "Synligheten ved publisering administreres i det opprinnelige arbeidsområdet. Be eieren endre tillatelsene for nettsted eller PDF."
 }

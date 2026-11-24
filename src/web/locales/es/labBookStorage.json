@@ -37,7 +37,6 @@
   "password": "Contraseña del cuaderno de laboratorio",
   "recovery": "Clave de recuperación",
   "importing": "Importando {name}",
-  "importWorking": "Importando el cuaderno de laboratorio...",
   "resumeImport": "Terminar de importar el cuaderno de laboratorio",
   "moreImports": "Más importaciones sin terminar",
   "imported": "Cuaderno de laboratorio importado.",

@@ -52,11 +52,8 @@
   "selectMovement": "Elegir un consumo registrado",
   "currentUse": "Aptitud actual para el consumo",
   "atReservation": "Aptitud al reservar",
-  "noExpiry": "Caducidad sin especificar",
-  "missingEvidence": "Ninguna documentación seleccionada",
   "otherItem": "Buscar otros elementos",
   "revision": "Revisión del elemento",
   "useLot": "Lote de material",
-  "readOnlyLot": "El número de lote guardado identifica su registro de existencias.",
   "heldAtRun": "El elemento estaba retenido cuando se registró la ejecución."
 }

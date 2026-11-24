@@ -42,7 +42,6 @@
  "invalidPage":"The run response was incomplete. Retry this page.",
  "loadFailed":"Could not load runs. Retry this page.",
  "saveFirst":"Save this record before adding a run or take.",
- "onRecord":"On this record",
  "newTitle":"{title} — new run or take",
  "repeatTitle":"Create another run or take",
  "repeatName":"{title} — next run",

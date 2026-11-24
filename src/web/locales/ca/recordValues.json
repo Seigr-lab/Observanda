@@ -73,7 +73,6 @@
  "mediaKind_audio": "Àudio",
  "mediaKind_video": "Vídeo",
  "mediaAvailable": "Disponible per publicar",
- "mediaPrivate": "Contingut multimèdia privat",
  "mediaHelp": "Descriu el contingut multimèdia per als lectors. Els canvis només s'apliquen a aquest registre.",
  "mediaCaption": "Peu",
  "mediaAlt": "Text alternatiu",

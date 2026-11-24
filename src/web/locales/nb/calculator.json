@@ -62,7 +62,6 @@
   "copy": "Kopier resultat",
   "copied": "Resultatet er kopiert",
   "copyFailed": "Kunne ikke kopiere resultatet. Merk resultatteksten for å kopiere den.",
-  "emptyResult": "Skriv inn en verdi eller velg en funksjon.",
   "calculating": "Beregner…",
   "timeout": "Beregningen overskreid tidsgrensa. Forenkle uttrykket.",
   "engineError": "Beregningsmotoren kunne ikke lastes inn.",

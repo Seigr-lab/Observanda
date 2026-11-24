@@ -167,8 +167,6 @@
   "revision": "Revisjon",
   "schemaHelp": "Kolonneopphav gjeld denne bevarte skjemarevisjonen. Einskilde unntak og opphavlege plasseringstilvisingar kan bevarast frå Sjå gjennom verdi.",
   "sourceValue": "Kjeldeskrivemåte",
-  "notPresent": "Denne cella har ingen observert talverdi.",
-  "nativeBoundary": "Opphavleg område eller strukturert felt",
   "edit": "Bevar revidert tolking",
   "unitDeclare": "Erklær storleiksdimensjonar og omrekning",
   "unitKind": "Storleikstype",

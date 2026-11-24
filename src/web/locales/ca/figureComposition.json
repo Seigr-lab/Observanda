@@ -55,7 +55,6 @@
   "y": "Valor",
   "uncertainty": "Incertesa",
   "measurement": "Mesura",
-  "resultLimit": "Aquesta còpia superaria els 64 resultats de suport del registre. Utilitza un registre separat per a les figures addicionals.",
   "missingPanelResult": "No s'ha declarat cap resultat de suport per al panell {panel}.",
   "resultAttached": "Aquesta figura té resultats de suport. Canvia la destinació d'aquests resultats o elimina'ls abans d'eliminar o substituir la figura."
 }

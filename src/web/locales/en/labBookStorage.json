@@ -37,7 +37,6 @@
   "password": "Lab book password",
   "recovery": "Recovery key",
   "importing": "Importing {name}",
-  "importWorking": "Importing lab book...",
   "resumeImport": "Finish importing lab book",
   "moreImports": "More unfinished imports",
   "imported": "Lab book imported.",

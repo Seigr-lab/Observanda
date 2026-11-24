@@ -42,7 +42,6 @@
   "invalidPage": "Svaret med køyringane var ufullstendig. Prøv denne sida på nytt.",
   "loadFailed": "Køyringane kunne ikkje lastast inn. Prøv denne sida på nytt.",
   "saveFirst": "Lagre denne oppføringa før du legg til ei køyring eller eit opptak.",
-  "onRecord": "I denne oppføringa",
   "newTitle": "{title} — ny køyring eller nytt opptak",
   "repeatTitle": "Opprett ei ny køyring eller eit nytt opptak",
   "repeatName": "{title} — neste køyring",

@@ -37,7 +37,6 @@
   "password": "Labbokpassord",
   "recovery": "Gjenopprettingsnøkkel",
   "importing": "Importerer {name}",
-  "importWorking": "Importerer labbok...",
   "resumeImport": "Fullfør import av labboka",
   "moreImports": "Fleire ufullførte importar",
   "imported": "Labboka er importert.",

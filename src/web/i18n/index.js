@@ -93,9 +93,7 @@ import researchPicker from '../locales/en/researchPicker.json' with {type:'json'
 import appearance from '../locales/en/appearance.json' with {type:'json'};
 import fonts from '../locales/en/fonts.json' with {type:'json'};
 import interfaceMessages from '../locales/en/interface.json' with {type:'json'};
-import websitePages from '../locales/en/websitePages.json' with {type:'json'};
 import websiteMedia from '../locales/en/websiteMedia.json' with {type:'json'};
-import websiteEditor from '../locales/en/websiteEditor.json' with {type:'json'};
 import timeline from '../locales/en/timeline.json' with {type:'json'};
 import recordDates from '../locales/en/recordDates.json' with {type:'json'};
 import migration from '../locales/en/migration.json' with {type:'json'};
@@ -116,7 +114,7 @@ import about from '../locales/en/about.json' with {type:'json'};
 import confirmations from '../locales/en/confirmations.json' with {type:'json'};
 import {resolveLanguage,validLanguage,translator,validateCatalogue,LANGUAGES} from './runtime.js';
 export {LANGUAGES,validLanguage,resolveLanguage};
-const english={confirmations,experience,datasetResources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,moduleCurrent,moduleConnected,locationTools,calendar,moduleFields,timeline,recordDates,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
+const english={confirmations,experience,datasetResources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,appearance,fonts,interface:interfaceMessages,reviews,websiteMedia,moduleCurrent,moduleConnected,locationTools,calendar,moduleFields,timeline,recordDates,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
 english.projectCreation=projectCreation;
 english.projectChoices=projectChoices;
 english.projectOpening=projectOpening;

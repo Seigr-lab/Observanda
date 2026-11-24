@@ -167,8 +167,6 @@
   "revision": "Revision",
   "schemaHelp": "Column provenance applies to this retained schema revision. Individual exceptions and native locators can be retained from Inspect value.",
   "sourceValue": "Source spelling",
-  "notPresent": "This cell has no observed numeric value.",
-  "nativeBoundary": "Native range or structured field",
   "edit": "Retain revised interpretation",
   "unitDeclare": "Declare quantity dimensions and conversion",
   "unitKind": "Quantity kind",

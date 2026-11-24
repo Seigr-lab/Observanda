@@ -52,11 +52,8 @@
   "selectMovement": "Choose a recorded use",
   "currentUse": "Current readiness for use",
   "atReservation": "Readiness at reservation",
-  "noExpiry": "No expiry specified",
-  "missingEvidence": "No evidence selected",
   "otherItem": "Search other items",
   "revision": "Item revision",
   "useLot": "Material lot",
-  "readOnlyLot": "Saved lot numbers identify their stock ledger.",
   "heldAtRun": "The item was on hold when the run was recorded."
 }

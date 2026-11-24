@@ -42,7 +42,6 @@
   "invalidPage": "La respuesta de ejecuciones estaba incompleta. Reintenta esta página.",
   "loadFailed": "No se han podido cargar las ejecuciones. Reintenta esta página.",
   "saveFirst": "Guarda este registro antes de añadir una ejecución o toma.",
-  "onRecord": "En este registro",
   "newTitle": "{title} — nueva ejecución o toma",
   "repeatTitle": "Crear otra ejecución o toma",
   "repeatName": "{title} — siguiente ejecución",

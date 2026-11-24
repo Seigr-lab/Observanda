@@ -62,7 +62,6 @@
   "copy": "Copiar resultado",
   "copied": "Resultado copiado",
   "copyFailed": "No se ha podido copiar el resultado. Selecciona el texto del resultado para copiarlo.",
-  "emptyResult": "Introduce un valor o elige una función.",
   "calculating": "Calculando…",
   "timeout": "El cálculo ha superado el límite de tiempo. Simplifica la expresión.",
   "engineError": "No se ha podido cargar el motor de cálculo.",

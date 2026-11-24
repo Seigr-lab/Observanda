@@ -55,7 +55,6 @@
   "y": "Valor",
   "uncertainty": "Incertidumbre",
   "measurement": "Medición",
-  "resultLimit": "Esta copia superaría los 64 resultados de apoyo del registro. Utiliza otro registro para figuras adicionales.",
   "missingPanelResult": "No se ha declarado ningún resultado de apoyo para el panel {panel}.",
   "resultAttached": "Esta figura tiene resultados de apoyo. Cambia el destino de esos resultados o elimínalos antes de eliminar o sustituir la figura."
 }

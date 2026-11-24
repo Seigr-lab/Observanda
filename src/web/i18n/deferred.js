@@ -58,6 +58,5 @@ export const deferredCatalogues=Object.freeze({
  repositorySetup:()=>import('./catalogues/repositorySetup.js'),
  githubConnection:()=>import('./catalogues/githubConnection.js'),
  materialFiles:()=>import('./catalogues/materialFiles.js'),
- publicationSources:()=>import('./catalogues/publicationSources.js'),
  bomStock:()=>import('./catalogues/bomStock.js'),
 });

@@ -42,7 +42,6 @@
   "invalidPage": "Svaret med kjøringene var ufullstendig. Prøv denne siden igjen.",
   "loadFailed": "Kjøringene kunne ikke lastes inn. Prøv denne siden igjen.",
   "saveFirst": "Lagre denne oppføringen før du legger til en kjøring eller et opptak.",
-  "onRecord": "I denne oppføringen",
   "newTitle": "{title} — ny kjøring eller nytt opptak",
   "repeatTitle": "Opprett en ny kjøring eller et nytt opptak",
   "repeatName": "{title} — neste kjøring",

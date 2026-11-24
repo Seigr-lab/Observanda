@@ -167,8 +167,6 @@
   "revision": "Revisió",
   "schemaHelp": "La procedència de les columnes s'aplica a aquesta revisió d'esquema conservada. Les excepcions individuals i els localitzadors natius es poden conservar des d'Inspecciona el valor.",
   "sourceValue": "Representació d'origen",
-  "notPresent": "Aquesta cel·la no té cap valor numèric observat.",
-  "nativeBoundary": "Interval natiu o camp estructurat",
   "edit": "Conserva una interpretació revisada",
   "unitDeclare": "Declara les dimensions i la conversió de la magnitud",
   "unitKind": "Tipus de magnitud",
