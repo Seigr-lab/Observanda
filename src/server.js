@@ -336,7 +336,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     if(selected.write&&key.access!=='write')throw new AppError('AGENT_KEY_SCOPE');
     await check();return projectApplication(selectedContext).run(owner.client,selected,data,{check});
    };
-   return json(await runAgentOperation(operation,input,{key,run}));
+   const output=await runAgentOperation(operation,input,{key,run});
+   // The owner sees every agent change under the key's name; the change is already saved.
+   if(operation.access==='write')await agentKeys.recordActivity({key,operation:operation.name,projectId:input.projectId,labBookId:input.labBookId,recordId:output.id,title:output.title}).catch(()=>{});
+   return json(output);
   };
   const activate=async(location,client,vault=null,{movingFrom,followSettings=false}={})=>operationStage('activate',{},async()=>{
     savedDeletion.assertAvailable(location);
@@ -777,6 +780,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workspaceId=(await workspace.outline()).metadata.id;
        if(operation==='list'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return json({workspaceId,agentKeys:await agentKeys.list(workspaceId)});}
+       if(operation==='activity'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return json({activity:await agentKeys.activity(workspaceId)});}
        if(operation==='revoke'){if(!data||Object.keys(data).join()!=='id')throw new AppError('INVALID');activeWrites++;countedWrite=true;return json(await agentKeys.revoke(workspaceId,data.id));}
        if(operation==='create'){
         if(!data||Object.keys(data).some(key=>!['name','scope','access','expiresAt'].includes(key)))throw new AppError('INVALID');

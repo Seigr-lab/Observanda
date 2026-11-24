@@ -30,5 +30,12 @@
   "key": "Agentnøkkel",
   "description": "Beskrivelse av agent-API-et",
   "descriptionHelp": "Programmet lærer å bruke agent-API-et fra denne adressen, som denne Observanda leverer.",
-  "done": "Ferdig"
+  "done": "Ferdig",
+  "activityTitle": "Nylige endringer fra agenter",
+  "noActivity": "Ingen endringer fra agenter ennå.",
+  "activityCreate": "{key} opprettet «{title}»",
+  "activityUpdate": "{key} endret «{title}»",
+  "activityLink": "{key} la til en lenke i «{title}»",
+  "activityUnlink": "{key} fjernet en lenke fra «{title}»",
+  "activityAttach": "{key} la ved filer i «{title}»"
 }

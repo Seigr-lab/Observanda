@@ -30,5 +30,12 @@
   "key": "Clave de agente",
   "description": "Descripción de la API de agentes",
   "descriptionHelp": "El programa aprende a usar la API de agentes desde esta dirección, servida por este Observanda.",
-  "done": "Hecho"
+  "done": "Hecho",
+  "activityTitle": "Cambios recientes de los agentes",
+  "noActivity": "Todavía no hay cambios de agentes.",
+  "activityCreate": "{key} creó «{title}»",
+  "activityUpdate": "{key} cambió «{title}»",
+  "activityLink": "{key} añadió un enlace a «{title}»",
+  "activityUnlink": "{key} quitó un enlace de «{title}»",
+  "activityAttach": "{key} adjuntó archivos a «{title}»"
 }

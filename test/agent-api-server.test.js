@@ -47,6 +47,10 @@ test('agents learn the API from the app and work only through their key, scope a
  assert.notEqual(updated.revision,read.revision);
  const again=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));assert.equal(again.status,'in progress');assert.equal(again.sections[0].id,read.sections[0].id);assert.equal(again.sections[0].text,'One: slow export.');
  assert.equal((await result(await f.agent('/api/v1/agent/records/update',{key,data:{...place,recordId:created.id,expectedRevision:read.revision,changes:{title:'Stale'}}}),409)).code,'RECORD_CHANGED');
+ // The owner sees each agent change under the key's name, newest first.
+ const changes=(await result(await f.owner('/api/security/agent-keys/activity',{}))).activity;
+ assert.deepEqual(changes.map(entry=>[entry.operation,entry.recordId,entry.title,entry.keyName]),[['records/update',created.id,'Release 1.2',me.name],['records/create',created.id,'Release 1.2',me.name]]);
+ assert.equal(created.title,'Release 1.2');
  // Scope and access are enforced on every operation.
  const readOnly=await create({kind:'workspace'},'read');
  assert.equal((await result(await f.agent('/api/v1/agent/records/create',{key:readOnly,data:{...place,record:{type:'note',title:'Refused'}}}),403)).code,'AGENT_KEY_SCOPE');

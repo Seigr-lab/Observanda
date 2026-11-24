@@ -30,5 +30,12 @@
   "key": "Agent key",
   "description": "Agent API description",
   "descriptionHelp": "The program learns how to use the agent API from this address, served by this Observanda.",
-  "done": "Done"
+  "done": "Done",
+  "activityTitle": "Recent agent changes",
+  "noActivity": "No agent changes yet.",
+  "activityCreate": "{key} created “{title}”",
+  "activityUpdate": "{key} changed “{title}”",
+  "activityLink": "{key} added a link to “{title}”",
+  "activityUnlink": "{key} removed a link from “{title}”",
+  "activityAttach": "{key} attached files to “{title}”"
 }

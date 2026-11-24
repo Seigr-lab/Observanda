@@ -30,5 +30,12 @@
   "key": "Clau d'agent",
   "description": "Descripció de l'API d'agents",
   "descriptionHelp": "El programa aprèn a fer servir l'API d'agents des d'aquesta adreça, servida per aquest Observanda.",
-  "done": "Fet"
+  "done": "Fet",
+  "activityTitle": "Canvis recents dels agents",
+  "noActivity": "Encara no hi ha canvis d'agents.",
+  "activityCreate": "{key} ha creat «{title}»",
+  "activityUpdate": "{key} ha canviat «{title}»",
+  "activityLink": "{key} ha afegit un enllaç a «{title}»",
+  "activityUnlink": "{key} ha tret un enllaç de «{title}»",
+  "activityAttach": "{key} ha adjuntat fitxers a «{title}»"
 }

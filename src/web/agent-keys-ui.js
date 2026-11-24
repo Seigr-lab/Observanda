@@ -4,7 +4,7 @@ import './i18n/catalogues/agentKeys.js';
 import {t} from './i18n/index.js';
 export function agentKeysUI({api,esc,field,present,notify}){
  const text=(key,args)=>esc(t('agentKeys',key,args));
- let keys=[],projects=[],books=new Map(),created=null;
+ let keys=[],activity=[],projects=[],books=new Map(),created=null;
  document.querySelector('#dialog')?.addEventListener('close',()=>{created=null;const secret=document.querySelector('[data-agent-key-secret]');if(secret){secret.value='';secret.textContent='';}});
  const day=value=>new Date(value).toLocaleDateString();
  async function loadProjects(parentId=null,depth=0){
@@ -29,7 +29,9 @@ export function agentKeysUI({api,esc,field,present,notify}){
  function view(){
   const list=keys.length?'<ul class="agent-keys" data-agent-keys>'+keys.map(key=>'<li><strong>'+esc(key.name)+'</strong><span>'+esc(scopeText(key.scope))+'</span><span>'+text(key.access==='write'?'accessWrite':'accessRead')+'</span><span>'+(key.expiresAt?text('expires',{date:day(key.expiresAt)}):text('noExpiry'))+'</span><span>'+(key.lastUsedAt?text('lastUsed',{date:day(key.lastUsedAt)}):text('notUsed'))+'</span><button type="button" class="button" data-action="security-agent-key-revoke" data-id="'+esc(key.id)+'">'+text('revoke')+'</button></li>').join('')+'</ul>':'<p class="muted" data-agent-keys-empty>'+text('none')+'</p>';
   const scopes='<option value="workspace">'+text('scopeWorkspace')+'</option>'+projects.map(project=>'<option value="project:'+esc(project.id)+'">'+'— '.repeat(project.depth)+esc(project.title)+'</option>').join('');
-  present(t('agentKeys','title'),'<p>'+text('help')+'</p>'+list+
+  const verbs={'records/create':'activityCreate','records/update':'activityUpdate','records/link':'activityLink','records/unlink':'activityUnlink','files/attach':'activityAttach'};
+  const changes='<section class="security-section"><h3>'+text('activityTitle')+'</h3>'+(activity.length?'<ul class="agent-activity" data-agent-activity>'+activity.map(entry=>'<li><time datetime="'+esc(entry.at)+'">'+esc(new Date(entry.at).toLocaleString())+'</time> '+text(verbs[entry.operation],{key:entry.keyName,title:entry.title})+'</li>').join('')+'</ul>':'<p class="muted">'+text('noActivity')+'</p>')+'</section>';
+  present(t('agentKeys','title'),'<p>'+text('help')+'</p>'+list+changes+
    '<details class="security-section"><summary>'+text('create')+'</summary><form id="security-agent-key-form">'+
    field(text('name'),'<input name="name" required maxlength="80" autocomplete="off" aria-describedby="agent-key-name-hint"><small id="agent-key-name-hint" class="muted">'+text('nameHint')+'</small>')+
    field(text('reaches'),'<select name="scope" data-agent-key-scope>'+scopes+'</select>')+
@@ -38,7 +40,7 @@ export function agentKeysUI({api,esc,field,present,notify}){
    field(text('expiry'),'<input name="expiry" type="date">')+
    '<button class="button primary" type="submit">'+text('createButton')+'</button></form></details>');
  }
- async function open(){keys=[];projects=[];books=new Map();keys=(await api('/api/security/agent-keys/list',{})).agentKeys;await loadProjects();for(const key of keys)if(key.scope.kind==='lab-book')await loadBooks(key.scope.projectId);view();}
+ async function open(){keys=[];activity=[];projects=[];books=new Map();keys=(await api('/api/security/agent-keys/list',{})).agentKeys;activity=(await api('/api/security/agent-keys/activity',{})).activity;await loadProjects();for(const key of keys)if(key.scope.kind==='lab-book')await loadBooks(key.scope.projectId);view();}
  async function input(el){
   if(!el.matches('[data-agent-key-scope]'))return false;
   const form=el.closest('form'),holder=form.querySelector('[data-agent-key-book]'),select=form.elements.labBook,value=el.value;

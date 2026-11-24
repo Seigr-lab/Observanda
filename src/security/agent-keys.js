@@ -14,6 +14,7 @@ import {refuseNewerFormat} from '../stored-format.js';
 import {preparePrivateDirectory} from './private-directory.js';
 
 export const AGENT_KEY_LIMIT=64;
+const LINE=String.fromCharCode(10),ACTIVITY_LIMIT=500,ACTIVITY_BYTES=4*1024*1024,ACTIVITY_OPERATIONS=['records/create','records/update','records/link','records/unlink','files/attach'];
 const PREFIX='obsk_',uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const instant=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&new Date(value).toISOString()===value;
 const secretHash=secret=>createHash('sha256').update(secret).digest('hex');
@@ -32,6 +33,10 @@ function validRecord(value,id){
  return value&&Object.keys(value).sort().join()==='access,createdAt,expiresAt,format,id,lastUsedAt,name,scope,sha256,workspaceId'&&value.format===1&&value.id===id&&uuid(value.workspaceId)&&
   validName(value.name)&&validAgentScope(value.scope)&&['read','write'].includes(value.access)&&instant(value.createdAt)&&(value.expiresAt===null||instant(value.expiresAt))&&
   (value.lastUsedAt===null||instant(value.lastUsedAt))&&/^[a-f0-9]{64}$/.test(value.sha256);
+}
+function validActivity(value){
+ return value&&Object.keys(value).sort().join()==='at,format,keyId,keyName,labBookId,operation,projectId,recordId,title,workspaceId'&&value.format===1&&instant(value.at)&&
+  [value.workspaceId,value.keyId,value.projectId,value.labBookId,value.recordId].every(uuid)&&validName(value.keyName)&&ACTIVITY_OPERATIONS.includes(value.operation)&&typeof value.title==='string'&&value.title.length<=180;
 }
 // What the app shows and an agent may learn about a key; never its hash.
 export const agentKeySummary=({sha256,format,...summary})=>(void sha256,void format,structuredClone(summary));
@@ -99,6 +104,31 @@ export class AgentKeyStore{
   refuseNewerFormat(value?.format,1);
   if(!value||Object.keys(value).sort().join()!=='apiVersion,description,format,origin,processId,startedAt'||value.format!==1||!/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(value.origin)||value.description!==value.origin+'/api/v1/openapi.json'||!instant(value.startedAt)||!Number.isSafeInteger(value.processId))throw new AppError('AGENT_KEY_DAMAGED');
   return value;
+ }
+ // What agents changed, with the key's name: the owner's record of agent work on
+ // this computer. The newest entries are kept; old ones are dropped in bounds.
+ activityFile(){return path.join(this.directory,'activity.jsonl');}
+ async readActivity(){
+  const file=this.activityFile(),info=await assertRegular(file,{missing:true});if(!info)return [];
+  if(info.size>ACTIVITY_BYTES)throw new AppError('AGENT_KEY_DAMAGED');
+  return (await readFile(file,'utf8')).split(LINE).filter(Boolean).map(line=>{
+   let value;try{value=JSON.parse(line);}catch{throw new AppError('AGENT_KEY_DAMAGED');}
+   refuseNewerFormat(value?.format,1);if(!validActivity(value))throw new AppError('AGENT_KEY_DAMAGED');return value;
+  });
+ }
+ async recordActivity({key,operation,projectId,labBookId,recordId,title},{now=new Date()}={}){
+  const value={format:1,at:now.toISOString(),workspaceId:key.workspaceId,keyId:key.id,keyName:key.name,operation,projectId,labBookId,recordId,title};
+  if(!validActivity(value))throw new AppError('INVALID');
+  await this.prepare();
+  await this.write(async()=>{
+   let entries=[...await this.readActivity(),value];if(entries.length>ACTIVITY_LIMIT*2)entries=entries.slice(-ACTIVITY_LIMIT);
+   await atomicWrite(this.activityFile(),entries.map(entry=>JSON.stringify(entry)).join(LINE)+LINE);
+  });
+ }
+ async activity(workspaceId,{limit=50}={}){
+  if(!uuid(workspaceId)||!Number.isSafeInteger(limit)||limit<1||limit>ACTIVITY_LIMIT)throw new AppError('INVALID');
+  if(!await assertRegular(this.directory,{directory:true,missing:true}))return [];
+  await this.prepare();return (await this.readActivity()).filter(entry=>entry.workspaceId===workspaceId).slice(-limit).reverse().map(({format,...entry})=>(void format,entry));
  }
  // Unknown, revoked, expired and malformed keys give the same answer.
  async authenticate(token,{now=new Date()}={}){

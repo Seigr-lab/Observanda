@@ -56,3 +56,15 @@ test('the running app publishes its agent address for the CLI and withdraws only
  await keys.withdrawEndpoint('http://127.0.0.1:41234');assert.equal(await keys.endpoint(),null);
  await writeFile(keys.endpointFile(),JSON.stringify({format:1,origin:'https://example.org'}));await assert.rejects(keys.endpoint(),{code:'AGENT_KEY_DAMAGED'});
 });
+
+test('agent changes are kept per workspace, newest first, and a damaged log is refused',async t=>{
+ const keys=await store(t),other=randomUUID(),now=new Date('2026-11-24T10:00:00.000Z');
+ const {agentKey}=await keys.create({name:'Release agent',workspaceId,scope:{kind:'workspace'},access:'write'},{now});
+ const entry=(recordId,operation,minute)=>keys.recordActivity({key:agentKey,operation,projectId,labBookId,recordId,title:'Release 1.2'},{now:new Date(Date.UTC(2026,10,24,10,minute))});
+ const first=randomUUID();await entry(first,'records/create',1);await entry(first,'records/update',2);
+ await keys.recordActivity({key:{...agentKey,workspaceId:other},operation:'records/create',projectId,labBookId,recordId:randomUUID(),title:'Elsewhere'},{now});
+ assert.deepEqual((await keys.activity(workspaceId)).map(value=>[value.operation,value.at,value.keyName]),[['records/update','2026-11-24T10:02:00.000Z','Release agent'],['records/create','2026-11-24T10:01:00.000Z','Release agent']]);
+ assert.deepEqual((await keys.activity(other)).map(value=>value.title),['Elsewhere']);
+ await assert.rejects(keys.recordActivity({key:agentKey,operation:'records/remove',projectId,labBookId,recordId:first,title:'x'},{now}),{code:'INVALID'});
+ await writeFile(keys.activityFile(),'{"format":1}\n');await assert.rejects(keys.activity(workspaceId),{code:'AGENT_KEY_DAMAGED'});
+});

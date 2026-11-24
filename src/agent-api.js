@@ -46,10 +46,10 @@ export const AGENT_OPERATIONS=Object.freeze([
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId'],properties:{...book,recordId:id}},output:recordOutput},
  {name:'records/create',method:'POST',access:'write',summary:'Create a record in a lab book.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','record'],properties:{...book,record:{type:'object',additionalProperties:false,required:['type','title'],properties:recordFields}}},
-  output:{type:'object',properties:{id,revision:{type:'string'}}}},
+  output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}}},
  {name:'records/update',method:'POST',access:'write',summary:'Change a record. Only the fields you send change; expectedRevision must be the revision you last read.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','changes'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},changes:{type:'object',additionalProperties:false,minProperties:1,properties:recordFields}}},
-  output:{type:'object',properties:{id,revision:{type:'string'}}}}
+  output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}}}
 ]);
 const byName=new Map(AGENT_OPERATIONS.map(operation=>[operation.name,operation]));
 
@@ -132,7 +132,7 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
  };
  const save=async(recordId,expectedRevision,record)=>{
   await run(prefix+'/research/records/save',{workspaceId,changes:[{id:recordId,expectedRevision,record}]});
-  return {id:recordId,revision:(await read(recordId)).revision};
+  const saved=await read(recordId);return {id:recordId,revision:saved.revision,title:saved.record.title};
  };
  const at=now().toISOString();
  if(operation.name==='records/create'){
