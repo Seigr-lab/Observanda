@@ -13,7 +13,9 @@ import {rememberSemanticWriting} from './semantic-record-format.js';
 import {resultDocumentHeader,validateResultDocument} from './record-result-document.js';
 
 const collections=['sections','contributors','relations','figures','attachments','tags'];
-const ordinaryDetails=new Set(['title','status','outcome','occurredOn','share','sharePdf','publication','updatedAt']);
+// Details checked again on every validation against the workspace metadata. The
+// lab book is one of them: no record owner below depends on which book holds it.
+const ordinaryDetails=new Set(['notebookId','title','status','outcome','occurredOn','share','sharePdf','publication','updatedAt']);
 const invalid=(field,recordId)=>{throw new AppError('INVALID',[{field,recordId}]);};
 // Only the admitted current original can prove unchanged owners. Detail and
 // result edits preserve other collections; changed results receive independent

@@ -33,6 +33,8 @@ test('ordinary detail admission does not traverse previously admitted collection
 
 test('reused validation preserves full admission for invalid details and changed owned values',async()=>{
  const f=await fixture(),first=f.record.sections[0],heading=id=>({type:'doc',content:[{type:'heading',attrs:{id,level:2},content:[{type:'text',text:'Repeated identity'}]}]});
+ // A record moved to another existing lab book keeps every owned value.
+ const other={...structuredClone(f.book.notebooks[0]),id:randomUUID(),title:'Other observations'};f.book.notebooks.push(other);
  const cases=[
   [['title'],'Changed title'],[['title'],''],[['title'],'x'.repeat(181)],
   [['status'],'completed'],[['status'],'unexpected'],[['share'],false],[['share'],'yes'],
@@ -43,7 +45,7 @@ test('reused validation preserves full admission for invalid details and changed
   [['tags'],['x'.repeat(41)]],[['contributors'],[{id:randomUUID(),name:'',role:'Author'}]],
   [['figures'],[{id:randomUUID(),kind:'unknown'}]],[['attachments'],[{id:randomUUID(),kind:'unknown'}]],
   [['relations'],[{id:randomUUID(),type:'Uses',label:'Self',role:'uses-method',target:{workspaceId:f.book.id,kind:'record',id:f.record.id,revision:'a'.repeat(64)}}]],
-  [['id'],first.id],[['notebookId'],randomUUID()],[['type'],'invalid'],
+  [['id'],first.id],[['notebookId'],randomUUID()],[['notebookId'],other.id],[['type'],'invalid'],
   [['attempt','events','1','id'],f.record.attempt.events[0].id],[['attempt','assessments','0','criterionId'],randomUUID()]
  ];
  for(const [path,value] of cases){

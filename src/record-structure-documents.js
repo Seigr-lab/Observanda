@@ -1,5 +1,7 @@
 // Hierarchy changes retain one record document at a time. Moving between books
 // copies its blocks under the destination key before the single structure commit.
+// A move changes only details, so the original's admission proves its unchanged
+// owners; the lab book and links to other records are still checked here.
 import {randomUUID} from 'node:crypto';
 import {digest} from './storage-format.js';
 import {AppError} from './errors.js';
@@ -47,7 +49,7 @@ export async function commitStructureDocuments(store,currentId,current,proposed,
      if(!target.share)document=await withdrawDocumentPublication(document,{signal});
      if(document===original)return;
      document=await document.replace(['updatedAt'],now,{signal});
-     const header=await validateRecordDocument(document,metadata,{signal});operationItem(header.title);
+     const header=await validateRecordDocument(document,metadata,{signal,admitted:original});operationItem(header.title);
      await validateDocumentSources(store,{...current,metadata},document,header,original,media,{signal});
      await new RunReadiness(store.workspace).documentCompletion(original,document,header,metadata);
      const encoding=await document.encoding({signal}),updated=await membership.retain({...row,notebookId:target.notebookId,share,updatedAt:now,revision:encoding.revision,bytes:encoding.memberBytes,...await query.retainDocument(document,encoding.contentRevision,{previous:row,signal})});
