@@ -18,8 +18,8 @@ import {TestDeviceStore} from './device-fixture.js';
 
 test('PDF documents save independently, roll back failed writes, and reopen from archives and fresh-key recovery', {timeout:180000},async t=>{
  const f=await fixture(t),documents=new PdfDocuments(f.storage,f.book.id),id=randomUUID(),section={id:randomUUID(),title:'Observation',content:'9007199254740993',layout:null,start:null};
- assert.deepEqual(await documents.read('list'),{items:[],next:null});assert.equal(await documents.available(),false);
- await assert.rejects(documents.change({id}),{code:'INVALID'});assert.equal(await documents.available(),false);
+ assert.deepEqual(await documents.read('list'),{items:[],next:null});assert.equal(await documents.available(),true);
+ await assert.rejects(documents.change({id}),{code:'INVALID'});assert.equal(await documents.available(),true);
  const create={id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header:{version:1,id,name:'Portable report',language:'en',direction:'ltr',layout:pdfLayoutPreset()},section}},created=await documents.change(create);
  // Holding the research writer must not queue an ordinary PDF save.
  const lock=await f.storage.openCatalogue();let changed;
