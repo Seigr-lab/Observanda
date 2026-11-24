@@ -1,6 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readDataset,datasetMapping} from '../src/dataset-reader.js';
+import {datasetMapping} from '../src/dataset-reader.js';
+import {readPagedDataset} from '../src/dataset-paged-reader.js';
+import {pagedDataset} from './fixtures/paged-dataset.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,15 +17,15 @@ const mapping={format:'json-nested',rowsPath:'/visits/*/windows/*/acquisitions',
 const window=(id,count=144)=>({id,controls:Array.from({length:count},(_,i)=>({value:id+'-control-'+i})),configuration:Array.from({length:count},(_,i)=>({value:id+'-config-'+i})),acquisitions:Array.from({length:count},(_,i)=>({count:i,ignored:'x'.repeat(2000)})),schedule:Array.from({length:count},(_,i)=>({value:id+'-schedule-'+i}))});
 const input=()=>({visits:[{windows:[window('first'),window('empty',0)]},{windows:[window('second'),window('third')]}]});
 async function* chunks(value){const bytes=Buffer.from(typeof value==='string'?value:JSON.stringify(value));for(let i=0;i<bytes.length;i+=113)yield bytes.subarray(i,i+113);}
-const collect=async(value,plan=mapping)=>{const out=[];for await(const row of readDataset(chunks(value),plan))out.push(row);return out;};
+const collect=async(value,plan=mapping)=>(await pagedDataset(chunks(value),plan)).rows;
 
 test('432 positional acquisitions retain controls, configuration, schedule and exact parent locations',async()=>{
  const source=JSON.stringify(input()).replace('"count":37','"count":9007199254740993123456789'),rows=await collect(source);
- assert.equal(rows.length,433);assert.deepEqual(rows[38].cells,['first','9007199254740993123456789','first-control-37','first-config-37','first-schedule-37']);
- assert.deepEqual(rows[182].cells,['second','37','second-control-37','second-config-37','second-schedule-37']);
- assert.deepEqual(rows[182].cellPointers,['/visits/1/windows/0/id','/visits/1/windows/0/acquisitions/37/count','/visits/1/windows/0/controls/37/value','/visits/1/windows/0/configuration/37/value','/visits/1/windows/0/schedule/37/value']);
- assert.deepEqual(rows[38].valueKinds,['string','number','string','string','string']);
- for(const [index,row] of rows.slice(1).entries()){
+ assert.equal(rows.length,432);assert.deepEqual(rows[37].cells,['first','9007199254740993123456789','first-control-37','first-config-37','first-schedule-37']);
+ assert.deepEqual(rows[181].cells,['second','37','second-control-37','second-config-37','second-schedule-37']);
+ assert.deepEqual(rows[181].cellPointers,['/visits/1/windows/0/id','/visits/1/windows/0/acquisitions/37/count','/visits/1/windows/0/controls/37/value','/visits/1/windows/0/configuration/37/value','/visits/1/windows/0/schedule/37/value']);
+ assert.deepEqual(rows[37].valueKinds,['string','number','string','string','string']);
+ for(const [index,row] of rows.entries()){
   const visit=index<144?0:1,window=index<288?0:1,position=index%144;
   for(const [column,name] of ['acquisitions','controls','configuration','schedule'].entries())assert.equal(row.cellPointers[column+1],'/visits/'+visit+'/windows/'+window+'/'+name+'/'+position+'/'+(column?'value':'count'));
  }
@@ -31,7 +33,7 @@ test('432 positional acquisitions retain controls, configuration, schedule and e
 
 test('positional length checks reject missing, shorter, longer and compensating mismatched windows before yielding rows',async()=>{
  for(const change of [s=>s.visits[0].windows[0].controls.pop(),s=>s.visits[0].windows[0].configuration.push({value:0}),s=>delete s.visits[0].windows[0].schedule,s=>s.visits[0].windows[1].controls.push({value:0}),s=>{s.visits[0].windows[0].controls.pop();s.visits[1].windows[0].controls.push({value:0});},s=>delete s.visits[0].windows[0].acquisitions]){
-  const source=input();change(source);let yielded=0;await assert.rejects(async()=>{for await(const row of readDataset(chunks(source),mapping)){void row;yielded++;}},{code:'DATASET_JOIN_LENGTH'});assert.equal(yielded,0);
+  const source=input();change(source);let yielded=0;await assert.rejects(async()=>{for await(const item of readPagedDataset(chunks(source),mapping)){void item;yielded++;}},{code:'DATASET_JOIN_LENGTH'});assert.equal(yielded,0);
  }
  for(const rowsPath of ['/visits/*/controls','/other/*/windows/*/controls','/visits/*/windows/*/controls/*/extra'])assert.throws(()=>datasetMapping({...mapping,joins:[{name:'controls',mode:'position',rowsPath}]}),{code:'MATERIAL_TABLE'});
  assert.throws(()=>datasetMapping({...mapping,joins:[{...mapping.joins[0],unmatched:'keep'}]}),{code:'MATERIAL_TABLE'});
@@ -39,7 +41,7 @@ test('positional length checks reject missing, shorter, longer and compensating 
 
 test('scalar positional rows and mixed keyed joins preserve null, absent and escaped locations',async()=>{
  const source={'w/x':[{rows:[{id:'a'}, {id:'b'}],values:[null,7],control:[{id:'b',label:'B'},{id:'a',label:'A'}]}]},plan={format:'json-nested',rowsPath:'/w~1x/*/rows',joins:[{name:'value',mode:'position',rowsPath:'/w~1x/*/values'},{name:'control',rowsPath:'/w~1x/*/control',leftPath:'/id',rightPath:'/id'}],fields:[{name:'Value',source:'value',path:''},{name:'Missing',source:'row',path:'/absent'},{name:'Label',source:'control',path:'/label'}]};
- const rows=await collect(source,plan);assert.deepEqual(rows[1].valueKinds,['null','absent','string']);assert.deepEqual(rows[2].cells,['7','','B']);assert.deepEqual(rows[1].cellPointers,['/w~1x/0/values/0',null,'/w~1x/0/control/1/label']);
+ const rows=await collect(source,plan);assert.deepEqual(rows[0].valueKinds,['null','absent','string']);assert.deepEqual(rows[1].cells,['7','','B']);assert.deepEqual(rows[0].cellPointers,['/w~1x/0/values/0',null,'/w~1x/0/control/1/label']);
 });
 
 test('positional mapping and every joined cell provenance remain inspectable after dataset revisions and backup',async t=>{

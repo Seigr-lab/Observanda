@@ -1,6 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readDataset,datasetMapping} from '../src/dataset-reader.js';
+import {datasetMapping} from '../src/dataset-reader.js';
+import {readPagedDataset} from '../src/dataset-paged-reader.js';
+import {pagedDataset} from './fixtures/paged-dataset.js';
 import {packedMapping,packedSource} from './fixtures/packed-dataset.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -15,14 +17,14 @@ import {createFigure} from '../src/web/figure-model.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 
 async function* chunks(source){const bytes=Buffer.from(typeof source==='string'?source:JSON.stringify(source));for(let i=0;i<bytes.length;i+=103)yield bytes.subarray(i,i+103);}
-const collect=async(source,mapping)=>{const rows=[];for await(const row of readDataset(chunks(source),mapping))rows.push(row);return rows;};
+const collect=(source,mapping)=>pagedDataset(chunks(source),mapping);
 
 test('two 3888-acquisition runs extract six timing values from offset 384 with exact physical provenance',async()=>{
  const source=packedSource(),mapping=packedMapping();source.runs[0].packed[608]='EXACT';source.runs[0].packed[609]='SMALL';
- const rows=await collect(JSON.stringify(source).replace('"EXACT"','9007199254740993123456789').replace('"SMALL"','1.2300e-12'),mapping);
- assert.equal(rows.length,7777);assert.deepEqual(rows[0].sourceMapping,mapping);
- assert.deepEqual(rows[38].cells,['37','222','223','9007199254740993123456789','1.2300e-12','226','227']);
- for(const [index,row] of rows.slice(1).entries()){
+ const {rows,sourceMapping}=await collect(JSON.stringify(source).replace('"EXACT"','9007199254740993123456789').replace('"SMALL"','1.2300e-12'),mapping);
+ assert.equal(rows.length,7776);assert.deepEqual(sourceMapping,mapping);
+ assert.deepEqual(rows[37].cells,['37','222','223','9007199254740993123456789','1.2300e-12','226','227']);
+ for(const [index,row] of rows.entries()){
   const run=Math.floor(index/3888),acquisition=index%3888;assert.equal(row.cells[0],String(acquisition));assert.equal(row.locator.pointer,'/runs/'+run+'/acquisitions/'+acquisition);
   for(let slot=0;slot<6;slot++)assert.equal(row.cellPointers[slot+1],'/runs/'+run+'/packed/'+(384+acquisition*6+slot));
  }
@@ -37,12 +39,12 @@ test('invalid packed ranges fail before yielding, and count alignment remains st
   [s=>s.runs[0].acquisitions.pop(),'DATASET_JOIN_LENGTH'],
   [s=>delete s.runs[1].packed,'DATASET_JOIN_LENGTH'],
   [s=>{s.runs[0].acquisitions.pop();s.runs[1].acquisitions.push({id:3});},'DATASET_JOIN_LENGTH']
- ]){const source=packedSource(3);change(source);let yielded=0;await assert.rejects(async()=>{for await(const row of readDataset(chunks(source),mapping)){void row;yielded++;}},{code});assert.equal(yielded,0);}
+ ]){const source=packedSource(3);change(source);let yielded=0;await assert.rejects(async()=>{for await(const item of readPagedDataset(chunks(source),mapping)){void item;yielded++;}},{code});assert.equal(yielded,0);}
  for(const packed of [{offset:-1,width:6,count:3},{offset:384,width:0,count:3},{offset:384,width:6,count:1.5},{offset:'384',width:6,count:3},{offset:384,width:Number.MAX_SAFE_INTEGER,count:3},{offset:384,width:6,count:3,ignored:true},null])assert.throws(()=>datasetMapping({...mapping,joins:[{...mapping.joins[0],packed}]}),{code:'MATERIAL_TABLE'});
  for(const path of ['', '/6','/00','/-1'])assert.throws(()=>datasetMapping({...mapping,fields:[{name:'Invalid slot',source:'timing',path}]}),{code:'MATERIAL_TABLE'});
  const source=packedSource(3);source.runs[0].packed[384]=null;source.runs[0].packed[385]='000105';source.runs[0].packed[386]=false;
- const rows=await collect(source,mapping);assert.deepEqual(rows[1].valueKinds.slice(1,4),['null','string','boolean']);assert.deepEqual(rows[1].cells.slice(1,4),['','000105','false']);
- const controller=new AbortController();controller.abort();await assert.rejects(async()=>{for await(const row of readDataset(chunks(source),mapping,{signal:controller.signal}))void row;},{name:'AbortError'});
+ const {rows}=await collect(source,mapping);assert.deepEqual(rows[0].valueKinds.slice(1,4),['null','string','boolean']);assert.deepEqual(rows[0].cells.slice(1,4),['','000105','false']);
+ const controller=new AbortController();controller.abort();await assert.rejects(async()=>{for await(const item of readPagedDataset(chunks(source),mapping,{signal:controller.signal}))void item;},{name:'AbortError'});
 });
 
 test('packed mapping and source references survive retained revisions, inspection and encrypted restore',async t=>{

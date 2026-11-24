@@ -13,7 +13,7 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {Workspace} from '../src/storage.js';
 import {copyWorkspace,copyPlan} from '../src/locations.js';
 import {contentBuffer} from '../src/file-content.js';
-import {readDataset} from '../src/dataset-reader.js';
+import {readPagedDataset} from '../src/dataset-paged-reader.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
@@ -44,7 +44,7 @@ test('UTF-8 CSV locators recover precise original row bytes across BOM, CRLF and
  const bytes=Buffer.from('\ufeffName,Note\r\nOne,"é\r\n🐝"\r\nTwo,last');
  for(const chunkSize of [1,2,3,7,100]){
   async function* chunks(){for(let i=0;i<bytes.length;i+=chunkSize)yield bytes.subarray(i,i+chunkSize);}
-  const rows=[];for await(const r of readDataset(chunks()))if(r.cells)rows.push(r);
+  const rows=[];for await(const r of readPagedDataset(chunks()))if(r.cells)rows.push(r);
   assert.equal(bytes.subarray(rows[0].locator.byteOffset,rows[0].locator.byteOffset+rows[0].locator.byteLength).toString(),'One,"é\r\n🐝"\r');
   assert.equal(bytes.subarray(rows[1].locator.byteOffset,rows[1].locator.byteOffset+rows[1].locator.byteLength).toString(),'Two,last');
  }
