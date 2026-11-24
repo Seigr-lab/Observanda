@@ -19,7 +19,7 @@ import path from 'node:path';
 import { AppError } from './errors.js';
 import {assertNotMoving} from './workspace-move-state.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
-import {legacyWriterLock,withWriterLease} from './writer-lease.js';
+import {withWriterLease} from './writer-lease.js';
 import {waitForWriter,queuedWriter} from './writer-wait.js';
 import { validateNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
 import {nativeDestination} from './native-destination.js';
@@ -293,7 +293,6 @@ export class Workspace {
     const internal = await privateDirectory(this.root, '.observanda');
     const lock = path.join(internal, 'write.lock');
     if(await hasCatalogue(this.root)){
-      if(await legacyWriterLock(lock))throw new AppError('LEGACY_WRITE_LOCK');
       if(catalogueContext.getStore()?.root===this.root)throw new AppError('LOCKED');
       return queuedWriter(this.root,()=>catalogueConnection(this,'write',{detached,moveId},async db=>{
         await db.run('BEGIN');await waitForWriter(()=>db.lock());

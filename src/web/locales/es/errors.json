@@ -270,7 +270,6 @@
   "EXISTS": "Aquí ya existe un espacio de trabajo o una salida. Elige un destino nuevo.",
   "CONFLICT": "Este espacio de trabajo ha cambiado desde que lo abriste. Recarga antes de guardar; tu borrador se ha conservado en pantalla.",
   "LOCKED": "Otra operación está utilizando actualmente este acceso de escritura.",
-  "LEGACY_WRITE_LOCK": "Una instalación anterior dejó un marcador de escritura. Abre Almacenamiento y acceso para revisar la recuperación después de cerrar otras instalaciones que utilicen esta ubicación.",
   "DASHBOARD_PENDING": "Guarda o descarta los cambios pendientes de módulos y panel antes de eliminar este espacio de trabajo. Abre Preferencias > Módulos para revisarlos.",
   "WRITE_CANCELLED": "La escritura pendiente se ha cancelado antes de comenzar.",
   "UNSAFE": "Una ubicación de archivo protegida no es segura. No se ha modificado ningún archivo.",

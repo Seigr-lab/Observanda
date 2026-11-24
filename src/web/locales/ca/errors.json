@@ -270,7 +270,6 @@
   "EXISTS": "Ja existeix un espai de treball o una sortida aquí. Tria una destinació nova.",
   "CONFLICT": "Aquest espai de treball ha canviat des que l'has obert. Torna'l a carregar abans de guardar; l'esborrany s'ha conservat a la pantalla.",
   "LOCKED": "Una altra operació està utilitzant actualment aquest procés d'escriptura.",
-  "LEGACY_WRITE_LOCK": "Una instal·lació antiga ha deixat un marcador d'escriptura. Obre Emmagatzematge i accés per revisar la recuperació després de tancar les altres instal·lacions que utilitzin aquesta ubicació.",
   "DASHBOARD_PENDING": "Guarda o descarta els canvis pendents dels mòduls i del tauler abans d'eliminar aquest espai de treball. Obre Preferències > Mòduls per revisar-los.",
   "WRITE_CANCELLED": "L'escriptura pendent s'ha cancel·lat abans de començar.",
   "UNSAFE": "Una ubicació de fitxer protegida no és segura. No s'ha modificat cap fitxer.",

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,mkdir,unlink,writeFile,readFile,symlink,lstat,rename} from 'node:fs/promises';
+import {mkdtemp,rm,mkdir,writeFile,symlink,link as link2,lstat,rename} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
@@ -10,7 +10,6 @@ import {sampleNotebook} from '../src/sample.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {withWriterLease,releaseWriterLease} from '../src/writer-lease.js';
-import {reviewWriterRecovery,recoverWriter} from '../src/writer-recovery.js';
 
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-writer-'));t.after(()=>rm(root,{recursive:true,force:true}));return root;}
 // A folder whose workspace is still being created has no database yet; its
@@ -34,14 +33,13 @@ test('queued local writers serialize, retain revision checks and release after f
  await assert.rejects(withWriterLease(path.join(root,'temporary.lock'),async()=>{throw Error('failed');}),/failed/);
  assert.equal(await withWriterLease(path.join(root,'temporary.lock'),async()=>37),37);
 });
-test('legacy recovery requires reviewed empty ownership and preserves unexpected contents and links',async t=>{
- const root=await fixture(t),file=path.join(root,'old.lock');await mkdir(file);const review=await reviewWriterRecovery(file);
- await assert.rejects(withWriterLease(file,()=>{}),{code:'LEGACY_WRITE_LOCK'});
- await assert.rejects(recoverWriter(file,{stamp:review.stamp}),{code:'INVALID'});
- await assert.rejects(recoverWriter(file,{stamp:'stale',closedOtherInstallations:true}),{code:'CONFLICT'});
- await writeFile(path.join(file,'unrelated'),'keep');await assert.rejects(recoverWriter(file,{stamp:review.stamp,closedOtherInstallations:true}),{code:'UNSAFE'});assert.equal(await readFile(path.join(file,'unrelated'),'utf8'),'keep');
- await unlink(path.join(file,'unrelated'));const current=await reviewWriterRecovery(file);await recoverWriter(file,{stamp:current.stamp,closedOtherInstallations:true});assert.equal(await reviewWriterRecovery(file),null);
- const outside=path.join(root,'outside'),link=path.join(root,'linked.lock');await mkdir(outside);await symlink(outside,link,process.platform==='win32'?'junction':'dir');await assert.rejects(reviewWriterRecovery(link),{code:'UNSAFE'});
+test('a lease path must be a single regular file, never a folder or a link',async t=>{
+ const root=await fixture(t),folder=path.join(root,'folder.lock');await mkdir(folder);
+ await assert.rejects(withWriterLease(folder,()=>{}),{code:'UNSAFE'});assert.equal((await lstat(folder)).isDirectory(),true);
+ const outside=path.join(root,'outside'),link=path.join(root,'linked.lock');await mkdir(outside);await symlink(outside,link,process.platform==='win32'?'junction':'dir');
+ await assert.rejects(withWriterLease(link,()=>{}),{code:'UNSAFE'});
+ const file=path.join(root,'file.lock'),second=path.join(root,'second.lock');await writeFile(file,'');await link2(file,second);
+ await assert.rejects(withWriterLease(file,()=>{}),{code:'UNSAFE'});
 });
 test('a verified owner can rename its folder without leaving a lock at the old path',async t=>{
  const parent=await fixture(t),root=path.join(parent,'source'),target=path.join(parent,'destination');await mkdir(root);

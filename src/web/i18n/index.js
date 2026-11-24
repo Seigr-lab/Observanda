@@ -33,7 +33,6 @@ import projectStorage from '../locales/en/projectStorage.json' with {type:'json'
 import projectAccess from '../locales/en/projectAccess.json' with {type:'json'};
 import storageProgress from '../locales/en/storageProgress.json' with {type:'json'};
 import activity from '../locales/en/activity.json' with {type:'json'};
-import writerRecovery from '../locales/en/writerRecovery.json' with {type:'json'};
 import pendingSettings from '../locales/en/pendingSettings.json' with {type:'json'};
 import workspaceDeletion from '../locales/en/workspaceDeletion.json' with {type:'json'};
 import operationProgress from '../locales/en/operationProgress.json' with {type:'json'};
@@ -128,7 +127,6 @@ english.labBookStorage=labBookStorage;
 english.projectAccess=projectAccess;
 english.storageProgress=storageProgress;
 english.activity=activity;
-english.writerRecovery=writerRecovery;
 english.pendingSettings=pendingSettings;
 english.workspaceDeletion=workspaceDeletion;
 english.workspaceNaming=workspaceNaming;

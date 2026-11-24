@@ -141,7 +141,6 @@ import {unlockKeyring} from './security/keyring.js';
 import {exportAccessCheckpoint,inspectAccessCheckpoint,importAccessCheckpoint} from './security/access-checkpoint.js';
 import {resolveLocation,inspectLocation,probeLocation,browseFolders,createFolder,storageMap,initializeLocation,namedWorkspaceLocation,readPreferences,rememberInterface} from './locations.js';
 import {OperationActivity} from './operation-activity.js';
-import {reviewWriterRecovery,recoverWriter} from './writer-recovery.js';
 import {DashboardEdits} from './dashboard-edits.js';
 import {requestWriterWait,waitForWriter,withoutWriterWait,writerCapacity} from './writer-wait.js';
 import {WorkspaceReadAdmission,workspaceSnapshotRequest} from './workspace-read-admission.js';
@@ -411,10 +410,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           else if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key)){await clearVault(vault);local.access=access.etag;}
           else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){await clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){await clearVault(vault);throw new AppError('LOCKED');}await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
          }
-         catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
+         catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
         }
         if(local.access&&data.filesOnly!==true){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
-        if(local.access)try{await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
+        if(local.access)await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));
         if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);if(local.access&&data.filesOnly!==true)startJobs(context);
         claim.complete(session);return json(sessionResponse(res,session));
         }catch(error){claim.fail(error);throw error;}
@@ -443,7 +442,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       // but cancel their connections immediately when the app is closing.
       if(req.method==='POST'&&/\/(?:design-preview|appearance-preview)$/.test(url.pathname)||req.method==='GET'&&/\/appearance-preview\/[a-f0-9]{64}\//.test(url.pathname))request.abortPreview=()=>res.destroy();
       if(!snapshotRead)req.operationActivity=()=>req.activity??=activities.begin(selectedContext.id,url.pathname,{view:req.headers['x-observanda-view'],recoveryKey:req.activityRecoveryKey});
-      req.waitForWriter=req.headers['x-observanda-wait']==='1'&&(snapshotRead||req.method==='POST'&&!['/api/storage/','/api/access/','/api/security/','/api/writer-recovery','/api/preferences/reset','/api/notebook/create'].some(prefix=>url.pathname.startsWith(prefix)));
+      req.waitForWriter=req.headers['x-observanda-wait']==='1'&&(snapshotRead||req.method==='POST'&&!['/api/storage/','/api/access/','/api/security/','/api/preferences/reset','/api/notebook/create'].some(prefix=>url.pathname.startsWith(prefix)));
       req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');requireSession(session);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
       let {workspace,publisher}=selectedContext;
       const {media,laboratory}=selectedContext;
@@ -466,17 +465,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation==='confirm')return await operationResponse(req,res,()=>savedDeletion.confirm(client,data),json);
         if(operation==='finish')return await operationResponse(req,res,()=>savedDeletion.finish(data),json);
         throw new AppError('NOT_FOUND');
-      }
-      if(url.pathname==='/api/writer-recovery'){
-        const paths={workspace:context.root?path.join(context.root,'.observanda','write.lock'):null,preferences:preferencesFile?preferencesFile+'.lock':null,device:deviceStore.file?deviceStore.file+'.lock':null};
-        if(req.method==='GET'){
-          const locks=[];for(const [kind,file] of Object.entries(paths)){const review=await reviewWriterRecovery(file);if(review)locks.push({kind,...review});}
-          return json({contextId:context.id,locks});
-        }
-        const data=await body(req);if(context!==selectedContext||data.contextId!==context.id)throw new AppError('WORKSPACE_CHANGED');
-        if(changing||loginBusy||activeWrites||publishing||importing)throw new AppError('LOCKED');
-        if(!Object.hasOwn(paths,data.kind)||!paths[data.kind])throw new AppError('INVALID');
-        changing=true;try{return json(await recoverWriter(paths[data.kind],data));}finally{changing=false;}
       }
       const blockedValues=[selectedContext.root,os.homedir(),os.hostname()].filter(Boolean);
       // Personal display preferences are independent of a workspace's lock and contents.
@@ -524,7 +512,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
            if(!client.filesOnly)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);
            client.access=state.access.etag;client.expires=Date.now()+8*60*60*1000;if(!client.filesOnly)startJobs(context);state=await status(client);
           }
-         }catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
+         }catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
          finally{if(drained)selectedContext.readers.open();loginBusy=false;}
         }
         const {access,locked}=state;return json({...await accessSummary(access.value,deviceStore),locked,updateRequired:!!access.updateRequired,username:locked?'':access.value?.username??''});

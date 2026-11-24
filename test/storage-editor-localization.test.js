@@ -15,7 +15,7 @@ test('storage display translates server labels and review counts without changin
  source.locations.push({label:'Custom <label>',path:'C:/User <path>'});
  const state={book:{title:'User workspace'},storageBusy:false,dirty:false,storage:{...source,applicationRoot:'C:/Application <path>',database:{ready:true,message:'PostgreSQL is connected.',placement:'workspace',path:'C:/Database <path>'}},access:{encrypted:true,version:3,deviceAvailable:false,passwordAvailable:true,username:'User <name>'}};
  const original=structuredClone(state.storage),calls=[];let dialog='';
- const ui=storageUI({state,api:async(path,data)=>{calls.push({path,data});assert.equal(path,'/api/storage/copy/preview');return {destination:data.path,files:1,bytes:1048576};},activity:{storageBusy:()=>false},writerRecovery:{},esc,field:(label,control)=>'<label>'+label+'</label>'+control,save:async()=>{},render:()=>{},showDialog:value=>{dialog=value;},notify:()=>{},reload:()=>{},resetInterface:()=>{},isUploading:()=>false});
+ const ui=storageUI({state,api:async(path,data)=>{calls.push({path,data});assert.equal(path,'/api/storage/copy/preview');return {destination:data.path,files:1,bytes:1048576};},activity:{storageBusy:()=>false},esc,field:(label,control)=>'<label>'+label+'</label>'+control,save:async()=>{},render:()=>{},showDialog:value=>{dialog=value;},notify:()=>{},reload:()=>{},resetInterface:()=>{},isUploading:()=>false});
  const english=await catalogue('en');
  for(const locale of ['en','ca','es','nb','nn']){
   const messages=await catalogue(locale);assert.deepEqual(Object.keys(messages).sort(),Object.keys(english).sort());validateCatalogue(messages,english);

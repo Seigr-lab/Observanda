@@ -270,7 +270,6 @@
   "EXISTS": "A workspace or output already exists here. Choose a new destination.",
   "CONFLICT": "This workspace changed since you opened it. Reload before saving; your draft has been kept on screen.",
   "LOCKED": "Another operation is currently using this writer.",
-  "LEGACY_WRITE_LOCK": "An older installation left a writer marker. Open Storage & access to review recovery after closing other installations that use this location.",
   "DASHBOARD_PENDING": "Save or discard pending module and dashboard changes before deleting this workspace. Open Preferences > Modules to review them.",
   "WRITE_CANCELLED": "The pending write was cancelled before it started.",
   "UNSAFE": "A protected file location is unsafe. No files were changed.",

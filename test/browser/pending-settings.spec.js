@@ -32,7 +32,7 @@ test('module edits remain usable through copy, navigation, reload and verified d
   await navigate(page,'Inventory');await expect(page.getByRole('heading',{name:path.basename(f.workspace.root)+' inventory',exact:true})).toBeVisible();await expect(page.locator('[data-module-items-status]')).toHaveText('No items yet. Create an item to get started.');
   await navigate(page,'Dashboard');await navigate(page,'All records');await expect(page.locator('.records-table').getByRole('link',{name:'Watching a seed unfold',exact:true})).toBeVisible();
   await preferences(page,'General');await expect(page.getByRole('heading',{name:'Workspace details',exact:true})).toBeVisible();await preferences(page,'Modules');await expect(page.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();
-  const independent=await page.evaluate(async()=>{const storage=await(await fetch('/api/writer-recovery')).json();return(await fetch('/api/interface',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({fontSize:18,lineHeight:1.7})})).status;});expect(independent).toBe(200);
+  const independent=await page.evaluate(async()=>{const storage=await(await fetch('/api/activity')).json();return(await fetch('/api/interface',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({fontSize:18,lineHeight:1.7})})).status;});expect(independent).toBe(200);
   expect((await readWorkspaceDashboard(f.workspace)).etag).toBe(initial.etag);
   await page.reload();await expect(page.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();
   await expect(page.locator('.app-activity [data-toggle]')).toContainText('running');

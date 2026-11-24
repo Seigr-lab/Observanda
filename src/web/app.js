@@ -20,7 +20,6 @@ import {projectContexts,projectApiRoute,projectRoute,ownedRoute,researchContext,
 import {retainedFigureReadingSlots} from './retained-figure-reader.js';
 import {publicationErrorView} from './publication-error-view.js';
 import {startApplication} from './application-startup.js';
-import {writerRecoveryUI} from './writer-recovery-ui.js';
 import {activityUI} from './activity-ui.js';
 import {snapshotWorkspace,draftWorkspace,editableRecord,sameValue} from './workspace-snapshot.js';
 
@@ -374,7 +373,6 @@ function returnToProjectAfterBookSettings(name){
 }
 function report(error) {
   if(error?.name==='AbortError')return;
-  if(error?.code==='LEGACY_WRITE_LOCK'){void writerRecovery.check({force:true}).catch(error=>notify(error.message,true));return;}
   if(error?.code==='RECORD_REVIEW'){notify(error.message);return;}
   if(error?.code==='RECORD_REVIEW_CANCELLED')return;
   if(error?.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','AUTH'].includes(error.code)){notify(error.message??appText('unlockProject'),true);return;}
@@ -622,8 +620,7 @@ const activity=activityUI({onChange:snapshot=>{
  else if(state.storage?.contextId&&snapshot.contextId!==state.storage.contextId){if(!uploading&&!savePromise&&!pendingChanges('all').labels.length)void loadWorkspace().catch(report);}
  else if(state.storageBusy){state.storageBusy=false;if(state.page==='storage')void storageControls.action({dataset:{action:'storage'}}).catch(report);}
 }});
-const writerRecovery=writerRecoveryUI({api,esc});
-const storageControls=storageUI({state,api,accessOwners:(operation,options)=>withProjectAccess(operation,options),activity,writerRecovery,esc,field,save,render,showDialog,notify,reload:loadWorkspace,resetInterface:async()=>{savedBook=null;recordChanges.reset(null);await languageControls.load();await textControls.load();await dashboard.load();},isUploading:()=>uploading});
+const storageControls=storageUI({state,api,accessOwners:(operation,options)=>withProjectAccess(operation,options),activity,esc,field,save,render,showDialog,notify,reload:loadWorkspace,resetInterface:async()=>{savedBook=null;recordChanges.reset(null);await languageControls.load();await textControls.load();await dashboard.load();},isUploading:()=>uploading});
 const userProfile=userProfileUI({state,api,esc,field,render,notify});
 const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify});
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:()=>{applyAppTheme(textControls);updateSaveStatus();}});
@@ -1283,7 +1280,7 @@ function renderMediaPolicy(){
 }
 function mediaPolicyField([key,label,unit]){const value=state.mediaPolicy.policy[key];return field(esc(appText(label)),`<input type="number" min="0" step="any" name="${key}" value="${value?value/unit:''}" placeholder="${esc(appText('standardLimit'))}">`);}
 
-let workspaceLoadTask=null,researchServicesStarted=false;
+let workspaceLoadTask=null;
 function renderWebsiteFiles(){
   workspaceLive.bind();
   const text=(key,fallback)=>websiteFiles?t('websiteFiles',key):fallback;
@@ -1319,7 +1316,6 @@ async function loadWorkspaceOwned(){
   state.access=await api('/api/access/status');
   if(state.access.locked){activity.hide();await recordDrafts.start(null);render();return;}
   if(fileEditorHash(location.hash)||new URLSearchParams(location.search).get('view')==='website'&&!location.hash.startsWith('#/')){await enterWebsiteFiles({hash:fileEditorHash(location.hash)?location.hash:'#/website',replace:true});return true;}
-  if(!researchServicesStarted){await writerRecovery.check();researchServicesStarted=true;}
   if(state.filesMode)return;
   activity.start();
   const activityStatus=await activity.refresh();

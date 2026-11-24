@@ -92,7 +92,7 @@ test('stable Help URLs work with password-locked access and leave password entry
   await page.goto(f.app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();observed.requests.length=0;
   await page.evaluate(()=>location.hash='#/preferences/help/storage/unlock');await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
   expect(observed.requests).toEqual([]);await page.reload();await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
-  expect(observed.requests.every(r=>['/api/access/status','/api/language','/api/interface','/api/activity','/api/writer-recovery'].includes(r.path)&&r.method==='GET'&&r.body===null),JSON.stringify(observed.requests)).toBe(true);
+  expect(observed.requests.every(r=>['/api/access/status','/api/language','/api/interface','/api/activity'].includes(r.path)&&r.method==='GET'&&r.body===null),JSON.stringify(observed.requests)).toBe(true);
   await help(page).getByRole('button',{name:'Return to form'}).click();await expect(page).not.toHaveURL(/preferences\/help/);
   await page.getByLabel('Password',{exact:true}).fill(f.password);await page.getByRole('button',{name:'Help',exact:true}).click();await page.keyboard.press('Escape');await expect(page.getByLabel('Password',{exact:true})).toHaveValue(f.password);
   expect(observed.errors).toEqual([]);

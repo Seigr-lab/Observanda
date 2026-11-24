@@ -4,9 +4,9 @@ import {projectPublicationRequest} from './project-publication-requests.js';
 import {pdfDocumentRequest} from './pdf-route-policy.js';
 import {reviewRequest} from './review-route-policy.js';
 
-const controlGet=new Set(['/api/health','/api/access/status','/api/diagnostics','/api/writer-recovery','/api/activity']);
+const controlGet=new Set(['/api/health','/api/access/status','/api/diagnostics','/api/activity']);
 const controlPost=new Set([
- '/api/access/lock','/api/writer-recovery',
+ '/api/access/lock',
  '/api/media-imports/job','/api/media-imports/cancel',
  '/api/v1/intake/status','/api/v1/intake/cancel','/api/storage/copy/cancel','/api/storage/export/cancel',
  '/api/record-transfer/cancel'

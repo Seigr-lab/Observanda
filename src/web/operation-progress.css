@@ -16,9 +16,6 @@ html[data-navigation=right] .app-activity>section{left:0;right:auto}
 .app-activity [data-close]{border:0;background:transparent;color:inherit;font-size:1.6rem;padding:.2rem .6rem}
 .app-activity article{margin-block:1rem;border-top:1px solid var(--ui-border);padding-top:1rem}.app-activity [data-title]{margin:0}
 .app-activity .operation-progress{margin-block:.5rem}.app-activity [data-status]{font-weight:600}.app-activity [data-error]{color:var(--ui-danger,var(--ui-danger))}
-.writer-recovery {width:min(36rem,calc(100vw - 2rem));max-height:calc(100dvh - 2rem);overflow:auto;}
-.writer-recovery form {margin-block:1rem;padding-block:1rem;border-bottom:1px solid var(--ui-border);}
-.writer-recovery .storage-path {overflow-wrap:anywhere;}
 
 .operation-progress-compact h3,.operation-progress-compact p:not([data-hint]){block-size:auto;overflow:visible;scrollbar-gutter:auto}
 .operation-progress-compact h3{min-block-size:1.45em}

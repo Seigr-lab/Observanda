@@ -270,7 +270,6 @@
   "EXISTS": "Eit arbeidsområde eller utdata finst allereie her. Vel eit nytt mål.",
   "CONFLICT": "Dette arbeidsområdet er endra sidan du opna det. Last inn på nytt før lagring; utkastet ditt er bevart på skjermen.",
   "LOCKED": "Ein annan operasjon bruker denne skrivaren no.",
-  "LEGACY_WRITE_LOCK": "Ein eldre installasjon etterlét ein skrivemarkør. Opne Lagring og tilgang for å sjå gjennom gjenoppretting etter at du har lukka andre installasjonar som bruker denne staden.",
   "DASHBOARD_PENDING": "Lagre eller forkast ventande modul- og oversiktsendringar før du slettar dette arbeidsområdet. Opne Innstillingar > Modular for å sjå gjennom dei.",
   "WRITE_CANCELLED": "Den ventande skrivinga vart avbroten før ho starta.",
   "UNSAFE": "Ei verna filplassering er utrygg. Ingen filer vart endra.",
