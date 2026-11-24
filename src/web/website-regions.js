@@ -1,5 +1,3 @@
-import {cloneElements} from './composition-tree.js';
-
 // Shared compositions and their assignments are authoring data. Publication
 // resolves them per admitted page; unused definitions never enter the export.
 export const REGION_KINDS=['sidebar','footer','header'];
@@ -25,23 +23,4 @@ export function validRegions(value,validSections){
     if(!keys(a,['target','kind','regionId'])||!target(a.target)||!REGION_SLOTS.includes(a.kind)||assignments.has(key)||!(a.regionId===null||value.definitions.some(r=>r.id===a.regionId&&r.kind===regionKind(a.kind))))return false;
     assignments.add(key);return true;
   });
-}
-export function regionsOf(website){return website.design.regions??{definitions:[],assignments:[]};}
-export function assignRegion(website,target,kind,regionId){
-  const regions=website.design.regions??={definitions:[],assignments:[]};
-  regions.assignments=regions.assignments.filter(a=>a.target!==target||a.kind!==kind);
-  if(regionId!==undefined)regions.assignments.push({target,kind,regionId});
-}
-export function removeRegion(website,id){
-  const regions=regionsOf(website);
-  regions.definitions=regions.definitions.filter(r=>r.id!==id);
-  // Explicit exclusions prevent a deleted page override inheriting an unrelated design.
-  regions.assignments=regions.assignments.map(a=>a.regionId===id?{...a,regionId:null}:a);
-  website.presentation.media=website.presentation.media.filter(m=>!m.scope.startsWith('region:'+id+'#'));
-}
-export function createRegion(website,kind,name,{copy=null,makeId=()=>crypto.randomUUID()}={}){
-  const regions=website.design.regions??={definitions:[],assignments:[]};
-  if(regions.definitions.length>=100)throw new Error('Region limit reached.');
-  const region=copy?{...structuredClone(copy),id:makeId(),name,sections:cloneElements(copy.sections,makeId)}:{id:makeId(),name,kind:regionKind(kind),side:kind==='secondary-sidebar'?'right':'left',width:260,sticky:true,background:null,color:null,padding:20,sections:[],mobile:'expanded',mobileTitle:''};
-  regions.definitions.push(region);return region;
 }

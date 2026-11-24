@@ -507,15 +507,6 @@
           ]
         },
         {
-          "id": "legacy-links",
-          "title": "Bevar gamle kapitteladresser og fragment",
-          "paragraphs": [
-            "Opne {ui:publication.legacyLinks} i Publisering. Legg til kvar gammal relativ HTML-sti, den offentlege sidetittelen og éi tilordning for kvart fragment. Vel den enkelte måloppføringa og om lenkja følgjer den gjeldande valde versjonen eller namngir den nøyaktige lagra revisjonen. Kvar etikett her er offentleg tekst. Å lagre tilordningar publiserer dei ikkje.",
-            "Førebuinga kontrollerer kvar tilordning mot den valde utgåva. Manglande mål, dupliserte stiar eller fragment og kollisjonar med genererte sider blokkerer førebuinga og identifiserer den påverka adressa. Rett tilordninga eller ta med den nøyaktige refererte revisjonen før du førebur på nytt. Eit kapittel med fleire eksperiment blir ei statisk innhaldsside med separate fragmentmål og lenkjer; det omdirigerer ikkje alle fragment til éi oppføring.",
-            "Eksisterande konfliktar med kodelagerfiler må framleis løysast. Ei eldre tilordning gir ikkje løyve til å erstatte uvedkomande eller eksternt redigerte filer på den adressa. Inspiser gjennomgangen av kodelagerfiler før du stadfestar ei opplasting."
-          ]
-        },
-        {
           "id": "publication-recovery",
           "title": "Gjenopprett ei opplasting eller ei eldre utgåve",
           "paragraphs": [

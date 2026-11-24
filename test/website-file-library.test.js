@@ -7,7 +7,7 @@ import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
-import {insertWebsiteSource} from '../src/website-file-html.js';
+import {insertWebsiteSources} from '../src/website-file-html.js';
 import {searchWebsiteLibrary,validateWebsiteLibraryRows,websiteLibraryFacets} from '../src/website-file-library.js';
 
 test('file picker searches compact permitted summaries, falls back to earlier saved heads, and binds the chosen revision',async t=>{
@@ -80,8 +80,8 @@ test('concurrent picker panes share one directory read and filtered results read
 test('source placement uses the editable page blocks without changing surrounding author bytes',()=>{
  const fragment={id:'a'.repeat(64),revision:'b'.repeat(64),html:'Selected copy'},marker='<section data-observanda-source="'+fragment.id+'" data-observanda-source-revision="'+fragment.revision+'">Selected copy</section>';
  const page='<html><body><main hidden>hidden</main><main><!-- retained --><p>one</p><style>.x{}</style><p>two</p></main><footer>end</footer></body></html>';
- assert.equal(insertWebsiteSource(page,{...fragment,position:'start'}),page.replace('<!-- retained -->',marker+'<!-- retained -->'));
- assert.equal(insertWebsiteSource(page,{...fragment,position:{before:1}}),page.replace('<p>two</p>',marker+'<p>two</p>'));
- assert.equal(insertWebsiteSource(page,{...fragment,position:'end'}),page.replace('<p>two</p>','<p>two</p>'+marker));
- assert.throws(()=>insertWebsiteSource(page,{...fragment,position:{before:2}}),{code:'INVALID'});
+ assert.equal(insertWebsiteSources(page,[fragment],'start'),page.replace('<!-- retained -->',marker+'<!-- retained -->'));
+ assert.equal(insertWebsiteSources(page,[fragment],{before:1}),page.replace('<p>two</p>',marker+'<p>two</p>'));
+ assert.equal(insertWebsiteSources(page,[fragment],'end'),page.replace('<p>two</p>','<p>two</p>'+marker));
+ assert.throws(()=>insertWebsiteSources(page,[fragment],{before:2}),{code:'INVALID'});
 });

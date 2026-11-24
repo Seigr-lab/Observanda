@@ -7,7 +7,7 @@ import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
-import {insertWebsiteSource,updateWebsiteSource} from '../src/website-file-html.js';
+import {insertWebsiteSources,updateWebsiteSource} from '../src/website-file-html.js';
 import {validateWebsiteHTML,validateWebsiteCSS} from '../src/website-file-policy.js';
 import {contentBuffer} from '../src/file-content.js';
 
@@ -128,7 +128,7 @@ test('saved HTML, CSS and copied source survive unavailable research; changing v
 
 test('a nested revoked figure disappears without replacing the surrounding website writing',()=>{
  const id='1'.repeat(64),revision='a'.repeat(64),article='<section data-observanda-part="body"><p>Author text</p><figure data-observanda-part="figure:one"><img src="assets/figure.png"></figure></section>';
- const page=insertWebsiteSource('<!doctype html><html><head><title>A</title></head><body><main>Before</main></body></html>',{id,revision,html:article}).replace('Author text','Edited on website');
+ const page=insertWebsiteSources('<!doctype html><html><head><title>A</title></head><body><main>Before</main></body></html>',[{id,revision,html:article}]).replace('Author text','Edited on website');
  const changed=updateWebsiteSource(page,{id,revision:'b'.repeat(64),previousHtml:article,html:article.replace(/<figure\b[\s\S]+?<\/figure>/,'')+'<section data-observanda-part="section:two">New section</section>'});
  assert.match(changed,/Edited on website/);assert.match(changed,/New section/);assert.match(changed,/Before/);assert.doesNotMatch(changed,/figure\.png|figure:one/);
 });

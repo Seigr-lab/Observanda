@@ -1,5 +1,4 @@
 import {outsideNativeDestinations} from './native-destination.js';
-import {AsyncResource,AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {withRecordDocument} from './record-document.js';
@@ -155,23 +154,6 @@ async function permittedOriginal(doc,target){
 }
 
 const SEED_GROUP=16;
-// A website conversion binds its pages to the sources it seeds and imports them
-// later. Inside this scope each owner's producer lease, once taken, stays held
-// until the scope ends, so no record save can change a seeded source before the
-// pages bound to it are imported; the save runs after the import instead. The
-// leases are taken from the context that opened the scope, whose native
-// destination outlives them, and are released when the scope ends.
-const heldWriters=new AsyncLocalStorage();
-export async function holdPublicationWriters(store,operation){
- const held={root:store.workspace.root,leases:new Map(),start:AsyncResource.bind(run=>run())};
- try{return await heldWriters.run(held,operation);}
- finally{await Promise.allSettled([...held.leases.values()].reverse().map(lease=>lease.release()));}
-}
-function heldWriterLease(files,name,signal,start){
- let release,acquire;const released=new Promise(resolve=>{release=resolve;}),acquired=new Promise(resolve=>{acquire=resolve;});
- const run=start(()=>runWebsiteUpgrade(files,name,()=>{acquire();return released;},{shareResult:false,signal}));
- return {acquired:Promise.race([acquired,run]),release:()=>{release();return run;}};
-}
 export class PublicationConversion{
  constructor(workspace,{store=new WebsiteFileStore(workspace)}={}){this.files=store;this.rebuilds=new Set();}
  // Wait for website copies still being rebuilt after answered saves.
@@ -439,11 +421,7 @@ export class PublicationConversion{
  }
  withProducer(storage,operation,{signal}={}){
   const id=storage.vault?.id;if(!researchId(id))throw new AppError('ACCESS_LOCKED');
-  const held=heldWriters.getStore(),name='publication-writer-'+id;
-  if(held?.root===this.files.workspace.root){
-   if(!held.leases.has(name))held.leases.set(name,heldWriterLease(this.files,name,signal,held.start));
-   return held.leases.get(name).acquired.then(()=>operation());
-  }
+  const name='publication-writer-'+id;
   // The research DB commit and the subsequent saved-file publication share
   // this owner lease. A second editor cannot supersede the first token
   // between those two commits. Other research owners remain independent.

@@ -1,4 +1,3 @@
-import {cloneElements} from './composition-tree.js';
 // Page presentation belongs to the website, never to the underlying research record.
 export const hasHomepage = book => book.website.home.enabled !== false;
 export const layoutTargets = book => [
@@ -8,7 +7,6 @@ export const layoutTargets = book => [
   ...book.notebooks.map(n=>({target:'notebook:'+n.id,title:n.title,path:'notebooks/'+n.id+'.html'})),
   ...book.entries.map(e=>({target:'entry:'+e.id,title:e.title,path:'entries/'+e.id+'.html'}))
 ];
-export const defaultPageLayout = target => ({target,showHeading:true,heading:'',description:'',placement:'before',sections:[]});
 // Starters contain structure, with empty authored text. Applying never publishes a record.
 export const PAGE_STARTERS = [
   {id:'journal',name:'Research journal',description:'An introduction followed by a chronological record list.',sections:[
@@ -61,6 +59,3 @@ PAGE_STARTERS.unshift(
   block('notes','callout',{parentId:'columns',title:'Keep in mind',body:'Materials, references, variations, or the next thing to try.',style:{...baseStyle,width:'third',padding:24,background:'#eef3e9',color:'#2b432b',radius:8}})
  ]}
 );
-export function instantiateLayout(sections,makeId) {
-  return cloneElements(sections,makeId).map(s=>({...s,show:s.show??true}));
-}

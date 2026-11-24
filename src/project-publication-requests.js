@@ -22,7 +22,7 @@ for(const operation of ['workspace/save',...Object.entries(commands).flatMap(([p
 }
 routes['github-connection/status']=policy('github-connection/status',{snapshot:true,admission:'control',limit:1024});
 routes.publishing=policy('publishing',{method:'GET',snapshot:true});
-export const publicationRoutes=Object.freeze(routes);
+Object.freeze(routes);
 export function projectPublicationRequest(route,method){
  const selected=route.startsWith('/api/')&&Object.hasOwn(routes,route.slice(5))?routes[route.slice(5)]:null;
  return !method||selected?.method===method?selected:null;

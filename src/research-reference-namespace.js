@@ -27,30 +27,6 @@ async function recordNamespaces(store,ref,{current,empty}){
  if(!empty)for await(const origin of recordOrigins(store,'record',ref.id))names.add(origin.sourceNamespace);return [...names];
 }
 
-// Capture calls this inside its authenticated catalogue callback. Only fixed
-// readers have a readCache; writers must continue to observe their own changes.
-// Facts never escape this callback or substitute a historical metadata snapshot
-// for the current catalogue's identity-specific ownership witnesses.
-export async function withRecordReferenceNamespaces(store,consume,{signal}={}){
- let active=true,facts;
- const check=()=>{signal?.throwIfAborted();if(!active)throw new AppError('INVALID');};
- const resolve=async reference=>{
-  check();
-  if(!store.readCache){const result=await recordReferenceNamespaces(store,reference);check();return result;}
-  facts??=(async()=>{
-   const current=(await store.snapshot()).metadata.id;
-   // This page authenticates both the index range and its SQL row count. An
-   // empty range proves absence for every identity without a per-record scan.
-   const page=await store.objectIdPage('record:reference-origin:record:',{limit:1,signal});
-   return {current,empty:page.items.length===0};
-  })();
-  const context=await facts;check();const ref={...reference,kind:'record'};
-  if(ref.workspaceId!==context.current&&!await referenceNamespaceMatches(store,ref)){check();return [ref.workspaceId];}
-  const result=await recordNamespaces(store,ref,context);check();return result;
- };
- try{check();return await consume(resolve);}finally{active=false;}
-}
-
 // Carry every authenticated former owner of this identity when its content
 // moves again.
 export async function* referenceSourceOwners(store,ref){

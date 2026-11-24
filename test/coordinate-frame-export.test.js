@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {MaterialSequence} from '../src/material-sequence.js';
 import {retainedTable,retainedTableBlocks} from '../src/retained-tables.js';
-import {retainedTableHTML,retainPublicationTables} from '../src/publication-retained-tables.js';
+import {retainedTableHTML} from '../src/publication-retained-tables.js';
 import {retainedTableView} from '../src/web/retained-table-model.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {defaultDomain} from '../src/web/measurement-domain-model.js';
@@ -23,8 +23,6 @@ test('public framed results stream every ordered axis from owned snapshots witho
  let last=-1;for(const axis of f.axes){const at=html.indexOf(esc(axis.name));assert.ok(at>last,'All axes must occur in declared order');last=at;assert.ok(!html.includes(axis.id));}
  for(const privateRef of [f.column.coordinateFrame.frame,f.column.coordinateFrame.sourceFrame,f.column.coordinateFrame.transform])for(const privateValue of [privateRef.id,privateRef.revision])assert.ok(!html.includes(privateValue));
  assert.ok(!html.includes(f.column.coordinateFrame.axesIndex.root.hash));assert.match(html,/Axis 19 &lt;last&gt;/);assert.deepEqual(f.calls,[{offset:0,limit:16},{offset:16,limit:16}]);
- const chunks=[],recordId=randomUUID();await retainPublicationTables({append:async(_collection,_id,value)=>chunks.push(value)},f.materials,{results:{statements:[{id:randomUUID(),source:ref,table:f.table}]}},recordId);
- assert.equal(chunks.slice(0,-1).map(value=>value.text).join(''),html);assert.ok(chunks.slice(0,-1).every(value=>value.text.length<=4096));assert.equal(chunks.at(-1).count,chunks.length-1);
 });
 test('public frame export refuses incomplete axis snapshots and honours cancellation between pages',async()=>{
  const f=await fixture(),descriptor=f.column.coordinateFrame.axesIndex;f.column.coordinateFrame.axesIndex={...descriptor,count:18};await assert.rejects(async()=>{for await(const chunk of retainedTableHTML(f.materials,{source:ref,table:f.table}))void chunk;},{code:'JOB_DAMAGED'});

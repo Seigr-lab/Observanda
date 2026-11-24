@@ -16,7 +16,6 @@ export function validWebsites(sites,metadata){
   Array.isArray(s.projects)&&new Set(s.projects.map(p=>p?.id)).size===s.projects.length&&s.projects.every(p=>p&&Object.keys(p).sort().join()==='id,logoId,share'&&siteProjectIds(metadata,s.projectId).has(p.id)&&typeof p.share==='boolean'&&(p.logoId===null||researchId(p.logoId)))&&
   validWebsiteSelection(s.selection)&&s.selection.defaultShare===false&&s.selection.includeProjects.every(id=>siteProjectIds(metadata,s.projectId).has(id)));
 }
-export function websiteDocument(book){return Object.fromEntries(WEBSITE_DOCUMENT_FIELDS.map(key=>[key,structuredClone(book[key])]));}
 export function websiteBook(metadata,site){
  const {websites,...base}=metadata,ids=siteProjectIds(metadata,site.projectId);
  const projects=metadata.projects.filter(p=>ids.has(p.id)).map(p=>({...p,...site.projects.find(v=>v.id===p.id),share:site.projects.find(v=>v.id===p.id)?.share??false,...(p.id===site.projectId&&p.parentId?{parentId:null}:{})}));

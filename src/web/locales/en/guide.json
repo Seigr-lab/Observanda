@@ -431,15 +431,6 @@
           ]
         },
         {
-          "id": "legacy-links",
-          "title": "Keep old chapter addresses and fragments",
-          "paragraphs": [
-            "Open {ui:publication.legacyLinks} in Publishing. Add each old relative HTML path, its public page title and one mapping for each fragment. Choose the individual destination record and whether the link follows its current selected version or names the exact saved revision. Every label here is public text. Saving mappings does not publish them.",
-            "Preparation checks each mapping against the selected edition. Missing destinations, duplicate paths or fragments, and collisions with generated pages block preparation and identify the affected address. Correct the mapping or include the exact referenced revision before preparing again. A chapter with several experiments becomes a static contents page with distinct fragment targets and links; it does not redirect all fragments to one record.",
-            "Existing repository file conflicts still require resolution. A legacy mapping does not authorize replacing unrelated or externally edited files at that address. Inspect the repository file review before confirming an upload."
-          ]
-        },
-        {
           "id": "publication-recovery",
           "title": "Recover an upload or restore an older edition",
           "paragraphs": [

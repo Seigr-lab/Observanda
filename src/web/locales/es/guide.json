@@ -507,15 +507,6 @@
           ]
         },
         {
-          "id": "legacy-links",
-          "title": "Conservar direcciones y fragmentos de capítulos antiguos",
-          "paragraphs": [
-            "Abre {ui:publication.legacyLinks} en Publicación. Añade cada ruta HTML relativa antigua, su título público de página y una asignación por cada fragmento. Elige el registro de destino individual y si el enlace sigue su versión actual seleccionada o nombra la revisión exacta guardada. Todas las etiquetas aquí son texto público. Guardar las asignaciones no las publica.",
-            "La preparación comprueba cada asignación frente a la edición seleccionada. Los destinos faltantes, las rutas o fragmentos duplicados y las colisiones con páginas generadas bloquean la preparación e identifican la dirección afectada. Corrige la asignación o incluye la revisión exacta referenciada antes de preparar de nuevo. Un capítulo con varios experimentos se convierte en una página estática de contenidos con destinos de fragmento y enlaces distintos; no redirige todos los fragmentos a un solo registro.",
-            "Los conflictos con archivos existentes del repositorio siguen requiriendo resolución. Una asignación antigua no autoriza a sustituir archivos ajenos o editados externamente en esa dirección. Inspecciona la revisión de archivos del repositorio antes de confirmar una subida."
-          ]
-        },
-        {
           "id": "publication-recovery",
           "title": "Recuperar una subida o restaurar una edición anterior",
           "paragraphs": [

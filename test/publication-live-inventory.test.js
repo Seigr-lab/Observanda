@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {LivePathIndex,deploymentInventory,deploymentInventoryPaths,prepareDeploymentInventory,recordDeploymentInventory,verifyDeploymentInventories} from '../src/publication-live-inventory.js';
+import {LivePathIndex,deploymentInventory,deploymentInventoryPaths,prepareDeploymentInventory,recordDeploymentInventory} from '../src/publication-live-inventory.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -14,7 +14,6 @@ import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
 import {websitePublicationMetadata} from '../src/website-publication-metadata.js';
-import {randomUUID} from 'node:crypto';
 
 test('retained live inventories grow past their former envelope and seek directly to late paths',async t=>{
  const data=new Map();let reads=0,largest=0;
@@ -49,16 +48,11 @@ test('inventory preparation preserves removals, fences changes and survives fres
  const siteFiles=new WebsiteFileStore(workspace),scoped=websitePublicationMetadata(await siteFiles.publicationWorkspace((await siteFiles.create({name:'Field notes'})).site.id));assert.equal(await deploymentInventory(scoped,key),null);
  const site=await prepareDeploymentInventory(scoped,key,['publication.json','site.html']);
  await scoped.withLock(()=>recordDeploymentInventory(scoped,key,{commit:'site-commit',releaseId:'site-edition'},site));
- assert.equal((await deploymentInventory(workspace,key)).commit,latest.commit);await verifyDeploymentInventories(workspace);await verifyDeploymentInventories(scoped);
- const pendingFile='.observanda/deployments/'+randomUUID()+'.json',pendingNode='.observanda/materials/sequences/live-inventory-nodes/'+stale.files.root.hash+'.json';
- const pendingBytes=await workspace.readMetadata(pendingNode,262144);
- await workspace.withLock(async()=>{await workspace.writeMetadata(pendingFile,serialize({version:1,journal:{liveInventory:stale}}));await workspace.writeMetadata(pendingNode,'{}');});
- await assert.rejects(verifyDeploymentInventories(workspace),{code:'MATERIAL_MISSING'});
- await workspace.withLock(async()=>{await workspace.writeMetadata(pendingNode,pendingBytes);await workspace.removeMetadata(pendingFile);});
+ assert.equal((await deploymentInventory(workspace,key)).commit,latest.commit);assert.deepEqual(await Array.fromAsync(deploymentInventoryPaths(scoped,await deploymentInventory(scoped,key),'files')),['publication.json','site.html']);
  const access=await createWorkspaceAccess('','synthetic inventory recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);
  try{
   const destination=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(destination,vault);
-  assert.deepEqual(await deploymentInventory(restored,key),current);await verifyDeploymentInventories(restored);
+  assert.deepEqual(await deploymentInventory(restored,key),current);
   assert.deepEqual(await Array.fromAsync(deploymentInventoryPaths(restored,current,'files')),[...files,'older.html'].sort());
  }finally{clearVault(vault);}
 });

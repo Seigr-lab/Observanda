@@ -70,29 +70,8 @@ export async function assertDeploymentInventory(workspace,key,prepared,receipt=n
  if(identity(current)!==prepared.before&&!repeated)throw new AppError('PUBLISH_STALE');
 }
 function validatePreparedInventory(prepared){if(!prepared||prepared.version!==1||typeof prepared.before!=='string'||!/^[a-f0-9]{64}$/.test(prepared.before)||!validSet(prepared.files)||!validSet(prepared.removed))fail();}
-export async function verifyPreparedInventory(workspace,prepared,{signal,files}={}){
- validatePreparedInventory(prepared);const index=new LivePathIndex(workspace);
- if(files&&files.size!==(prepared.files.root?.count??0))fail();
- for await(const path of index.paths(prepared.files)){signal?.throwIfAborted();if(files&&!await files.has(path))fail();}
- for await(const path of index.paths(prepared.removed)){signal?.throwIfAborted();if(await index.has(prepared.files,path))fail();}
-}
 export async function recordDeploymentInventory(workspace,key,receipt,prepared){
  await assertDeploymentInventory(workspace,key,prepared,receipt);
  const value=validateDeploymentInventory({version:2,commit:receipt.commit,releaseId:receipt.releaseId,files:prepared.files,removed:prepared.removed});
  await workspace.writeMetadata(file(key),serialize(value));return value;
-}
-export async function verifyDeploymentInventories(workspace){
- for await(const name of workspace.metadataNames('.observanda/publication-live')){
-  if(!/^[a-f0-9]{64}\.json$/.test(name))fail();const inventory=await deploymentInventory(workspace,name.slice(0,-5));if(!inventory)fail();
-  if(inventory.version===1){const files=new Set(inventory.files);if(inventory.removed.some(path=>files.has(path)))fail();continue;}
-  const index=new LivePathIndex(workspace);for await(const path of index.paths(inventory.files))void path;
-  for await(const path of index.paths(inventory.removed))if(await index.has(inventory.files,path))fail();
- }
- // A stopped deployment may reference pages that have not become the current
- // inventory yet. Backup qualification includes those resumable roots too.
- for await(const name of workspace.metadataNames('.observanda/deployments')){
-  if(!/^[a-f0-9-]{36}\.json$/.test(name))fail();let value;
-  const raw=await workspace.readMetadata('.observanda/deployments/'+name,16*1024*1024);try{value=JSON.parse(raw);}catch{fail();}if(!value)fail();
-  if(value?.journal?.liveInventory)await verifyPreparedInventory(workspace,value.journal.liveInventory);
- }
 }

@@ -146,16 +146,6 @@ async function* subscriptions(store,owners,signal){
   signal?.throwIfAborted();const row=await store.control(file);if(row.id!==id)throw new AppError('FORMAT');yield id;
  }
 }
-export async function hasFeedInterest(store,{projectId,notebookId}={}, {signal}={}){
- return store.scope(async()=>{
-  const owner=notebookId?{projectId,notebookId}:null;
-  for await(const id of subscriptions(store,[owner],signal)){
-   const manifest=await store.raw(id,{missing:true});
-   if(manifest?.feeds?.some(feed=>(!projectId||!feed.criteria.projectId||feed.criteria.projectId===projectId)&&(!notebookId||!feed.criteria.notebookId||feed.criteria.notebookId===notebookId)))return true;
-  }
-  return false;
- },{signal});
-}
 function reservePath(files,name,id){
  const previous=files.get(name);if(previous&&previous.feedPage!==id)throw new AppError('CONFLICT');
 }

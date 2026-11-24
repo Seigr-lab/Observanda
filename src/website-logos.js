@@ -15,7 +15,6 @@ export const LOGOS_ATTRIBUTE='data-observanda-logos';
 export const LOGOS_STYLESHEET='website-logos.css';
 // Zero-specificity rules, so any style the author writes takes precedence.
 export const LOGOS_CSS=':where(.site-logos){display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;margin:.75rem auto;padding:0 1rem;max-width:72rem}\n:where(.site-logos:empty){display:none}\n:where(.site-logos img){display:block;width:auto;height:auto;max-height:4rem;max-width:12rem}\n';
-export const validLogoScope=value=>value==='auto'||value==='home';
 export const PAGE_LOGOS_ATTRIBUTE='data-observanda-page-logos';
 export const maxPageLogos=4;
 function markers(html){

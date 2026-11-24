@@ -127,7 +127,6 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
  return patches(html,changes);
 }
 
-export function insertWebsiteSource(html,{position='end',...source}){return insertWebsiteSources(html,[source],position);}
 export function websiteInsertionOffset(document,position){
  const body=[...descendants(document)].find(node=>node.tagName==='body');
  // New content belongs in the editable page, ahead of the site's footer.

@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
-import {GithubPlanIndex,githubPlanReader,verifyGithubPublishingPlans} from '../src/github-plan-index.js';
+import {GithubPlanIndex,githubPlanReader} from '../src/github-plan-index.js';
 import {indexedGithubFilePlan,githubPlanReview,admitGithubPlan,writeGithubOwnership,readGithubOwnership} from '../src/github-publication-plan.js';
 import {Publisher,defaultPublishing} from '../src/publishing.js';
 import {deployGithub} from '../src/github-deployment.js';
@@ -25,8 +25,6 @@ test('indexed GitHub reviews hold many long paths without enlarging headers or r
  assert.ok(Buffer.byteLength(serialize(saved))<8192);assert.equal(reader.count('uploads'),1);assert.equal(reader.count('entries'),files.size);
  const review=await githubPlanReview(f.workspace,saved);assert.equal(review.added.length,32);assert.equal(review.counts.added,files.size);assert.equal(review.document,undefined);
  const visited=new Set();for(let offset=0;offset!==null;){const page=await reader.page('added',{offset});assert.ok(page.items.length<=32);for(const row of page.items){assert.ok(files.has(row.path));assert.equal(visited.has(row.path),false);visited.add(row.path);}offset=page.next;}assert.equal(visited.size,files.size);
- await reader.verify();
- await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/publishing-plan/'+'a'.repeat(64)+'.json',serialize({...saved,document:{version:1,collections:{}}})));await assert.rejects(verifyGithubPublishingPlans(f.workspace),{code:'PUBLISH_OWNERSHIP'});
 });
 test('indexed deployment resumes lost tree and activation replies, retains ownership and detects later conflicts',async t=>{
  const f=await fixture(t),remote=githubFixture({branch:'main',initialFiles:{'README.md':'Keep outside publishing'}}),adapter=truncatedGithubTrees(remote),publisher=new Publisher(f.workspace.root,{request:adapter.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',pages:false,directory:'site'});await publisher.save(config,'new');await publisher.connect('synthetic_github_token_1234567890');
@@ -41,8 +39,8 @@ test('indexed deployment resumes lost tree and activation replies, retains owner
  await f.workspace.withLock(()=>writeGithubOwnership(f.workspace,publisher.destinationKey(config),durable));const owned=await readGithubOwnership(publisher,config,receipt);assert.equal(owned.version,2);assert.equal(githubPlanReader(f.workspace,owned).count('entries'),files.size);
  const tree=remote.trees.get(remote.commits.get(remote.head).tree);assert.ok(tree.some(row=>row.path==='README.md'));const current=await indexedGithubFilePlan(f.workspace,candidate,tree,owned,'site');assert.equal(current.counts.conflicts,0);assert.equal(current.counts.unchanged,files.size);
  const altered=tree.map(row=>row.path==='site/page-9.txt'?{...row,sha:'f'.repeat(40)}:row),conflicting=await indexedGithubFilePlan(f.workspace,candidate,altered,owned,'site');assert.equal(conflicting.counts.conflicts,1);
- await verifyGithubPublishingPlans(f.workspace);
- const block=durable.document.collections.entries.hash;await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/publishing-plan-blocks/index-'+block+'.json','{}'));await assert.rejects(verifyGithubPublishingPlans(f.workspace),{code:'PUBLISH_OWNERSHIP'});
+ const entries=()=>Array.fromAsync(new GithubPlanIndex(f.workspace,durable.document).values('entries'));assert.equal((await entries()).length,files.size);
+ const block=durable.document.collections.entries.hash;await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/publishing-plan-blocks/index-'+block+'.json','{}'));await assert.rejects(entries(),{code:'PUBLISH_OWNERSHIP'});
 });
 
 test('a version 1 inline review, its inline deployment journal and its file ownership record are refused',async t=>{

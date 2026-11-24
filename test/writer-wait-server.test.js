@@ -1,6 +1,5 @@
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
 import {recordRevisions} from '../src/research.js';
-import {emptyWebsiteSelection} from '../src/web/website-selection.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';

@@ -507,15 +507,6 @@
           ]
         },
         {
-          "id": "legacy-links",
-          "title": "Behold gamle kapitteladresser og fragmenter",
-          "paragraphs": [
-            "Åpne {ui:publication.legacyLinks} i Publisering. Legg til hver gamle relative HTML-sti, den offentlige sidetittelen og én tilordning for hvert fragment. Velg den enkelte måloppføringen og om lenken følger dens gjeldende valgte versjon eller viser til den nøyaktige lagrede revisjonen. Alle etiketter her er offentlig tekst. Lagring av tilordninger publiserer dem ikke.",
-            "Klargjøringen kontrollerer hver tilordning mot den valgte utgaven. Manglende mål, dupliserte stier eller fragmenter og kollisjoner med genererte sider blokkerer klargjøringen og identifiserer den berørte adressen. Rett tilordningen eller inkluder den nøyaktige refererte revisjonen før ny klargjøring. Et kapittel med flere eksperimenter blir en statisk innholdsside med separate fragmentmål og lenker; det omdirigerer ikke alle fragmenter til én oppføring.",
-            "Eksisterende filkonflikter i repositoriet må fortsatt løses. En eldre lenketilordning gir ikke tillatelse til å erstatte andre eller eksternt redigerte filer på den adressen. Inspiser gjennomgangen av repositoriefilene før du bekrefter en opplasting."
-          ]
-        },
-        {
           "id": "publication-recovery",
           "title": "Gjenopprett en opplasting eller en eldre utgave",
           "paragraphs": [

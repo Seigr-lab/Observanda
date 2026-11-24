@@ -8,14 +8,14 @@ import {selectionBook} from './publication-selection-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {RecordWriting} from '../src/record-writing.js';
-import {defaultEditionRecord,selectEditionRecord} from '../src/web/publication-selection.js';
+import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 import {recordRevision} from '../src/research.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace,workspaceFile,atomicWrite} from '../src/storage.js';
 import {MediaStore} from '../src/media.js';
 import {serialize} from '../src/storage-format.js';
-import {catalogueFormat,catalogueRequiresSourcePublicationControls,catalogueRequiresWebsiteSourceSelections,requireSourcePublicationControls,requireWebsiteSourceSelections} from '../src/catalogue-format.js';
+import {catalogueFormat,catalogueRequiresSourcePublicationControls,configurationCatalogueFeatures,requireSourcePublicationControls,requireWebsiteSourceSelections} from '../src/catalogue-format.js';
 import {rekeyCatalogue,verifyCatalogueArchive} from '../src/research-catalogue.js';
 import {backupCatalogue,CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
@@ -38,9 +38,7 @@ test('website and edition choices cannot authorize source-private records or wri
  record.sections[1].share=false;
  const choice=defaultEditionRecord(record,recordRevision(record));
  assert.deepEqual(choice.sections,[record.sections[0].id]);
- choice.sections.push(record.sections[1].id);
- assert.deepEqual(selectEditionRecord(record,choice).sections.map(s=>s.id),[record.sections[0].id]);
- assert.equal(selectEditionRecord(secret,{...defaultEditionRecord(secret,recordRevision(secret)),include:true}).share,false);
+ assert.equal(defaultEditionRecord(secret,recordRevision(secret)).include,false);
 });
 
 test('section permission saves with its source revision and bounds the website copy, rendering and portable reopening',async t=>{
@@ -92,7 +90,7 @@ test('paged website source admission rolls back atomically and survives portable
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await requireSourcePublicationControls(store.db);await requireWebsiteSourceSelections(store.db);}));
  const generation=await format(f.workspace),expected=await f.workspace.read(),descriptorText=await f.workspace.readFile(await workspaceFile(f.workspace.root),'utf8'),descriptor=JSON.parse(descriptorText);
  async function check(workspace){
-  const current=await format(workspace);assert.equal(current,generation);assert.equal(catalogueRequiresSourcePublicationControls(current),true);assert.equal(catalogueRequiresWebsiteSourceSelections(current),true);
+  const current=await format(workspace);assert.equal(current,generation);assert.equal(catalogueRequiresSourcePublicationControls(current),true);assert.equal(configurationCatalogueFeatures(current).sourceSelections,true);
   assert.deepEqual(await workspace.read(),expected);await verifyCatalogueArchive(workspace,descriptor);
  }
  await check(new Workspace(f.workspace.root,f.vault));

@@ -507,15 +507,6 @@
           ]
         },
         {
-          "id": "legacy-links",
-          "title": "Conserva adreces i fragments de capítols antics",
-          "paragraphs": [
-            "Obre {ui:publication.legacyLinks} a Publicació. Afegeix cada camí HTML relatiu antic, el títol públic de la pàgina i una correspondència per a cada fragment. Tria el registre de destinació individual i si l'enllaç segueix la seva versió actual seleccionada o anomena la revisió exacta guardada. Totes les etiquetes d'aquí són text públic. Guardar les correspondències no les publica.",
-            "La preparació comprova cada correspondència contra l'edició seleccionada. Les destinacions absents, els camins o fragments duplicats i els conflictes amb pàgines generades bloquegen la preparació i identifiquen l'adreça afectada. Corregeix la correspondència o inclou la revisió exacta referenciada abans de tornar a preparar. Un capítol amb diversos experiments es converteix en una pàgina de continguts estàtica amb destinacions de fragment i enllaços diferenciats; no redirigeix tots els fragments a un sol registre.",
-            "Els conflictes existents de fitxers del repositori continuen requerint resolució. Una correspondència antiga no autoritza a substituir fitxers no relacionats o editats externament en aquella adreça. Inspecciona la revisió de fitxers del repositori abans de confirmar una càrrega."
-          ]
-        },
-        {
           "id": "publication-recovery",
           "title": "Recupera una càrrega o restaura una edició anterior",
           "paragraphs": [

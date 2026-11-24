@@ -1,15 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,writeFile,readFile} from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
-import {randomBytes} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {hasPrivateText,normalizePrivateText,privateTextPatterns} from '../src/privacy-text.js';
 import {hasPrivateTextStream,PRIVACY_NORMALIZATION_SEGMENT} from '../src/privacy-text-stream.js';
 import {PrivacyPatternStream,PrivacyBlockedStream} from '../src/privacy-pattern-stream.js';
-import {admitRetainedPublicFile,assertPublicFiles} from '../src/privacy.js';
-import {FileContent,writeContent} from '../src/file-content.js';
 
 const source=(value,size=7)=>async function*(){const bytes=Buffer.isBuffer(value)?value:Buffer.from(value);for(let i=0;i<bytes.length;i+=size)yield bytes.subarray(i,i+size);};
 async function same(value,blocked=[],sizes=[1,2,7,31,16384]){
@@ -44,17 +39,6 @@ test('normalization complexity fails explicitly without truncation or a document
  await assert.rejects(hasPrivateTextStream(source('a'+'\u0301'.repeat(PRIVACY_NORMALIZATION_SEGMENT)+' C:/secret')), {code:'PRIVACY_TEXT_COMPLEXITY'});
  const controller=new AbortController();controller.abort(new Error('Stop inspection'));await assert.rejects(hasPrivateTextStream(source('safe'),[],{signal:controller.signal}),/Stop inspection/);
  for(const bytes of [Buffer.from([0xff]),Buffer.from([0xed,0xa0,0x80]),Buffer.from([0xe2,0x82])])await assert.rejects(hasPrivateTextStream(source(bytes,1)),{code:'UNSAFE'});
-});
-test('retained admission authenticates bytes and keys before caching a streamed text file',async t=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-privacy-stream-')),vault={id:'synthetic',key:randomBytes(32)},workspace={root,vault,requireStorageKey:async()=>{if(!vault.key){const error=Error('locked');error.code='ACCESS_LOCKED';throw error;}},fileAAD:file=>path.basename(file)};
- t.after(async()=>{vault.key?.fill(0);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-privacy-stream-'));await rm(root,{recursive:true,force:true});});
- async function retained(name,text){const file=path.join(root,name),saved=await writeContent(workspace,file,source(text,29)());return new FileContent(workspace,file,saved.size,saved.sha256);}
- const safe=await retained('safe.blob','<p>\u00c5ngstr\u00f6m public observation \u{1f41d}.</p>');assert.equal(await admitRetainedPublicFile('index.html',safe,{type:'text'}),safe);assert.doesNotThrow(()=>assertPublicFiles(new Map([['index.html',safe]])));
- const privateFile=await retained('private.blob','<p>'+ 'ordinary '.repeat(5000)+'C:/private/notes</p>');await assert.rejects(admitRetainedPublicFile('index.html',privateFile,{type:'text'}),{code:'PRIVACY'});assert.throws(()=>assertPublicFiles(new Map([['index.html',privateFile]])),{code:'UNSAFE'});
- const damaged=await retained('damaged.blob','safe text'),bytes=await readFile(damaged.file);bytes[bytes.length-1]^=1;await writeFile(damaged.file,bytes);await assert.rejects(admitRetainedPublicFile('index.html',damaged,{type:'text'}),error=>['ENCRYPTION_DAMAGED','MEDIA_INVALID'].includes(error.code));
- const wrong=new FileContent(workspace,safe.file,safe.size,'0'.repeat(64));await assert.rejects(admitRetainedPublicFile('index.html',wrong,{type:'text'}),{code:'MEDIA_INVALID'});
- const invalid=await retained('invalid.blob',Buffer.from([0xff]));await assert.rejects(admitRetainedPublicFile('index.html',invalid,{type:'text'}),{code:'UNSAFE'});
- const locked=await retained('locked.blob','safe text'),read=locked.read.bind(locked);let passes=0;locked.read=async function*(...args){yield* read(...args);if(++passes===2){vault.key.fill(0);vault.key=null;}};await assert.rejects(admitRetainedPublicFile('index.html',locked,{type:'text'}),{code:'ACCESS_LOCKED'});
 });
 test('privacy scanning memory remains bounded as ordinary output grows sixteenfold',t=>{
  const program=`import {hasPrivateTextStream} from './src/privacy-text-stream.js';const mib=Number(process.argv[1]),stats={},chunk=Buffer.from('Ordinary public observation. '.repeat(600));let remaining=mib*1024*1024;const source=async function*(){let left=remaining;while(left){const n=Math.min(left,chunk.length);yield chunk.subarray(0,n);left-=n;}};const privateText=await hasPrivateTextStream(source,[],{stats});console.log(JSON.stringify({privateText,stats,rss:process.resourceUsage().maxRSS}));`;

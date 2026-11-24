@@ -41,8 +41,3 @@ export async function runWebsiteUpgrade(store,name,operation,{signal,shareResult
  if(shareResult)running.set(key,work);
  try{return await work;}finally{if(running.get(key)===work)running.delete(key);}
 }
-export function validateUpgradeState(value){
- if(value===null)return {state:'unprepared',total:0,done:0};
- if(value.version!==1||!['preparing','ready','failed'].includes(value.state)||!Number.isSafeInteger(value.total)||!Number.isSafeInteger(value.done)||value.total<value.done||value.done<0)throw new AppError('FORMAT');
- const {version,...status}=value;return status;
-}

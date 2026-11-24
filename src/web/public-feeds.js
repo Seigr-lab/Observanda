@@ -1,10 +1,6 @@
 // Self-contained controller shared by hosted exports and trusted preview hosts.
 // Source pages contain only the already admitted public selection. Filtering
 // keeps a bounded page cache and never constructs the complete feed DOM.
-export function disposePublicFeeds(document){
- for(const root of document.querySelectorAll('[data-public-feed]'))root.__feedDispose?.();
-}
-
 export function enhancePublicFeeds(document,view,fetchPage,{baseURL=view.location.href,history=true,onPageApplied=()=>{}}={}){
  for(const root of document.querySelectorAll('[data-public-feed]')){
   const stamp=root.dataset.feedConfig+'|'+baseURL;if(root.__feedStamp===stamp)continue;

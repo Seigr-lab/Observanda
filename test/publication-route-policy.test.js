@@ -1,16 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {publicationRoutes,projectPublicationRequest} from '../src/project-publication-requests.js';
+import {projectPublicationRequest} from '../src/project-publication-requests.js';
 import {projectRequest} from '../src/project-application.js';
 import {projectContentHttp} from '../src/project-content-http.js';
 import {workspaceSnapshotRequest} from '../src/workspace-read-admission.js';
 import {requestLane} from '../src/request-admission.js';
 
 const id='00000000-0000-4000-8000-000000000001';
+const operations=['workspace/save','github-connection/status','github-connection/start','github-connection/cancel','github-connection/choose','github-connection/disconnect','publishing/connect','publishing/disconnect','publishing'];
+const publicationRoutes=Object.fromEntries(operations.map(operation=>[operation,projectPublicationRequest('/api/'+operation)]));
 test('all declared publication routes share transport, capacity and lifecycle policy across owners',()=>{
  for(const [operation,contract] of Object.entries(publicationRoutes)){
-  const route='/api/'+operation;assert.ok(Object.isFrozen(contract));
+  const route='/api/'+operation;assert.ok(contract,operation);assert.ok(Object.isFrozen(contract));
   for(const key of ['method','input','schema','authority','owner','admission','cancellation','output'])assert.equal(typeof contract[key],'string',operation+': '+key);
   assert.equal(projectPublicationRequest(route,contract.method),contract);
   assert.equal(requestLane(contract.method,route),contract.admission);

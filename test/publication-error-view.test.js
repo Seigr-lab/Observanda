@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {publicationErrorView} from '../src/web/publication-error-view.js';
 
 const esc=value=>String(value).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-const error={code:'PUBLICATION_LINKS',message:'Two links need review.',details:[{path:'old/index.html',reason:'generatedPath'}]};
+const error={code:'PUBLISH_NOT_LIVE',message:'Two files need review.',details:[{path:'old/index.html',reason:'missing'}]};
 
 test('a publication issue names its dialog only when the dialog asks for it',()=>{
  const dialog=publicationErrorView(error,esc,{titleId:'dialog-title'}),inline=publicationErrorView(error,esc);

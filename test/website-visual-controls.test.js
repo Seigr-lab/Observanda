@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyVisualStyle,visualStyleFields,writeVisualStyle,generatedAppearanceProperties} from '../src/web/website-files-visual-style.js';
-import {blockTypes} from '../src/web/website-files-blocks.js';
+import {elementGroups} from '../src/web/website-element-library.js';
 import en from '../src/web/locales/en/websiteFiles.json' with {type:'json'};
 
 function fakeStyle(){
@@ -26,8 +26,9 @@ test('the block inspector offers space around, opacity and shadow as ordinary de
 });
 
 test('the block menu offers an image and a video next to the gallery, each labelled',()=>{
- for(const key of ['image','video','gallery'])assert.ok(blockTypes.includes(key),key);
- for(const key of blockTypes)assert.ok(en[key==='heading'?'addHeading':key==='paragraph'?'addText':key],key);
+ const media=elementGroups.find(([group])=>group==='media')[1];
+ for(const key of ['image','video','gallery'])assert.ok(media.includes(key),key);
+ for(const [,keys] of elementGroups)for(const key of keys)assert.ok(en['element_'+key]&&en['element_'+key+'Text'],key);
 });
 
 test('a block or page can take a site picture as its background, sized, placed and overlaid visually',async()=>{

@@ -1,11 +1,10 @@
 import {hasPrivateText} from './privacy-text.js';
-import {hasPrivateTextStream} from './privacy-text-stream.js';
 export {hasPrivateText} from './privacy-text.js';
 import {isDownloadPath} from './web/website-file.js';
 import {PUBLIC_POPUPS_SCRIPT} from './publication-popups.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
 import {PUBLIC_REGIONS_SCRIPT} from './public-regions.js';
-import {FileContent,contentBuffer} from './file-content.js';
+import {FileContent} from './file-content.js';
 import {legacyPagePath} from './web/publication-links-model.js';
 import {knownPublicBookScript} from './publication-scripts.js';
 import {PUBLIC_FEEDS_SCRIPT,feedFilePath} from './publication-feeds.js';
@@ -18,27 +17,12 @@ const textName = new RegExp(`^(?:index\\.html|styles\\.css|publication\\.json|\\
 const mediaName = new RegExp(`^media/${uuid}\\.(png|wav|mp4)$`);
 const publicTextFile=name=>name==='browse.html'||feedFilePath(name)||textName.test(name)||legacyPagePath(name);
 const checkedFonts=new Map();
-const retainedChecks=new WeakMap();
-const retainedIdentity=(name,file,blockedValues)=>JSON.stringify([name,file.file,file.size,file.sha256,blockedValues]);
 // Buffered and retained outputs share the exact byte decoding and public policy.
 export function assertPublicFileBytes(name,bytes,{type,blockedValues=[]}){
   if(!Buffer.isBuffer(bytes)||!['text','binary'].includes(type))throw new AppError('UNSAFE');
   const content=type==='text'?bytes.toString('utf8'):bytes;
   if(type==='text'&&!Buffer.from(content).equals(bytes))throw new AppError('UNSAFE');
   assertPublicFiles(new Map([[name,content]]),blockedValues);
-}
-// Validate one retained output at a time, then keep only its authenticated file
-// handle. This admission is never deserialized from a candidate manifest.
-export async function admitRetainedPublicFile(name,file,{type,blockedValues=[]}){
-  if(!(file instanceof FileContent)||!['text','binary'].includes(type))throw new AppError('UNSAFE');
-  if(type==='binary'&&isDownloadPath(name)){await file.verify();assertPublicFiles(new Map([[name,file]]),blockedValues);return file;}
-  if(type==='text'&&publicTextFile(name)){
-    const vault=file.workspace.vault;
-    if(await hasPrivateTextStream(()=>file.stream(),blockedValues))throw new AppError('PRIVACY',[{field:'generated output'}]);
-    await file.workspace.requireStorageKey();if(file.workspace.vault!==vault||!vault?.key)throw new AppError('ACCESS_LOCKED');
-  }else assertPublicFileBytes(name,await contentBuffer(file),{type,blockedValues});
-  retainedChecks.set(file,{workspace:file.workspace,identity:retainedIdentity(name,file,blockedValues)});
-  return file;
 }
 function assertCustomFont(name,bytes,blockedValues){
   const match=/^fonts\/custom-([a-f0-9]{64})\.(ttf|otf|woff|woff2)$/.exec(name);
@@ -60,8 +44,6 @@ export function assertPublicFields(fields, blockedValues = []) {
 
 export function assertPublicFiles(files, blockedValues = []) {
   for (const [name, value] of files) {
-    const checked=retainedChecks.get(value);
-    if(checked&&checked.workspace===value.workspace&&checked.identity===retainedIdentity(name,value,blockedValues))continue;
     const content=value instanceof FileContent?value.header:value;
     if(value instanceof FileContent&&!mediaName.test(name)&&!isDownloadPath(name))throw new AppError('UNSAFE');
     if(isDownloadPath(name)){

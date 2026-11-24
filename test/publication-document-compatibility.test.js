@@ -153,7 +153,7 @@ test('paged website choices preserve all 192 prior capability combinations throu
  const payload=seal(Buffer.from('Retained website source choices'),randomBytes(32),'test'),tables={state:['slot','payload']},seen=new Set();
  for(let previous=122;previous<=313;previous++){
   const features=formats.configurationCatalogueFeatures(previous),db=database(previous),next={...features,sourceSelections:true};
-  assert.equal(formats.catalogueRequiresWebsiteSourceSelections(previous),false);
+  assert.equal(formats.configurationCatalogueFeatures(previous)?.sourceSelections===true,false);
   await formats.requireWebsiteSourceSelections(db);const generation=db.version;seen.add(generation);
   assert.equal(generation,previous+192);assert.deepEqual(formats.configurationCatalogueFeatures(generation),next);
   assert.deepEqual(requirements(generation),requirements(previous));assert.equal(formats.catalogueRequiresSourcePublicationControls(generation),features.permissions===true);
@@ -188,7 +188,7 @@ test('nested preparation admission preserves all 384 prior combinations through 
   assert.equal(generation,previous+384);assert.deepEqual(formats.configurationCatalogueFeatures(generation),next);
   assert.deepEqual(requirements(generation),requirements(previous));
   assert.equal(formats.catalogueRequiresSourcePublicationControls(generation),features.permissions===true);
-  assert.equal(formats.catalogueRequiresWebsiteSourceSelections(generation),features.sourceSelections===true);
+  assert.equal(formats.configurationCatalogueFeatures(generation)?.sourceSelections===true,features.sourceSelections===true);
   await formats.requireNestedAttemptCollections(db);assert.equal(db.version,generation);
   for(const [admit,change] of transitions){
    const changing=database(generation);await admit(changing);
@@ -220,7 +220,7 @@ test('native directory admission preserves all 768 prior combinations through ow
   assert.equal(generation,previous+768);assert.deepEqual(formats.configurationCatalogueFeatures(generation),next);
   assert.deepEqual(requirements(generation),requirements(previous));
   assert.equal(formats.catalogueRequiresSourcePublicationControls(generation),features.permissions===true);
-  assert.equal(formats.catalogueRequiresWebsiteSourceSelections(generation),features.sourceSelections===true);
+  assert.equal(formats.configurationCatalogueFeatures(generation)?.sourceSelections===true,features.sourceSelections===true);
   assert.equal(formats.catalogueRequiresNestedAttemptCollections(generation),features.nestedAttempts===true);
   await formats.requireOwnerDirectories(db);assert.equal(db.version,generation);
   for(const [admit,change] of transitions){
@@ -246,9 +246,9 @@ test('native directory admission preserves all 768 prior combinations through ow
 test('native portability generations preserve all prior feature and restore combinations',async()=>{
  for(let previous=122;previous<=1657;previous++){
   const features=formats.configurationCatalogueFeatures(previous),db=database(previous);await formats.requirePortabilityCollections(db);
-  assert.equal(db.version,previous+1536);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...features,portability:true});assert.equal(formats.catalogueRequiresPortabilityCollections(db.version),true);
+  assert.equal(db.version,previous+1536);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...features,portability:true});assert.equal(formats.configurationCatalogueFeatures(db.version).portability,true);
   const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,db.version);assert.equal(restored.version,db.version);
-  await formats.requireOwnerDirectories(db);assert.equal(formats.catalogueRequiresPortabilityCollections(db.version),true);assert.equal(formats.catalogueRequiresOwnerDirectories(db.version),true);
+  await formats.requireOwnerDirectories(db);assert.equal(formats.configurationCatalogueFeatures(db.version).portability,true);assert.equal(formats.catalogueRequiresOwnerDirectories(db.version),true);
  }
  for(const portability of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),portability}),{code:'INVALID'});
 });
@@ -256,7 +256,7 @@ test('native portability generations preserve all prior feature and restore comb
 
 test('paged research admission restores every existing feature without manufacturing a template or publication owner',async()=>{
  for(let prior=122;prior<=6265;prior+=1){
-  const features=formats.configurationCatalogueFeatures(prior),db=database(prior);await formats.requirePagedResearchTables(db);assert.equal(db.version,prior+6144);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...features,pagedResearchTables:true});assert.equal(formats.catalogueRequiresPagedResearchTables(db.version),true);assert.equal(formats.catalogueRequiresWebsiteTemplateInheritance(db.version),features.templateInheritance===true);
+  const features=formats.configurationCatalogueFeatures(prior),db=database(prior);await formats.requirePagedResearchTables(db);assert.equal(db.version,prior+6144);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...features,pagedResearchTables:true});assert.equal(formats.catalogueRequiresPagedResearchTables(db.version),true);assert.equal(formats.configurationCatalogueFeatures(db.version).templateInheritance===true,features.templateInheritance===true);
   const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,db.version);assert.equal(restored.version,db.version);
   await formats.requirePagedResearchTables(db);assert.equal(db.version,restored.version);
  }

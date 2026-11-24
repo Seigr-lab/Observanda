@@ -42,7 +42,6 @@ export class GithubPlanIndex{
  async at(kind,offset){this.check();if(!Number.isSafeInteger(offset)||offset<0||offset>=this.count(kind))fail();let cached=this.ordinalCache;if(!cached||cached.kind!==kind||cached.root!==this.root(kind)?.hash||offset<cached.offset||offset>=cached.offset+cached.items.length){const page=await this.page(kind,{offset:Math.floor(offset/32)*32});cached=this.ordinalCache={kind,root:this.root(kind)?.hash,...page};}return cached.items[offset-cached.offset];}
  async *values(kind,{offset=0}={}){if(!Number.isSafeInteger(offset)||offset<0||offset>this.count(kind))fail();while(offset<this.count(kind)){const page=await this.page(kind,{offset});for(const value of page.items){this.check();yield value;}offset+=page.items.length;}}
  async page(kind,{offset=0,limit=32}={}){if(!Number.isSafeInteger(offset)||offset<0||offset>this.count(kind)||!Number.isSafeInteger(limit)||limit<1||limit>64)throw new AppError('INVALID');return this.snapshot(async()=>{const items=[];for(let at=offset;at<Math.min(this.count(kind),offset+limit);at++)items.push(await this.value(await this.tree.entryAt({root:this.root(kind)},at)));return {items,offset,total:this.count(kind),next:offset+items.length<this.count(kind)?offset+items.length:null};});}
- async verify(){const fresh=new GithubPlanIndex(this.workspace,this.descriptor,{signal:this.signal});for(const kind of Object.keys(this.descriptor.collections))for await(const value of fresh.values(kind))void value;}
 }
 // Every review, deployment cursor and retained ownership is indexed.
 export function githubPlanReader(workspace,plan,options){
@@ -53,20 +52,3 @@ export async function* githubRemovedPaths(workspace,plan,directory=''){
  if(!plan)return;for await(const row of githubPlanReader(workspace,plan).values('removed'))yield directory?row.path.slice(directory.length+1):row.path;
 }
 
-// Archives and fresh-key recovery verify current reviews, retained ownership
-// and every interrupted deployment, including descriptors not yet activated.
-export async function verifyGithubPublishingPlans(workspace){
- for(const folder of ['publishing-plan','publishing-ownership','deployments']){
-  for await(const name of workspace.metadataNames('.observanda/'+folder)){
-   if(!/^(?:[a-f0-9]{64}|[a-f0-9-]{36})\.json$/.test(name))fail();
-   const raw=await workspace.readMetadata('.observanda/'+folder+'/'+name,16*1024*1024);let value;try{value=JSON.parse(raw);}catch{fail();}
-   if(!value)fail();
-   const replacement=folder==='publishing-plan'?value:value.intent?.plan;
-   if(replacement?.version===3)(await import('./github-publication-plan.js')).admitGithubPlan(replacement);
-   if([2,3].includes(value.version)&&folder!=='deployments')requireGithubPlanCollections(value.document,{ownership:folder==='publishing-ownership'});
-   if([2,3].includes(value.intent?.plan?.version))requireGithubPlanCollections(value.intent.plan.document);
-   if(value.journal?.document)requireGithubPlanCollections(value.journal.document);
-   for(const descriptor of [value.document,value.intent?.plan?.document,value.journal?.document])if(descriptor)await new GithubPlanIndex(workspace,descriptor).verify();
-  }
- }
-}

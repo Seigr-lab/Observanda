@@ -332,7 +332,6 @@ export async function requireSourcePublicationControls(db){
 
 // Source collections remain in the same encrypted website document. The gate
 // prevents earlier capped readers from discarding a larger saved selection.
-export const catalogueRequiresWebsiteSourceSelections=format=>configurationCatalogueFeatures(format)?.sourceSelections===true;
 export async function requireWebsiteSourceSelections(db){
  await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.sourceSelections)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,sourceSelections:true}));
@@ -355,18 +354,9 @@ export async function requireOwnerDirectories(db){
 }
 
 // Indexed portability controls are admitted with the encrypted native pages.
-export const catalogueRequiresPortabilityCollections=format=>configurationCatalogueFeatures(format)?.portability===true;
 export async function requirePortabilityCollections(db){
  await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.portability)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,portability:true}));
-}
-
-// Linked templates retain immutable baselines inside the website native tree.
-// Old writers must refuse the catalogue before discarding those bindings.
-export const catalogueRequiresWebsiteTemplateInheritance=format=>configurationCatalogueFeatures(format)?.templateInheritance===true;
-export async function requireWebsiteTemplateInheritance(db){
- await requireWebsitePresentation(db);await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
- if(!features.templateInheritance)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,templateInheritance:true}));
 }
 
 // Paged cells and retained table queries share immutable source locators.

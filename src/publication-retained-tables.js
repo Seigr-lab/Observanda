@@ -9,19 +9,13 @@ import {aggregationQuantileContextParts,aggregationPairContextText,aggregationWe
 import {clockSynchronizationContextParts} from './web/measurement-clock-context.js';
 import {computationLabel,cellComputationLabel} from './web/measurement-computation.js';
 import {domainDescription} from './web/measurement-domain-ui.js';
-import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {digest,serialize} from './storage-format.js';
 import {retainedTableBlocks} from './retained-tables.js';
-import {researchId} from './web/research-reference.js';
 import messages from './web/locales/en/retainedTables.json' with {type:'json'};
 import recordText from './web/locales/en/websiteRecordText.json' with {type:'json'};
 import measurementText from './web/locales/en/measurements.json' with {type:'json'};
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const natural=value=>Number.isSafeInteger(value)&&value>=0;
-const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const fail=()=>{throw new AppError('JOB_DAMAGED');};
-const key=(recordId,resultId)=>recordId+'/'+resultId+'/';
 // Words of a published table are written in English with the message they
 // come from, so a website page relabels them in its own language
 // (src/website-record-language.js); numbers follow the page's locale there.
@@ -30,7 +24,6 @@ const formatted=(catalogue,key,template,args,tag='span')=>'<'+tag+' data-observa
 export function retainedTableWindowHTML(block,table){
  return formatted('websiteRecordText','tableWindow',recordText.tableWindow,{rowFrom:block.offset+1,rowTo:block.offset+table.rows.length,columnFrom:block.columnOffset+1,columnTo:block.columnOffset+table.headers.length},'p');
 }
-export const retainedTableQueryHash=statement=>digest(serialize({source:statement.source,table:statement.table}));
 async function* cellText(materials,value,{signal}){
  if(typeof value==='string'){for(let at=0;at<value.length;at+=4096)yield value.slice(at,at+4096);return;}
  let offset=0;for(;;){const page=await materials.readDatasetCell(value,{offset,limit:4096,signal});yield page.value??page.text;const next=page.next;if(next===null)return;if(!Number.isSafeInteger(next)||next<=offset)fail();offset=next;}
@@ -79,49 +72,4 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
   }
   yield '</section>';
  }
-}
-export async function retainPublicationTables(builder,materials,record,recordId,{signal}={}){
- for(const statement of record.results?.statements??[]){
-  if(statement.table?.version!==3)continue;
-  const prefix=key(recordId,statement.id),queryHash=retainedTableQueryHash(statement),checksum=createHash('sha256');let count=0,pending='';
-  const append=async text=>{checksum.update(text);await builder.append('retainedTables',prefix+String(count).padStart(16,'0'),{recordId,resultId:statement.id,ordinal:count++,text},{indexes:{result:prefix}});};
-  for await(const chunk of retainedTableHTML(materials,statement,{signal})){
-   if(typeof chunk!=='string')fail();pending+=chunk;
-   while(pending.length>=4096){let end=4096;if(/[\uD800-\uDBFF]/.test(pending[end-1]))end--;await append(pending.slice(0,end));pending=pending.slice(end);}
-  }
-  if(pending)await append(pending);
-  await builder.append('retainedTables',prefix+'summary',{recordId,resultId:statement.id,queryHash,count,sha256:checksum.digest('hex')},{indexes:{result:prefix}});
- }
-}
-export function validRetainedTableChunk(identifier,value){
- if(!value||!researchId(value.recordId)||!researchId(value.resultId))return false;const prefix=key(value.recordId,value.resultId);
- return identifier===prefix+'summary'?Object.keys(value).sort().join()==='count,queryHash,recordId,resultId,sha256'&&natural(value.count)&&hash(value.queryHash)&&hash(value.sha256):Object.keys(value).sort().join()==='ordinal,recordId,resultId,text'&&natural(value.ordinal)&&identifier===prefix+String(value.ordinal).padStart(16,'0')&&typeof value.text==='string'&&value.text.length<=4096;
-}
-// Every chunk must belong to a selected statement, even when no record asks
-// the renderer to consume it. Validate each summary once and point-check chunks.
-export async function verifyRetainedTableEntry(input,identifier,value,{signal}={}){
- if(!validRetainedTableChunk(identifier,value))fail();
- const prefix=key(value.recordId,value.resultId);
- if(identifier===prefix+'summary'){
-  if(!await input.document.get('records',value.recordId,{signal}))fail();
-  const record=await input.record(value.recordId),statement=record.results?.statements.find(item=>item.id===value.resultId);
-  if(statement?.table?.version!==3||retainedTableQueryHash(statement)!==value.queryHash)fail();
- }else{
-  const summary=await input.document.get('retainedTables',prefix+'summary',{signal});
-  if(!validRetainedTableChunk(prefix+'summary',summary)||value.ordinal>=summary.count)fail();
- }
-}
-async function* publicationTableChunks(input,recordId,statement,{signal}={}){
- if(!input.native||!input.document.collectionNames().includes('retainedTables'))fail();
- const prefix=key(recordId,statement.id),summary=await input.document.get('retainedTables',prefix+'summary',{signal});
- if(!validRetainedTableChunk(prefix+'summary',summary)||summary.queryHash!==retainedTableQueryHash(statement))fail();
- const checksum=createHash('sha256');let count=0,seenSummary=false;
- for await(const {key:identifier,value} of input.document.items('retainedTables',{index:'result',prefix,signal})){
-  if(!validRetainedTableChunk(identifier,value))fail();if(identifier.endsWith('/summary')){seenSummary=true;continue;}
-  if(value.ordinal!==count++)fail();checksum.update(value.text);yield value.text;
- }
- if(!seenSummary||count!==summary.count||checksum.digest('hex')!==summary.sha256)fail();
-}
-export async function verifyPublicationTables(input,record,{signal}={}){
- for(const statement of record.results?.statements??[])if(statement.table?.version===3)for await(const chunk of publicationTableChunks(input,record.id,statement,{signal}))void chunk;
 }
