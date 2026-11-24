@@ -10,7 +10,7 @@ import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {insertWebsiteSource} from '../src/website-file-html.js';
 import {searchWebsiteLibrary,validateWebsiteLibraryRows,websiteLibraryFacets} from '../src/website-file-library.js';
 
-test('file picker searches compact permitted summaries, falls back to earlier saved heads, and binds the chosen revision',async t=>{
+test('file picker searches compact permitted summaries, refuses sources without a compact row, and binds the chosen revision',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-picker-'));await mkdir(path.join(root,'.observanda'));
  t.after(async()=>{await closeIdleMutationFiles();assert.equal(path.dirname(root),path.resolve(os.tmpdir()));await rm(root,{recursive:true,maxRetries:8});});
  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>assert.fail('File picker opened a research catalogue');
@@ -36,14 +36,17 @@ test('file picker searches compact permitted summaries, falls back to earlier sa
  assert.deepEqual((await visible()).accepted,[]);
  assert.equal((await store.searchLibrary({filter:'media'})).items.length,0);
  await assert.rejects(store.previewSource({sourceId:b.id,sourceRevision:b.revision}),{code:'CONFLICT'});await store.cancelSourceUpdate({sourceId:b.id,token});
- await store.scope(()=>store.remove('.observanda/website-files/picker/'+b.id.slice(0,2)+'.json'),{write:true});
- const legacy=(await store.searchLibrary({filter:'media'})).items[0];assert.equal(legacy.id,b.id);assert.equal(legacy.preview,'Optical survey');
+ // Every saved source writes its compact row; a source without one is an earlier storage format.
+ const shardName='.observanda/website-files/picker/'+b.id.slice(0,2)+'.json',shardRows=await store.scope(()=>store.control(shardName));
+ await store.scope(()=>store.remove(shardName),{write:true});await assert.rejects(store.searchLibrary({filter:'media'}),{code:'ACCESS_UPGRADE'});
+ await store.scope(()=>store.writeControl(shardName,shardRows),{write:true});
+ const restored=(await store.searchLibrary({filter:'media'})).items[0];assert.equal(restored.id,b.id);assert.equal(restored.preview,'Optical survey');
  assert.equal((await store.previewSource({sourceId:b.id,sourceRevision:b.revision})).preview,'Optical survey');
  const page=await store.create({name:'Site',html:'<!doctype html><html><head><title>Test</title></head><body><main><p>Before</p><p>After</p></main></body></html>'});
  await assert.rejects(store.insertSource(page.site.id,{sourceId:b.id,sourceRevision:a.revision,expectedRevision:page.site.revision,position:'start'}),{code:'CONFLICT'});
  const result=await store.insertSource(page.site.id,{sourceId:b.id,sourceRevision:b.revision,expectedRevision:page.site.revision,position:{before:1}});
  assert.match(result.html,/<p>Before<\/p><section data-observanda-source=.*Optical survey.*<\/section><p>After<\/p>/s);
- await put('Hidden again','',{recordId:legacy.recordId,visible:false});assert.equal((await store.searchLibrary({filter:'media'})).items.length,0);
+ await put('Hidden again','',{recordId:restored.recordId,visible:false});assert.equal((await store.searchLibrary({filter:'media'})).items.length,0);
  assert.deepEqual((await visible()).accepted,[]);
  await assert.rejects(store.previewSource({sourceId:b.id,sourceRevision:b.revision}),{code:'NOT_FOUND'});
 });
