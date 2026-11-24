@@ -82,6 +82,24 @@ export class AgentKeyStore{
    await unlink(this.file(id));return {revoked:id};
   });
  }
+ // The running app publishes where agents reach it: an address and version, no
+ // secret. It changes every time the app starts, so agents read it each time.
+ endpointFile(){return path.join(this.directory,'endpoint.json');}
+ async publishEndpoint(origin,apiVersion,{now=new Date()}={}){
+  await this.prepare();
+  await this.write(()=>atomicWrite(this.endpointFile(),serialize({format:1,origin,description:origin+'/api/v1/openapi.json',apiVersion,startedAt:now.toISOString(),processId:process.pid})));
+ }
+ async withdrawEndpoint(origin){
+  if(!await assertRegular(this.directory,{directory:true,missing:true}))return;
+  await this.write(async()=>{if((await this.endpoint())?.origin===origin)await unlink(this.endpointFile()).catch(error=>{if(error.code!=='ENOENT')throw error;});});
+ }
+ async endpoint(){
+  const file=this.endpointFile(),info=await assertRegular(file,{missing:true});if(!info)return null;if(info.size>4096)throw new AppError('AGENT_KEY_DAMAGED');
+  let value;try{value=JSON.parse(await readFile(file,'utf8'));}catch{throw new AppError('AGENT_KEY_DAMAGED');}
+  refuseNewerFormat(value?.format,1);
+  if(!value||Object.keys(value).sort().join()!=='apiVersion,description,format,origin,processId,startedAt'||value.format!==1||!/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(value.origin)||value.description!==value.origin+'/api/v1/openapi.json'||!instant(value.startedAt)||!Number.isSafeInteger(value.processId))throw new AppError('AGENT_KEY_DAMAGED');
+  return value;
+ }
  // Unknown, revoked, expired and malformed keys give the same answer.
  async authenticate(token,{now=new Date()}={}){
   const {id,secret}=parseAgentKey(token);

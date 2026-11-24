@@ -16,6 +16,7 @@
   "helpPassword": "--password-stdin llegeix una contrasenya de xifratge de l’entrada estàndard per a init, validate o build.",
   "helpBuild": "Build exporta un lloc web desat de l'editor de llocs web, només amb el que permeten els seus quaderns de laboratori. No se sobreescriu mai cap exportació existent.",
   "helpPublishing": "Cap ordre crea un repositori de GitHub, fa commits o push, ni publica en un servidor.",
+  "helpAgentApi": "api mostra, en JSON versionat, on serveix l'Observanda en execució la seva API d'agents en aquest ordinador i la seva descripció. Els programes la fan servir amb una clau d'agent que el propietari de l'espai de treball crea a Observanda.",
   "inventoryComplete": "Tots els elements de l’inventari estan justificats.",
   "inventoryIncomplete": "Cal resoldre incidències de l’inventari.",
   "inventoryReport": "{status} No s’ha importat cap registre.\n{objects} objectes; {files} fitxers; {bytes} bytes.\nEmpremta de l’origen: {pin}\nFes servir --json per consultar les declaracions privades i les incidències individuals.",

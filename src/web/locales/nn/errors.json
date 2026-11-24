@@ -142,6 +142,7 @@
   "AGENT_KEY_LIMIT": "Denne datamaskina har allereie så mange agentnøklar som tillate (64). Tilbakekall ein nøkkel du ikkje lenger brukar før du opprettar ein ny.",
   "AGENT_KEY_DAMAGED": "Agentnøklane på denne datamaskina kunne ikkje stadfestast. Tilbakekall dei aktuelle nøklane og opprett nye.",
   "AGENT_KEY_SCOPE": "Denne agentnøkkelen tillèt ikkje det. Omfanget eller tilgangen dekkjer ikkje dette prosjektet, denne laboratorieboka eller denne endringa.",
+  "AGENT_APP_CLOSED": "Observanda køyrer ikkje på denne datamaskina. Start Observanda og lås opp arbeidsområdet, og prøv igjen.",
   "RECORD_VIEW_FORMAT": "Lagra oppføringsvisingar kunne ikkje lesast. Fila er bevart; gjenopprett henne frå ein stadfesta tryggingskopi.",
   "RECORD_VIEW_CHANGED": "Denne lagra visinga er endra i eit anna vindauge. Skjemaet ditt er framleis her. Opne Lagra visingar att for å sjå gjennom den nyaste versjonen før du oppdaterer henne.",
   "RECORD_VIEW_NAME": "Ei vising med dette namnet finst allereie. Vel eit anna namn.",

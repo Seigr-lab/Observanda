@@ -16,6 +16,7 @@
   "helpPassword": "--password-stdin reads an encryption password from standard input for init, validate or build.",
   "helpBuild": "Build exports one saved website from the website editor, with only what its lab books allow. Existing output is never overwritten.",
   "helpPublishing": "No command creates a GitHub repository, commits, pushes, or publishes to a server.",
+  "helpAgentApi": "api prints, as versioned JSON, where the running Observanda serves its agent API on this computer and its description. Programs use it with an agent key that the workspace owner creates in Observanda.",
   "inventoryComplete": "Inventory fully accounted for.",
   "inventoryIncomplete": "Inventory needs resolution.",
   "inventoryReport": "{status} No records were imported.\n{objects} objects; {files} files; {bytes} bytes.\nSource pin: {pin}\nUse --json to inspect private declarations and individual issues.",

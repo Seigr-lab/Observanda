@@ -8,7 +8,7 @@ import progress from './web/locales/en/operationProgress.json' with {type:'json'
 import storage from './web/locales/en/storageProgress.json' with {type:'json'};
 
 const references={commandLine:messages,errors,localIntake:intake,operationProgress:progress,storageProgress:storage};
-const helpKeys=['helpReopen','helpHeadless','helpSetup','helpInit','helpPreferences','helpDatabase','helpRuntime','helpMac','helpInstall','helpExternalDatabase','helpDatabaseAccess','helpCredentials','helpEncryption','helpPassword','helpBuild','helpPublishing'];
+const helpKeys=['helpReopen','helpHeadless','helpSetup','helpInit','helpPreferences','helpDatabase','helpRuntime','helpMac','helpInstall','helpExternalDatabase','helpDatabaseAccess','helpCredentials','helpEncryption','helpPassword','helpBuild','helpPublishing','helpAgentApi'];
 // This is executable syntax, shared unchanged by every language.
 const usage=`  npm start
   npm start -- --setup
@@ -17,7 +17,8 @@ const usage=`  npm start
   node src/cli.js init --workspace "<parent>/Research Workspace 1" [--password-stdin]
   node src/cli.js inventory --source <export-directory> [--manifest inventory.observanda-source.json] [--expect-pin <sha256>] [--json]
   node src/cli.js validate --workspace <directory>
-  node src/cli.js build --workspace <directory> --out <new-directory> [--site <website>]`;
+  node src/cli.js build --workspace <directory> --out <new-directory> [--site <website>]
+  node src/cli.js api [--preferences <file>]`;
 
 // A CLI invocation captures its language once. Reading it never repairs settings
 // or starts workspace/database services, including for --preferences --help.

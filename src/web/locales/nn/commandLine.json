@@ -16,6 +16,7 @@
   "helpPassword": "--password-stdin les eit krypteringspassord frå standard inndata for init, validate eller build.",
   "helpBuild": "Build eksporterer éin lagra nettstad frå nettstadredigeraren, berre med det labbøkene tillèt. Eksisterande utdata blir aldri skrivne over.",
   "helpPublishing": "Ingen kommando opprettar eit GitHub-repositorium, lagar committar, pushar eller publiserer til ein tenar.",
+  "helpAgentApi": "api skriv ut, som versjonert JSON, kvar Observanda som køyrer, leverer agent-API-et sitt på denne datamaskina og skildringa av det. Program brukar det med ein agentnøkkel som eigaren av arbeidsområdet opprettar i Observanda.",
   "inventoryComplete": "Det er gjort greie for alle elementa i inventaret.",
   "inventoryIncomplete": "Inventaret har uavklarte forhold.",
   "inventoryReport": "{status} Ingen postar vart importerte.\n{objects} objekt; {files} filer; {bytes} byte.\nKontrollsummen til kjelda: {pin}\nBruk --json for å undersøkje private deklarasjonar og dei enkelte problema.",

@@ -142,6 +142,7 @@
   "AGENT_KEY_LIMIT": "Este equipo ya tiene el máximo de claves de agente permitidas (64). Revoca una clave que ya no uses antes de crear otra.",
   "AGENT_KEY_DAMAGED": "No se han podido verificar las claves de agente de este equipo. Revoca las claves afectadas y crea otras nuevas.",
   "AGENT_KEY_SCOPE": "Esta clave de agente no lo permite. Su alcance o acceso no incluye este proyecto, cuaderno de laboratorio o cambio.",
+  "AGENT_APP_CLOSED": "Observanda no se está ejecutando en este equipo. Inicia Observanda y desbloquea el espacio de trabajo, y vuelve a intentarlo.",
   "RECORD_VIEW_FORMAT": "No se han podido leer las vistas guardadas de registros. Su archivo se ha conservado; restáuralo desde una copia de seguridad verificada.",
   "RECORD_VIEW_CHANGED": "Esta vista guardada ha cambiado en otra ventana. Tu formulario sigue aquí. Vuelve a abrir Vistas guardadas para revisar la versión más reciente antes de actualizarla.",
   "RECORD_VIEW_NAME": "Ya existe una vista con este nombre. Elige otro nombre.",

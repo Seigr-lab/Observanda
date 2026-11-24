@@ -142,6 +142,7 @@
   "AGENT_KEY_LIMIT": "This computer already has the most agent keys allowed (64). Revoke a key you no longer use before creating another.",
   "AGENT_KEY_DAMAGED": "The agent keys on this computer could not be verified. Revoke the affected keys and create new ones.",
   "AGENT_KEY_SCOPE": "This agent key does not allow that. Its scope or access does not cover this project, lab book or change.",
+  "AGENT_APP_CLOSED": "Observanda is not running on this computer. Start Observanda and unlock the workspace, then try again.",
   "RECORD_VIEW_FORMAT": "Saved record views could not be read. Their file has been preserved; restore it from a verified backup.",
   "RECORD_VIEW_CHANGED": "This saved view changed in another window. Your form is still here. Reopen Saved views to review the latest version before updating it.",
   "RECORD_VIEW_NAME": "A view with this name already exists. Choose a different name.",

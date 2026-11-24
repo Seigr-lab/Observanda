@@ -43,3 +43,16 @@ test('expired keys, invalid requests, the key limit and newer key files are refu
  await writeFile(file,JSON.stringify({...value,format:2}));await assert.rejects(keys.list(workspaceId),{code:'STORAGE_NEWER'});
  await writeFile(file,JSON.stringify({...value,extra:true}));await assert.rejects(keys.list(workspaceId),{code:'AGENT_KEY_DAMAGED'});
 });
+
+test('the running app publishes its agent address for the CLI and withdraws only its own',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-agent-endpoint-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const preferences=path.join(directory,'preferences.json'),keys=new AgentKeyStore(preferences+'.device-key.agents');
+ const {execFile}=await import('node:child_process'),run=()=>new Promise(resolve=>execFile(process.execPath,['src/cli.js','api','--preferences',preferences],(error,stdout)=>resolve({code:error?.code??0,value:JSON.parse(stdout)})));
+ let printed=await run();assert.equal(printed.code,1);assert.equal(printed.value.error.code,'AGENT_APP_CLOSED');
+ await keys.publishEndpoint('http://127.0.0.1:41234','1.0.0',{now:new Date('2026-11-24T10:00:00.000Z')});
+ printed=await run();assert.equal(printed.code,0);
+ assert.deepEqual(printed.value,{version:1,ok:true,result:{origin:'http://127.0.0.1:41234',description:'http://127.0.0.1:41234/api/v1/openapi.json',apiVersion:'1.0.0',startedAt:'2026-11-24T10:00:00.000Z'}});
+ await keys.withdrawEndpoint('http://127.0.0.1:50000');assert.equal((await keys.endpoint()).origin,'http://127.0.0.1:41234');
+ await keys.withdrawEndpoint('http://127.0.0.1:41234');assert.equal(await keys.endpoint(),null);
+ await writeFile(keys.endpointFile(),JSON.stringify({format:1,origin:'https://example.org'}));await assert.rejects(keys.endpoint(),{code:'AGENT_KEY_DAMAGED'});
+});

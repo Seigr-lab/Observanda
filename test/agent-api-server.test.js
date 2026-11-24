@@ -13,6 +13,8 @@ async function keys(f){
 
 test('agents learn the API from the app and work only through their key, scope and the owner\'s unlocked session',{timeout:600000},async t=>{
  const f=await agentServerFixture(t),{workspaceId,create}=await keys(f);
+ // Agents find this run's address beside the keys; it changes each time the app starts.
+ assert.equal((await new AgentKeyStore(f.device.file+'.agents').endpoint()).origin,f.app.origin);
  const project=await f.createProject('Software notes'),book=await f.createBook(project.projectId,'Release log'),other=await f.createBook(project.projectId,'Design notes');
  // The description needs no key and names this build's operations.
  const description=await result(await f.agent('/api/v1/openapi.json'));
@@ -69,4 +71,9 @@ test('the owner creates scoped keys only for existing lab books, lists and revok
  assert.equal((await result(await f.agent('/api/security/agent-keys/list',{key:created.key,data:{}}),403)).code,'ORIGIN');
  await result(await f.owner('/api/security/agent-keys/revoke',{id:created.agentKey.id}));
  assert.equal((await result(await f.agent('/api/v1/agent/me',{key:created.key}),401)).code,'AGENT_KEY_INVALID');
+});
+
+test('closing the app withdraws its agent address',{timeout:600000},async t=>{
+ const f=await agentServerFixture(t),keys=new AgentKeyStore(f.device.file+'.agents');
+ assert.equal((await keys.endpoint()).origin,f.app.origin);await f.app.close();assert.equal(await keys.endpoint(),null);
 });

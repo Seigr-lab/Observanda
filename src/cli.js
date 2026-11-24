@@ -6,6 +6,7 @@ import {withConsoleProgress} from './operation-progress-console.js';
 import {startWorkspaceDatabases} from './workspace-databases.js';
 import {requireAccess,createWorkspaceAccess,takeCreatedVault,verifyAccess} from './access.js';
 import {DeviceStore} from './security/device-store.js';
+import {AgentKeyStore} from './security/agent-keys.js';
 import {clearVault} from './encryption.js';
 import {initializeLocation} from './locations.js';
 import {defaultLocation,preferencesLocation,readPreference,namedWorkspaceLocation} from './locations.js';
@@ -43,8 +44,13 @@ try {
   const command = positionals[0] ?? 'open';
   const preferencesFile=values.preferences?path.resolve(values.preferences):preferencesLocation();
   localization=commandLineLocalization(preferencesFile);
-  if (values.help || !['open', 'init', 'validate', 'build','inventory','intake'].includes(command) || positionals.length > 1) {
+  if (values.help || !['open', 'init', 'validate', 'build','inventory','intake','api'].includes(command) || positionals.length > 1) {
     console.log(localization.help()); if (!values.help) process.exitCode = 1;
+  } else if(command==='api') {
+    // Where the running app serves its agent API: read by programs on this computer.
+    if(Object.keys(values).some(key=>key!=='preferences'))throw new AppError('INVALID');
+    const endpoint=await new AgentKeyStore(preferencesFile+'.device-key.agents').endpoint();if(!endpoint)throw new AppError('AGENT_APP_CLOSED');
+    console.log(JSON.stringify({version:1,ok:true,result:{origin:endpoint.origin,description:endpoint.description,apiVersion:endpoint.apiVersion,startedAt:endpoint.startedAt}}));
   } else if(command==='inventory') {
     if(!values.source||Object.keys(values).some(k=>!['source','manifest','expect-pin','json','preferences'].includes(k)))throw new AppError('INVENTORY_INVALID');
     const report=await inspectSource({source:path.resolve(values.source),...(values.manifest?{manifest:values.manifest}:{}),...(values['expect-pin']?{expectedPin:values['expect-pin']}:{})},{signal:startup.signal});
@@ -117,7 +123,7 @@ try {
 } catch (error) {
   if(app)await stop();
   const safe = safeError(error);
-  if(process.argv[2]==='intake')console.log(JSON.stringify({version:1,ok:false,error:safe}));
+  if(['intake','api'].includes(process.argv[2]))console.log(JSON.stringify({version:1,ok:false,error:safe}));
   else{console.error(`${safe.code}: ${localization.error(safe)}`);
   for (const issue of safe.details) console.error(text(issue.recordId?'checkRecord':'checkField',{field:issue.field,...(issue.recordId?{recordId:issue.recordId}:{})}));}
   process.exitCode = 1;

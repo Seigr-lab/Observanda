@@ -16,6 +16,7 @@
   "helpPassword": "--password-stdin lee una contraseña de cifrado de la entrada estándar para init, validate o build.",
   "helpBuild": "Build exporta un sitio web guardado del editor de sitios web, solo con lo que permiten sus cuadernos de laboratorio. Nunca se sobrescribe ninguna exportación existente.",
   "helpPublishing": "Ningún comando crea un repositorio de GitHub, hace commits o push, ni publica en un servidor.",
+  "helpAgentApi": "api muestra, en JSON versionado, dónde sirve el Observanda en ejecución su API de agentes en este equipo y su descripción. Los programas la usan con una clave de agente que el propietario del espacio de trabajo crea en Observanda.",
   "inventoryComplete": "Todos los elementos del inventario están justificados.",
   "inventoryIncomplete": "Es necesario resolver incidencias del inventario.",
   "inventoryReport": "{status} No se ha importado ningún registro.\n{objects} objetos; {files} archivos; {bytes} bytes.\nHuella del origen: {pin}\nUtiliza --json para consultar las declaraciones privadas y las incidencias individuales.",

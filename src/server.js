@@ -156,7 +156,7 @@ import os from 'node:os';
 import {Workspace,workspaceFile,assertRegular} from './storage.js';
 import {createNotebook,upgradeNotebook,MAX_BYTES} from './model.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
-import {agentRoute,runAgentOperation,agentOpenApi} from './agent-api.js';
+import {agentRoute,runAgentOperation,agentOpenApi,AGENT_API_VERSION} from './agent-api.js';
 import {AgentKeyStore} from './security/agent-keys.js';
 import {admitResearchBytes} from './research-capacity.js';
 import {AppError,safeError} from './errors.js';
@@ -1459,6 +1459,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   try{await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });}
   catch(error){await collaborationSession.close();throw error;}
   origin = `http://127.0.0.1:${server.address().port}`;
+  // Agents find this run's address here; a failure never stops the app.
+  await agentKeys?.publishEndpoint(origin,AGENT_API_VERSION).catch(()=>{});
   diagnostics.record('service-ready');
   const expiry=setInterval(()=>{
    const memory=process.memoryUsage(),cpu=process.cpuUsage(),capacity=Object.values(requestAdmission.stats()),total=key=>capacity.reduce((sum,lane)=>sum+lane[key],0);diagnostics.record('resource',{rssBytes:memory.rss,heapBytes:memory.heapUsed,externalBytes:memory.external,cpuUserUs:cpu.user,cpuSystemUs:cpu.system,pendingRequests:pending.size,activeWrites,activeRequests:total('active'),queuedRequests:total('queued'),requestBytes:total('retainedBytes'),queuedWriters:writerCapacity().queued});
@@ -1473,10 +1475,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>item.kind!=='website-preparation'&&['running','queued'].includes(item.state))),failure:activities.failureSequence};
   };
   return {server,origin,get launchToken(){return launches.issue();},get url(){return origin+'/#'+launches.issue();},shutdownStatus,close:()=>closePromise??=(async()=>{
-   shuttingDown=true;launches.clear();downloads.clear();requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
+   shuttingDown=true;const withdrawn=agentKeys?.withdrawEndpoint(origin).catch(()=>{});launches.clear();downloads.clear();requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
-   try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}
+   try{await Promise.all([stoppedJobs,withdrawn,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}
     finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);await context.calendarSources.clear();await clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();diagnostics.record('service-stop');if(!providedDiagnostics)await diagnostics.close();}
   })()};
 }
