@@ -1,0 +1,169 @@
+// The agent API: a stable, documented contract for programs on this computer,
+// from any provider. Each operation's JSON Schema validates its input and is
+// published in the OpenAPI description, so the description is always what the
+// server accepts. Operations translate into the app's own commands, which still
+// perform every check; this layer never writes storage itself.
+import {randomUUID} from 'node:crypto';
+import {AppError} from './errors.js';
+import {recordBrowse} from './web/record-query.js';
+import {RECORD_TYPES,STATUSES} from './web/record-types.js';
+import {markdownRichText,richTextForAgents} from './agent-markdown.js';
+
+export const AGENT_API_VERSION='1.0.0';
+const UUID='^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$';
+const id={type:'string',pattern:UUID},nullableId={type:['string','null'],pattern:UUID};
+const cursor={type:['string','null'],maxLength:4096,description:'Opaque cursor from the previous page, or null for the first page.'};
+const limit=max=>({type:'integer',minimum:1,maximum:max,description:'Items per page, at most '+max+'.'});
+const markdown={type:'string',maxLength:60000,description:'Text in a small Markdown: # to ### headings, paragraphs, - and 1. lists, > quotes, ``` code blocks, **bold**, *italic*, `code` and [label](https://...) links. HTML is kept as text.'};
+const date={type:['string','null'],pattern:'^\\d{4}-\\d{2}-\\d{2}$',description:'The day the work happened (YYYY-MM-DD), or null when unknown.'};
+const sectionInput={type:'object',additionalProperties:false,required:['title'],properties:{id:{...id,description:'Keep an existing section by its id; omit for a new section.'},title:{type:'string',minLength:1,maxLength:160},text:markdown}};
+const recordFields={
+ type:{type:'string',enum:RECORD_TYPES.map(type=>type.id)},
+ title:{type:'string',minLength:1,maxLength:180},
+ status:{type:'string',enum:[...STATUSES]},
+ tags:{type:'array',maxItems:64,items:{type:'string',minLength:1,maxLength:40}},
+ occurredOn:date,text:markdown,
+ sections:{type:'array',maxItems:200,items:sectionInput,description:'The full list of sections, in order. Sections left out are removed.'}
+};
+const book={projectId:id,labBookId:id};
+const recordOutput={type:'object',properties:{
+ id,revision:{type:'string',description:'Pass this as expectedRevision when you update the record.'},type:{type:'string'},title:{type:'string'},status:{type:'string'},tags:{type:'array',items:{type:'string'}},
+ occurredOn:{type:['string','object']},text:{type:'string',description:'The record text as plain text.'},
+ sections:{type:'array',items:{type:'object',properties:{id,title:{type:'string'},text:{type:'string'}}}},createdAt:{type:'string'},updatedAt:{type:'string'}}};
+
+export const AGENT_OPERATIONS=Object.freeze([
+ {name:'me',method:'GET',access:'read',summary:'Describe this key: its name, workspace, scope, access and expiry.',output:{type:'object'}},
+ {name:'projects/list',method:'POST',access:'read',summary:'List the projects this key can reach, one page at a time.',
+  input:{type:'object',additionalProperties:false,properties:{parentId:{...nullableId,description:'List the projects inside this project; null lists the top level.'},cursor,limit:limit(50)}},
+  output:{type:'object',properties:{projects:{type:'array',items:{type:'object',properties:{projectId:id,parentId:nullableId,title:{type:'string'},description:{type:'string'},kind:{type:'string'}}}},nextCursor:cursor}}},
+ {name:'lab-books/list',method:'POST',access:'read',summary:'List the lab books of a project.',
+  input:{type:'object',additionalProperties:false,required:['projectId'],properties:{projectId:id,cursor,limit:limit(50)}},
+  output:{type:'object',properties:{labBooks:{type:'array',items:{type:'object',properties:{labBookId:id,title:{type:'string'}}}},nextCursor:cursor}}},
+ {name:'records/list',method:'POST',access:'read',summary:'List the records of a lab book, optionally matching search text.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId'],properties:{...book,search:{type:'string',maxLength:512},cursor,limit:limit(100)}},
+  output:{type:'object',properties:{records:{type:'array',items:{type:'object'}},nextCursor:cursor,total:{type:'integer'}}}},
+ {name:'records/get',method:'POST',access:'read',summary:'Read one record, with its revision.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId'],properties:{...book,recordId:id}},output:recordOutput},
+ {name:'records/create',method:'POST',access:'write',summary:'Create a record in a lab book.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','record'],properties:{...book,record:{type:'object',additionalProperties:false,required:['type','title'],properties:recordFields}}},
+  output:{type:'object',properties:{id,revision:{type:'string'}}}},
+ {name:'records/update',method:'POST',access:'write',summary:'Change a record. Only the fields you send change; expectedRevision must be the revision you last read.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','changes'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},changes:{type:'object',additionalProperties:false,minProperties:1,properties:recordFields}}},
+  output:{type:'object',properties:{id,revision:{type:'string'}}}}
+]);
+const byName=new Map(AGENT_OPERATIONS.map(operation=>[operation.name,operation]));
+
+// The subset of JSON Schema used above, checked exactly as published.
+function check(schema,value,at='input'){
+ const fail=()=>{throw new AppError('INVALID',[{field:at}]);};
+ const types=[].concat(schema.type??[]);
+ if(types.length&&!types.some(type=>type==='null'?value===null:type==='integer'?Number.isSafeInteger(value):type==='array'?Array.isArray(value):type==='object'?value!==null&&typeof value==='object'&&!Array.isArray(value):typeof value===type))fail();
+ if(value===null)return;
+ if(schema.enum&&!schema.enum.includes(value))fail();
+ if(typeof value==='string'){if(value.length<(schema.minLength??0)||value.length>(schema.maxLength??Infinity)||schema.pattern&&!new RegExp(schema.pattern).test(value))fail();}
+ if(typeof value==='number'&&(value<(schema.minimum??-Infinity)||value>(schema.maximum??Infinity)))fail();
+ if(Array.isArray(value)){if(value.length>(schema.maxItems??Infinity))fail();value.forEach((item,index)=>check(schema.items,item,at+'['+index+']'));}
+ if(types.includes('object')&&schema.properties){
+  if(schema.additionalProperties===false&&Object.keys(value).some(key=>!Object.hasOwn(schema.properties,key)))fail();
+  if((schema.required??[]).some(key=>!Object.hasOwn(value,key))||Object.keys(value).length<(schema.minProperties??0))fail();
+  for(const [key,property] of Object.entries(schema.properties))if(Object.hasOwn(value,key))check(property,value[key],at+'.'+key);
+ }
+}
+
+export function agentRoute(method,pathname){
+ if(pathname==='/api/v1/openapi.json')return method==='GET'?{description:true}:null;
+ const match=/^\/api\/v1\/agent\/([a-z-]+(?:\/[a-z-]+)?)$/.exec(pathname),operation=match&&byName.get(match[1]);
+ return operation&&operation.method===method?{operation}:null;
+}
+const forbidden=()=>{throw new AppError('AGENT_KEY_SCOPE');};
+function inScope(key,{projectId=null,labBookId=null}){
+ if(key.scope.kind==='workspace')return true;
+ if(projectId!==key.scope.projectId)return false;
+ return key.scope.kind==='project'||labBookId===null||labBookId===key.scope.labBookId;
+}
+const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+function decode(value){if(value==null)return null;try{return JSON.parse(Buffer.from(value,'base64url').toString('utf8'));}catch{throw new AppError('INVALID',[{field:'input.cursor'}]);}}
+const dateValue=value=>value===null?{kind:'unknown'}:value;
+const dateOutput=value=>typeof value==='string'?value:value?.kind==='unknown'?null:value;
+
+// run(route,data) executes one of the app's own commands through the owner's
+// session; the server enforces the key's read or write access on each command.
+export async function runAgentOperation(operation,input,{key,run,now=()=>new Date()}){
+ if(operation.access==='write'&&key.access!=='write')forbidden();
+ if(operation.input)check(operation.input,input??{});else if(input!==undefined&&input!==null)throw new AppError('INVALID');
+ if(operation.name==='me')return {name:key.name,workspaceId:key.workspaceId,scope:key.scope,access:key.access,expiresAt:key.expiresAt,apiVersion:AGENT_API_VERSION};
+ if(!inScope(key,{projectId:input.projectId??(operation.name==='projects/list'?key.scope.projectId??null:null),labBookId:input.labBookId??null})&&operation.name!=='projects/list')forbidden();
+ if(operation.name==='projects/list'){
+  const page=decode(input.cursor)??{offset:0},size=input.limit??50;if(!Number.isSafeInteger(page.offset)||page.offset<0)throw new AppError('INVALID',[{field:'input.cursor'}]);
+  const value=await run('/api/projects/list',{parentId:input.parentId??null,offset:page.offset,limit:size,revision:null});
+  const projects=value.projects.filter(project=>inScope(key,{projectId:project.projectId})).map(project=>({projectId:project.projectId,parentId:project.parentId,title:project.summary.title,description:project.summary.description,kind:project.summary.kind}));
+  return {projects,nextCursor:page.offset+value.projects.length<value.total?encode({offset:page.offset+value.projects.length}):null};
+ }
+ if(operation.name==='lab-books/list'){
+  const value=await run('/api/projects/'+input.projectId+'/lab-books/list',{after:input.cursor??null,limit:input.limit??50,revision:null});
+  return {labBooks:value.items.filter(item=>inScope(key,{projectId:input.projectId,labBookId:item.labBookId})).map(item=>({labBookId:item.labBookId,title:item.directory})),nextCursor:value.next??null};
+ }
+ const prefix='/api/projects/'+input.projectId+'/lab-books/'+input.labBookId;
+ const start=await run(prefix+'/workspace/read/start',{}),workspaceId=start.metadata.id;
+ const read=async recordId=>{
+  const value=await run(prefix+'/workspace/read/selection',{workspaceId,ids:[recordId]}),record=value.book?.entries?.find(entry=>entry.id===recordId);
+  if(!record)throw new AppError('NOT_FOUND');return {record,revision:value.recordRevisions[recordId]};
+ };
+ if(operation.name==='records/list'){
+  const value=await run(prefix+'/research/records/query',{workspaceId,query:{projectId:null,notebookId:null,filter:'all',search:input.search??'',browse:recordBrowse()},cursor:input.cursor??null,limit:input.limit??25});
+  return {records:value.records.map(item=>({id:item.id,type:item.type,title:item.title,status:item.status,updatedAt:item.updatedAt})),nextCursor:value.nextCursor??null,total:value.total};
+ }
+ if(operation.name==='records/get'){
+  const {record,revision}=await read(input.recordId);
+  return {id:record.id,revision,type:record.type,title:record.title,status:record.status,tags:record.tags,occurredOn:dateOutput(record.occurredOn),text:richTextForAgents(record.body),
+   sections:record.sections.map(section=>({id:section.id,title:section.title,text:richTextForAgents(section.body)})),createdAt:record.createdAt,updatedAt:record.updatedAt};
+ }
+ const sections=(values,existing=[])=>values.map(section=>{
+  if(section.id&&!existing.some(item=>item.id===section.id))throw new AppError('INVALID',[{field:'sections'}]);
+  return {id:section.id??randomUUID(),title:section.title,body:markdownRichText(section.text??'')};
+ });
+ const apply=(record,fields)=>{
+  const next={...record};
+  for(const key of ['type','title','status','tags'])if(Object.hasOwn(fields,key))next[key]=fields[key];
+  if(Object.hasOwn(fields,'occurredOn'))next.occurredOn=dateValue(fields.occurredOn);
+  if(Object.hasOwn(fields,'text'))next.body=markdownRichText(fields.text);
+  if(Object.hasOwn(fields,'sections'))next.sections=sections(fields.sections,record.sections);
+  return next;
+ };
+ const save=async(recordId,expectedRevision,record)=>{
+  await run(prefix+'/research/records/save',{workspaceId,changes:[{id:recordId,expectedRevision,record}]});
+  return {id:recordId,revision:(await read(recordId)).revision};
+ };
+ const at=now().toISOString();
+ if(operation.name==='records/create'){
+  const recordId=randomUUID();
+  const record=apply({id:recordId,notebookId:input.labBookId,type:'note',title:'',body:markdownRichText(''),contributors:[],relations:[],tags:[],occurredOn:{kind:'unknown'},createdAt:at,updatedAt:at,share:false,figures:[],status:'draft',sections:[],attachments:[]},input.record);
+  return save(recordId,null,record);
+ }
+ if(operation.name==='records/update'){
+  const {record,revision}=await read(input.recordId);
+  if(revision!==input.expectedRevision)throw new AppError('RECORD_CHANGED');
+  return save(record.id,revision,{...apply(record,input.changes),updatedAt:at});
+ }
+ throw new AppError('NOT_FOUND');
+}
+
+// OpenAPI 3.1, served by the installed app, so an agent learns this build's API.
+export function agentOpenApi(origin){
+ const error={description:'Refused. The body has a stable code, a message and details.',content:{'application/json':{schema:{type:'object',properties:{code:{type:'string'},message:{type:'string'},details:{type:'array'}}}}}};
+ const paths={};
+ for(const operation of AGENT_OPERATIONS){
+  paths['/api/v1/agent/'+operation.name]={[operation.method.toLowerCase()]:{
+   operationId:operation.name.replace(/[-/](.)/g,(_,c)=>c.toUpperCase()),summary:operation.summary,
+   description:operation.access==='write'?'Needs a key with read and write access.':'Any key may call this within its scope.',
+   security:[{agentKey:[]}],
+   ...(operation.input?{requestBody:{required:true,content:{'application/json':{schema:operation.input}}}}:{}),
+   responses:{200:{description:'Done.',content:{'application/json':{schema:operation.output}}},422:error,401:error,403:error,404:error,409:error,423:error}
+  }};
+ }
+ return {openapi:'3.1.0',
+  info:{title:'Observanda agent API',version:AGENT_API_VERSION,description:'Use Observanda from programs on this computer. The workspace owner creates a key in Observanda; send it as a bearer token. A key works only while its workspace, and the project or lab book it reaches, is unlocked in the app. Every change goes through the same checks as a change made in the app.'},
+  servers:[{url:origin}],
+  components:{securitySchemes:{agentKey:{type:'http',scheme:'bearer',description:'An Observanda agent key (obsk_...).'}}},
+  paths};
+}

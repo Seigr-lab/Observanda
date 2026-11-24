@@ -141,6 +141,7 @@
   "AGENT_KEY_INVALID": "Denne agentnøkkelen er ikke gyldig. Den kan være tilbakekalt eller utløpt. Be eieren av arbeidsområdet om en ny nøkkel.",
   "AGENT_KEY_LIMIT": "Denne datamaskinen har allerede så mange agentnøkler som tillatt (64). Tilbakekall en nøkkel du ikke lenger bruker før du oppretter en ny.",
   "AGENT_KEY_DAMAGED": "Agentnøklene på denne datamaskinen kunne ikke bekreftes. Tilbakekall de berørte nøklene og opprett nye.",
+  "AGENT_KEY_SCOPE": "Denne agentnøkkelen tillater ikke det. Omfanget eller tilgangen dekker ikke dette prosjektet, denne laboratorieboken eller denne endringen.",
   "RECORD_VIEW_FORMAT": "Lagrede oppføringsvisninger kunne ikke leses. Filen er bevart; gjenopprett den fra en verifisert sikkerhetskopi.",
   "RECORD_VIEW_CHANGED": "Denne lagrede visningen ble endret i et annet vindu. Skjemaet ditt er fortsatt her. Åpne Lagrede visninger igjen for å gjennomgå den nyeste versjonen før du oppdaterer den.",
   "RECORD_VIEW_NAME": "En visning med dette navnet finnes allerede. Velg et annet navn.",

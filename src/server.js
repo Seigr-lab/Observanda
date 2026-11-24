@@ -156,6 +156,8 @@ import os from 'node:os';
 import {Workspace,workspaceFile,assertRegular} from './storage.js';
 import {createNotebook,upgradeNotebook,MAX_BYTES} from './model.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
+import {agentRoute,runAgentOperation,agentOpenApi} from './agent-api.js';
+import {AgentKeyStore} from './security/agent-keys.js';
 import {admitResearchBytes} from './research-capacity.js';
 import {AppError,safeError} from './errors.js';
 import {MediaStore} from './media.js';
@@ -314,6 +316,28 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   // Every route, including download grants and launch retries, uses this gate.
   const liveSession=id=>{const client=sessions.get(id);if(client&&Number.isFinite(client.expires)&&client.expires>Date.now())return client;if(client)forgetSession(id);return null;};
   const requireSession=id=>{const client=liveSession(id);if(!client)throw new AppError('AUTH');return client;};
+  // Agent keys reach this app only from programs on this computer, and only
+  // through a live owner session that has the key's workspace, and the project
+  // or lab book it addresses, unlocked. A key never unlocks anything itself.
+  const agentKeys=typeof deviceStore?.file==='string'?new AgentKeyStore(deviceStore.file+'.agents'):null;
+  const agentOwner=async()=>{
+   for(const id of [...sessions.keys()].reverse()){const client=liveSession(id);if(client?.access&&!client.filesOnly&&!(await status(client)).locked)return {id,client};}
+   throw new AppError('ACCESS_LOCKED');
+  };
+  const agentHttp=async(req,operation,json)=>{
+   if(req.headers['x-observanda-session']||req.headers.cookie)throw new AppError('AUTH');
+   const token=/^Bearer (\S+)$/.exec(req.headers.authorization??'')?.[1];if(!token||!agentKeys)throw new AppError('AGENT_KEY_INVALID');
+   const key=await agentKeys.authenticate(token),selectedContext=context;
+   if(!selectedContext.workspace||selectedContext.manualLock||(await selectedContext.workspace.outline()).metadata.id!==key.workspaceId)throw new AppError('ACCESS_LOCKED');
+   const owner=await agentOwner(),input=operation.method==='POST'?await body(req,operation.access==='write'?MAX_RECORD_COMMAND_BYTES:65536):undefined;
+   const check=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(!liveSession(owner.id)||(await status(owner.client)).locked)throw new AppError('ACCESS_LOCKED');};
+   const run=async(route,data)=>{
+    const selected=projectRequest(route,'POST');if(!selected)throw new AppError('NOT_FOUND');
+    if(selected.write&&key.access!=='write')throw new AppError('AGENT_KEY_SCOPE');
+    await check();return projectApplication(selectedContext).run(owner.client,selected,data,{check});
+   };
+   return json(await runAgentOperation(operation,input,{key,run}));
+  };
   const activate=async(location,client,vault=null,{movingFrom,followSettings=false}={})=>operationStage('activate',{},async()=>{
     savedDeletion.assertAvailable(location);
     if(context.workspace&&context.root!==location){
@@ -365,7 +389,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.headers.host !== new URL(origin).host) throw new AppError('ORIGIN');
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && req.headers.origin !== origin)) throw new AppError('ORIGIN');
       if (!['GET', 'POST'].includes(req.method)) throw new AppError('ORIGIN');
-      if (req.method === 'POST' && req.headers.origin !== origin) throw new AppError('ORIGIN');
+      // Programs on this computer call the agent API with a key and no browser origin.
+      const agentCall=req.url.startsWith('/api/v1/agent/')&&/^Bearer /.test(req.headers.authorization??'')&&!req.headers['x-observanda-session']&&!req.headers.cookie;
+      if (req.method === 'POST' && req.headers.origin !== origin && !agentCall) throw new AppError('ORIGIN');
       const url = new URL(req.url, origin);
       let downloadSession;
       if(url.searchParams.has('__observanda_download')){
@@ -386,6 +412,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       // still applies below. No request-supplied value changes these limits.
       req.admission=await requestAdmission.acquire(requestLane(req.method,url.pathname),{signal:admissionAbort.signal});
       if(shuttingDown)throw new AppError('SERVER_CLOSING');
+      const agent=agentRoute(req.method,url.pathname);
+      if(agent?.description)return json(agentOpenApi(origin));
+      if(agent)return await agentHttp(req,agent.operation,json);
+      if(url.pathname.startsWith('/api/v1/agent/')||url.pathname==='/api/v1/openapi.json')throw new AppError('NOT_FOUND');
       if (req.method === 'POST' && url.pathname === '/api/session') {
         const data = await body(req);
         const claim=launches.claim(data?.token,data?.binding);
@@ -1389,7 +1419,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       diagnosticError=error;
       req.activity?.finish(error);
       const safe = safeError(error);
-      const statuses = { WEBSITE_CHANGED:409, TASK_DEPENDENCY_OWNER_LIMIT:422, TASK_DEPENDENCY_DATABASE_LIMIT:422, TASK_PREREQUISITE_ACCESS:403, TASK_PREREQUISITE_CHANGED:409, TASK_PREREQUISITE_UNSUPPORTED:422, RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, RESOURCE_QUALITY_BLOCK:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
+      const statuses = { WEBSITE_CHANGED:409, TASK_DEPENDENCY_OWNER_LIMIT:422, TASK_DEPENDENCY_DATABASE_LIMIT:422, TASK_PREREQUISITE_ACCESS:403, TASK_PREREQUISITE_CHANGED:409, TASK_PREREQUISITE_UNSUPPORTED:422, RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, RESOURCE_QUALITY_BLOCK:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, AGENT_KEY_INVALID: 401, AGENT_KEY_SCOPE: 403, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
       if (!res.headersSent){
        if(!req.complete){req.pause();res.setHeader('Connection','close');}
        if(safe.code==='WORKLOAD_BUSY')res.setHeader('Retry-After','1');

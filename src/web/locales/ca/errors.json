@@ -141,6 +141,7 @@
   "AGENT_KEY_INVALID": "Aquesta clau d'agent no és vàlida. Pot haver estat revocada o haver caducat. Demana una clau nova al propietari de l'espai de treball.",
   "AGENT_KEY_LIMIT": "Aquest ordinador ja té el màxim de claus d'agent permeses (64). Revoca una clau que ja no facis servir abans de crear-ne una altra.",
   "AGENT_KEY_DAMAGED": "No s'han pogut verificar les claus d'agent d'aquest ordinador. Revoca les claus afectades i crea'n de noves.",
+  "AGENT_KEY_SCOPE": "Aquesta clau d'agent no ho permet. El seu abast o accés no inclou aquest projecte, quadern de laboratori o canvi.",
   "RECORD_VIEW_FORMAT": "No s'han pogut llegir les vistes de registres guardades. Se n'ha conservat el fitxer; restaura'l des d'una còpia de seguretat verificada.",
   "RECORD_VIEW_CHANGED": "Aquesta vista guardada ha canviat en una altra finestra. El formulari continua aquí. Torna a obrir Vistes guardades per revisar l'última versió abans d'actualitzar-la.",
   "RECORD_VIEW_NAME": "Ja existeix una vista amb aquest nom. Tria un altre nom.",
