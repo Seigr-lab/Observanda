@@ -15,6 +15,7 @@ function admittedMove(root,marker){
 import {readFile} from 'node:fs/promises';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {MOVE_RECEIPT,MOVE_SOURCE} from './storage-lifecycle-markers.js';
 export {MOVE_RECEIPT,MOVE_SOURCE};
 export async function moveSource(root){
@@ -23,7 +24,9 @@ export async function moveSource(root){
  let value;try{value=JSON.parse(await readFile(file,'utf8'));}catch{throw new AppError('STORAGE_MOVE_STATE');}
  // Each moved owner, books included, carries its own marker. Independently
  // registered child projects are outside this fence.
- if(!value||typeof value.id!=='string'||!path.isAbsolute(value.destination??'')||value.books!==undefined)throw new AppError('STORAGE_MOVE_STATE');
+ // The marker is {id,destination}. A later release that extends it adds a version.
+ refuseNewerFormat(value?.version,1);
+ if(!value||Object.keys(value).sort().join()!=='destination,id'||typeof value.id!=='string'||!path.isAbsolute(value.destination))throw new AppError('STORAGE_MOVE_STATE');
  return value;
 }
 export async function assertNotMoving(root,moveId){const value=await moveSource(root);if(value&&value.id!==moveId&&!admittedMove(root,value))throw new AppError('STORAGE_MOVED',[value.destination]);}

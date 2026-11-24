@@ -9,6 +9,7 @@ import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {jsonChunks} from './web/json-chunks.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {copiedPdfSectionId} from './pdf-document-copy.js';
 import fontProvenance from './fonts/provenance.json' with {type:'json'};
 
@@ -42,6 +43,7 @@ export function publicationFontFiles(font){
 }
 export function validatePublicationStarter(value,{checkFont=true}={}){
  if(!object(value))fail('format');
+ if(value.format==='observanda-publication-starter')refuseNewerFormat(value.version,1);
  const issues=Object.keys(value).filter(key=>!manifestFields.includes(key)).slice(0,12).map(key=>/^[a-z][a-z0-9_-]{0,39}$/i.test(key)?key:'…');
  if(value.format!=='observanda-publication-starter')issues.push('format');
  if(value.version!==1)issues.push('version');

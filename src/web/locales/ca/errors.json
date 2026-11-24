@@ -137,6 +137,7 @@
   "DATABASE_UNAVAILABLE": "PostgreSQL no està disponible. Comprova el servei de base de dades i els paràmetres de connexió i torna-ho a provar. Les dades guardades no s'han substituït.",
   "CATALOGUE_DAMAGED": "No s'ha pogut verificar el catàleg de recerca. Se n'han conservat els fitxers. Restaura una còpia verificada abans de continuar.",
   "CATALOGUE_NEWER": "Aquest catàleg de recerca s'ha desat amb una versió més nova d'Observanda. Els fitxers no s'han modificat. Actualitza Observanda per obrir-lo.",
+  "STORAGE_NEWER": "Això s'ha desat amb una versió més nova d'Observanda. No s'ha modificat res. Actualitza Observanda per obrir-ho.",
   "RECORD_VIEW_FORMAT": "No s'han pogut llegir les vistes de registres guardades. Se n'ha conservat el fitxer; restaura'l des d'una còpia de seguretat verificada.",
   "RECORD_VIEW_CHANGED": "Aquesta vista guardada ha canviat en una altra finestra. El formulari continua aquí. Torna a obrir Vistes guardades per revisar l'última versió abans d'actualitzar-la.",
   "RECORD_VIEW_NAME": "Ja existeix una vista amb aquest nom. Tria un altre nom.",

@@ -13,7 +13,7 @@ import {Readable,PassThrough} from 'node:stream';
 import {constants as bufferConstants} from 'node:buffer';
 import {pipeline} from 'node:stream/promises';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
-import {ENVELOPE,ENCRYPTION_OVERHEAD} from './encryption.js';
+import {ENVELOPE,ENCRYPTION_OVERHEAD,refuseNewerEnvelope} from './encryption.js';
 import {AppError} from './errors.js';
 import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
 
@@ -34,6 +34,7 @@ async function* decoded(handle,workspace,file){
   const magic=Buffer.alloc(8);await handle.read(magic,0,8,0);if(magic.equals(SEGMENTED_ENVELOPE)){for await(const bytes of readSegmentedFile(handle,workspace.vault.key,workspace.fileAAD(file))){operationWork({bytes:bytes.length});yield bytes;}return;}
   // Single-envelope files (as Workspace.writeFile stores them) authenticate at the end.
   const header=Buffer.alloc(ENCRYPTION_OVERHEAD);const r=await handle.read(header,0,header.length,0);
+  if(r.bytesRead===header.length)refuseNewerEnvelope(header);
   if(r.bytesRead!==header.length||!header.subarray(0,8).equals(ENVELOPE))throw new AppError('ENCRYPTION_DAMAGED');
   const cipher=createDecipheriv('aes-256-gcm',workspace.vault.key,header.subarray(8,20));cipher.setAAD(Buffer.from(workspace.fileAAD(file)));cipher.setAuthTag(header.subarray(20,36));let position=header.length;
   for(;;){const bytes=Buffer.allocUnsafe(BLOCK),r=await handle.read(bytes,0,BLOCK,position);if(!r.bytesRead)break;position+=r.bytesRead;operationWork({bytes:r.bytesRead});yield cipher.update(bytes.subarray(0,r.bytesRead));}

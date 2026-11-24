@@ -6,6 +6,7 @@ import {clearVault,cloneVault} from './encryption.js';
 import path from 'node:path';
 import {Workspace,assertRegular,atomicWrite,digest,serialize,readStorageFile as readFile} from './storage.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 
 const createdVaults=new WeakMap();
 const accessRoots=new WeakMap();
@@ -37,7 +38,7 @@ export async function readAccess(root,{deviceStore=accessDevice()}={}){
     const file=path.join(root,'.observanda','access.json'),stat=await assertRegular(file);
     if(stat.size>ACCESS_LIMIT)throw new AppError('ACCESS_FORMAT');
     const raw=await readFile(file,'utf8',ACCESS_LIMIT);let value;try{value=JSON.parse(raw);}catch{throw new AppError('ACCESS_FORMAT');}
-    if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
+    refuseNewerFormat(value?.formatVersion,3);if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
     validateKeyring(value);
     const access={value,etag:digest(raw)};accessRoots.set(access,root);return resolveAccess(access,{deviceStore,root});
   }catch(e){if(e.code==='ENOENT')return {value:null,etag:'none'};throw e;}
@@ -50,7 +51,7 @@ export async function verifyAccess(access,username,password,{deviceStore=accessD
   if(access.updateRequired)throw new AppError('ACCESS_STATE_CHANGED');
   if(access.value===null)throw new AppError('ACCESS_FORMAT');
   access=await resolveAccess(access,{deviceStore});
-  if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
+  refuseNewerFormat(access.value.formatVersion,3);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
   const vault=await unlockKeyring(access.value,{username,password,recovery,deviceStore});
   try{await deviceStore.accessTrust.remember(access.value,vault);return vault;}catch(error){await clearVault(vault);throw error;}
 }

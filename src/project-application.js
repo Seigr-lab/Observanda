@@ -78,6 +78,7 @@ import {retireQueryCacheScope,withQueryCacheScope} from './query-cache-scope.js'
 import {researchId,validTarget} from './web/research-reference.js';
 import {executeResearchRequest,researchRequest} from './research-requests.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 
 export function projectRequest(route,method){
  const rootTransfer=recordOwnerTransferRequest(route,method);if(rootTransfer)return rootTransfer;
@@ -124,6 +125,7 @@ export class ProjectApplication{
   const file=await workspaceFile(this.workspace.root),stat=await assertRegular(file);
   if(stat.size>4096)throw new AppError('ACCESS_UPGRADE');let value;
   try{value=JSON.parse(await this.workspace.readFile(file,'utf8'));}catch(error){if(error instanceof SyntaxError)throw new AppError('FORMAT');throw error;}
+  if(value?.format==='observanda-research-catalogue')refuseNewerFormat(value.version,2);
   if(value?.format!=='observanda-research-catalogue'||value.version!==2||!researchId(value.workspaceId))throw new AppError('ACCESS_UPGRADE');
   return this.registryOwner??=new ProjectRegistry(this.workspace,value.workspaceId);
  }

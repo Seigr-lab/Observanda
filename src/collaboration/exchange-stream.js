@@ -5,6 +5,7 @@ import {verifyOrganizationCommand,identityHash} from './identity.js';
 import {exchangeContact,wrapExchangeKey} from './exchange-identity.js';
 import {exact,uuid} from '../modules/validation.js';
 import {AppError} from '../errors.js';
+import {refuseNewerFormat} from '../stored-format.js';
 
 const magic=Buffer.from('OBSSHARE1\n'),block=1024*1024,maxFrame=block+512;
 const maxDeclaration=2*1024*1024+16384;
@@ -95,6 +96,7 @@ export async function readExchange(identity,source,consume,{signal,expectedSende
  signal=input.signal;
  try{
   if(!(await input.take(magic.length)).equals(magic))fail();const bytes=await input.frame(8192);if(!bytes)fail();const header=JSON.parse(bytes.toString('utf8'));
+  if(header?.format==='observanda-collaboration')refuseNewerFormat(header.version,2);
   if(!exact(header,['format','version','id','recipient','key'])||header.format!=='observanda-collaboration'||![1,2].includes(header.version)||requireDeclaration&&header.version!==2||!uuid(header.id)||!digest(header.recipient)||typeof header.key!=='string'||header.key.length!==512||Buffer.from(header.key,'base64').toString('base64')!==header.key)fail();
   secret=await identity.unwrap(header);const headerHash=hash(bytes);
   const next=async(max=maxFrame)=>{signal?.throwIfAborted();const frame=await input.frame(max);if(!frame)fail();return unseal(frame,secret,headerHash+'/'+index++);};
@@ -127,6 +129,6 @@ export async function readExchange(identity,source,consume,{signal,expectedSende
    }
    await consume(info,content(),{signal});if(!ended)fail();count++;
   }
- }catch(error){if(error.name==='AbortError'||['AUTH','ACCESS_LOCKED','WORKSPACE_CHANGED','SERVER_CLOSING','DEVICE_UNAVAILABLE','STORAGE_FULL','COLLABORATION_SCOPE','COLLABORATION_DENIED','LIMIT'].includes(error.code))throw error;throw new AppError('COLLABORATION_PACKAGE');}
+ }catch(error){if(error.name==='AbortError'||['AUTH','ACCESS_LOCKED','WORKSPACE_CHANGED','SERVER_CLOSING','DEVICE_UNAVAILABLE','STORAGE_FULL','STORAGE_NEWER','COLLABORATION_SCOPE','COLLABORATION_DENIED','LIMIT'].includes(error.code))throw error;throw new AppError('COLLABORATION_PACKAGE');}
  finally{secret?.fill(0);await input.close();}
 }

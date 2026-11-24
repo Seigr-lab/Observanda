@@ -9,6 +9,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {assertRegular,atomicWrite,serialize} from '../storage.js';
 import {AppError} from '../errors.js';
+import {refuseNewerFormat} from '../stored-format.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {AccessTrustStore} from './access-trust.js';
 const generate=promisify(generateKeyPair);
@@ -44,8 +45,11 @@ export class DeviceStore{
  available(){return this.protector.available();}
  async read(){
   const stat=await assertRegular(this.file,{missing:true});if(!stat)return null;if(stat.size>32768)throw new AppError('DEVICE_INVALID');
+  const raw=await readFile(this.file,'utf8');
+  // A device file from a newer release is refused as newer and kept unchanged.
+  try{refuseNewerFormat(JSON.parse(raw)?.format,1);}catch(error){if(error.code==='STORAGE_NEWER')throw error;}
   try{
-   const value=JSON.parse(await readFile(this.file,'utf8'));validatePublicDevice(value.public);
+   const value=JSON.parse(raw);validatePublicDevice(value.public);
    if(value.format!==1||Object.keys(value).sort().join()!=='format,protectedKey,public'||typeof value.protectedKey!=='string'||!value.protectedKey||value.protectedKey.length>25000||Buffer.from(value.protectedKey,'base64').toString('base64')!==value.protectedKey)throw new Error();
    return value;
   }catch{throw new AppError('DEVICE_INVALID');}

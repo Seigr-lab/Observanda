@@ -2,6 +2,7 @@ import path from 'node:path';
 import {unlink} from 'node:fs/promises';
 import {assertRegular,atomicWrite,serialize,readStorageFile} from './storage.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {projectCatalogueBinding,validProjectCatalogueBinding} from './project-catalogue-owner.js';
 import {labBookCatalogueBinding,validLabBookCatalogueBinding} from './lab-book-catalogue-owner.js';
 import {nativeDestination} from './native-destination.js';
@@ -38,6 +39,7 @@ async function readIdentity(root,relative,format){
  if(stat.size>1024)throw new AppError('CATALOGUE_DAMAGED');
  let value;try{value=JSON.parse(await readStorageFile(file,'utf8',1024));}catch(error){if(error.code==='ENOENT')return null;throw new AppError('CATALOGUE_DAMAGED');}
  if(format==='observanda-postgresql')return catalogueBindingValue(value);
+ if(value?.format===format)refuseNewerFormat(value.version,1);
  if(!value||Object.keys(value).sort().join()!=='format,id,version'||value.format!==format||value.version!==1||!uuid(value.id))throw new AppError('CATALOGUE_DAMAGED');
  return value;
 }

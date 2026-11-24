@@ -1,6 +1,7 @@
 // Pending jobs and lease deadlines have independently indexed membership. The
 // shared authenticated metadata tree owns paging, integrity and atomic writes.
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {digest} from './storage-format.js';
 import {researchId} from './web/research-reference.js';
 const root='.observanda/jobs',file=root+'/queue.json';
@@ -16,7 +17,8 @@ export class JobQueueIndex{
  async head(){
   const value=await this.json(file,65536);
   if(value===null)return {format:2,count:0,next:0};
-  if(value.format!==2||!ordinal(value.count)||!ordinal(value.next)||value.count>value.next)fail();return value;
+  // A later release that changes the queue's files raises this format.
+  refuseNewerFormat(value.format,2);if(value.format!==2||!ordinal(value.count)||!ordinal(value.next)||value.count>value.next)fail();return value;
  }
  path(member){return member.until===null?root+'/pending/'+padded(member.ticket)+'-'+member.id+'.json':root+'/leases/'+padded(Math.ceil(member.until))+'-'+padded(member.ticket)+'-'+member.id+'.json';}
  memberFile(id){if(!researchId(id))fail();return root+'/members/'+id+'.json';}

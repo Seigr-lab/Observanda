@@ -32,6 +32,7 @@ import {projectTransferRunning,trackProjectTransfer} from './project-transfer-ta
 import {researchId} from './web/research-reference.js';
 import {withOperationProgress,operationStage,operationSequence,operationTransfer} from './operation-progress.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 const terminal=value=>value?.phase==='complete';
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
 const inside=(root,child)=>{const relative=path.relative(root,child);return !relative||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
@@ -64,6 +65,7 @@ export class LabBookImports{
   if(!binding)return {...await readLabBookArchiveIdentity(root,vault,{verify:false}),archive:true};
   const storage=new Workspace(root,vault),file=await workspaceFile(root);if((await assertRegular(file)).size>4096)throw new AppError('LAB_BOOK_FOLDER');let descriptor;
   try{descriptor=JSON.parse(await storage.readFile(file,'utf8'));}catch{throw new AppError('LAB_BOOK_FOLDER');}
+  if(descriptor?.format==='observanda-research-catalogue')refuseNewerFormat(descriptor.version,2);
   if(descriptor?.format!=='observanda-research-catalogue'||descriptor.version!==2||!researchId(descriptor.workspaceId))throw new AppError('LAB_BOOK_FOLDER');return {labBookId:binding.labBookId,namespaceId:descriptor.workspaceId,vaultId:vault.id,archiveDigest:null};
  }
  async run(command,{resume=false,check=async()=>{},checkpoint=async()=>{},opened=async()=>{},onProgress}={}){

@@ -2,11 +2,14 @@ import {SEGMENTED_ENVELOPE,unsealSegmentedFile} from './segmented-file-format.js
 import {createCipheriv,createDecipheriv,randomBytes,scrypt} from 'node:crypto';
 import {promisify} from 'node:util';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {retireVault,drainRetiredVault} from './vault-lifecycle.js';
 
 const derive=promisify(scrypt);
 export const ENVELOPE=Buffer.from('OBSENC01');
 export const ENCRYPTION_OVERHEAD=36;
+// Envelopes OBSENC01 and OBSENC02 are known; a higher number comes from a newer release.
+export function refuseNewerEnvelope(bytes){const tag=bytes.subarray(0,8).toString('latin1');if(/^OBSENC\d\d$/.test(tag))refuseNewerFormat(Number(tag.slice(6)),2);}
 export const encrypted=bytes=>bytes.subarray(0,8).equals(ENVELOPE)||bytes.subarray(0,8).equals(SEGMENTED_ENVELOPE);
 export const passwordKey=(password,salt)=>derive(password,salt,32,{N:131072,r:8,p:1,maxmem:160*1024*1024});
 export function seal(bytes,key,aad){
@@ -17,6 +20,7 @@ export function seal(bytes,key,aad){
 }
 export function unseal(bytes,key,aad){
   if(!key)throw new AppError('ACCESS_LOCKED');
+  refuseNewerEnvelope(bytes);
   try{
     if(bytes.subarray(0,8).equals(SEGMENTED_ENVELOPE))return unsealSegmentedFile(bytes,key,aad);
     if(bytes.length<ENCRYPTION_OVERHEAD||!encrypted(bytes))throw new Error();

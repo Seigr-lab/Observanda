@@ -8,6 +8,7 @@ import {stat} from 'node:fs/promises';
 import {nativeDestination} from './native-destination.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {encrypted} from './encryption.js';
 import {cataloguePayloadRows} from './catalogue-payload-rows.js';
 import {catalogueFormat,catalogueRequiresDomains,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes,requireWebsiteDocuments,requireStagedEvidence,requireWebsiteEditor,requireWebsitePresentation} from './catalogue-format.js';
@@ -111,6 +112,7 @@ export async function readCatalogueStream(stream,db,tables,{archiveSize,totalRow
  for await(const line of lines(stream,{countBytes:!direct,checksum:archiveChecksum})){
   if(finished)fail();let value;try{value=JSON.parse(line);}catch{fail();}
   if(version===null){
+   if(value?.format==='observanda-postgresql-archive')refuseNewerFormat(value.version,16);
    if(value?.format!=='observanda-postgresql-archive'||![2,3,4,5,6,7,8,9,10,11,12,13,14,15,16].includes(value.version))fail();
    const header=value;
    if(value.version===16){

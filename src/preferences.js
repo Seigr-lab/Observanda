@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {DEFAULT_INTERFACE,validInterface} from './web/interface-ui.js';
 import {assertRegular,atomicWrite,serialize,digest} from './storage.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {favoriteQuantityPage,quantityFavoriteKey,validQuantityChoice,validQuantityFavorites} from './quantity-favorites.js';
 import {validLanguage} from './web/i18n/runtime.js';
 
@@ -18,6 +19,7 @@ export async function preferencesSnapshot(file){
  if(file)try{const stat=await assertRegular(file);if(stat.size>1048576)throw new AppError('PREFERENCES_FORMAT');raw=await readFile(file);}catch(error){if(error.code!=='ENOENT')throw error;}
  if(!raw)return {value:defaultPreferences(),etag:'none',raw:null};
  let value;try{value=JSON.parse(raw.toString('utf8'));}catch{throw new AppError('PREFERENCES_FORMAT');}
+ refuseNewerFormat(value?.formatVersion,1);
  if(!value||Array.isArray(value)||value.formatVersion!==1||Object.keys(value).some(key=>!['formatVersion','workspace','recent','interface','dashboard','language','quantityFavorites'].includes(key))||value.language!==undefined&&!validLanguage(value.language)||(value.workspace!==null&&!validPath(value.workspace))||value.interface!==undefined&&!validInterface(value.interface)||value.recent!==undefined&&(!Array.isArray(value.recent)||value.recent.length>30||value.recent.some(item=>!item||!validPath(item.path)||typeof item.title!=='string'||item.title.length>160||typeof item.label!=='string'||item.label.length>60)))throw new AppError('PREFERENCES_FORMAT');
  if(value.quantityFavorites!==undefined&&!validQuantityFavorites(value.quantityFavorites))throw new AppError('PREFERENCES_FORMAT');
  if(value.recent?.some(item=>!validCatalogue(item.catalogueId)))throw new AppError('PREFERENCES_FORMAT');

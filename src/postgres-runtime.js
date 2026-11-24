@@ -23,6 +23,7 @@ import {fileURLToPath} from 'node:url';
 import {assertRegular,WORKSPACE_FILE} from './storage.js';
 import {WindowsProtector} from './security/device-store.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 import {compatibleManagedRuntime} from './postgres-runtime-compatibility.js';
 import {seal,unseal} from './encryption.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
@@ -225,6 +226,8 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   if(stat){
    if(stat.size>16384)throw new AppError('DATABASE_RUNTIME');
    let bytes=await files.read(stateFile);try{if(protector)bytes=await protector.unprotect(bytes);config=JSON.parse(bytes.toString());}finally{bytes.fill(0);}
+   // A newer release may change this file or upgrade PostgreSQL beyond 18.
+   refuseNewerFormat(config.format,1);if(config.format===1)refuseNewerFormat(config.major,18);
    if(config.format!==1||![16,17,18].includes(config.major)||!['initializing','ready'].includes(config.phase)||!Number.isInteger(config.port)||config.port<1||config.port>65535||![config.adminPassword,config.appPassword].every(v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v))||!path.isAbsolute(config.bin))throw new AppError('DATABASE_RUNTIME');
    // Only a cluster still initializing from the template carries these.
    if(config.bootstrapPassword!==undefined&&(config.phase!=='initializing'||!/^[a-f0-9]{64}$/.test(config.bootstrapPassword))||config.templateCopy!==undefined&&(config.phase!=='initializing'||config.templateCopy!==true))throw new AppError('DATABASE_RUNTIME');

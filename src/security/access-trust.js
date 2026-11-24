@@ -10,6 +10,7 @@ import {assertRegular,atomicWrite,serialize} from '../storage.js';
 import {withWriterLease} from '../writer-lease.js';
 import {validateKeyring,authenticateKeyring} from './keyring.js';
 import {AppError} from '../errors.js';
+import {refuseNewerFormat} from '../stored-format.js';
 
 const execute=promisify(execFile),uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const canonical=value=>Array.isArray(value)?'['+value.map(canonical).join(',')+']':value&&typeof value==='object'?'{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+canonical(value[key])).join(',')+'}':JSON.stringify(value);
@@ -47,7 +48,7 @@ export class AccessTrustStore{
  }
  async resolve(value){
   if(value===null)throw new AppError('ACCESS_FORMAT');
-  if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
+  refuseNewerFormat(value?.formatVersion,3);if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');
   const current=await this.current(value.vaultId);if(!current)return value;
   const fingerprint=keyringFingerprint(value);if(current.sha256===fingerprint)return current.keyring;
   const file=path.join(this.folder(value.vaultId),fingerprint+'.retired'),info=await assertRegular(file,{missing:true});
@@ -61,7 +62,7 @@ export class AccessTrustStore{
   catch(error){if(error.code!=='LOCKED'||Date.now()>=deadline)throw error;await delay(50);}
  }
  async remember(value,vault){
-  if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(value,vault);
+  refuseNewerFormat(value?.formatVersion,3);if(value?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(value,vault);
   // Every unlock remembers its keyring. An already current record needs no
   // write, so read it first: current.json is only ever replaced atomically.
   // Taking the kernel lease here serialized every concurrent unlock of one

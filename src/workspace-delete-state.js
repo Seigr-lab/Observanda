@@ -5,6 +5,7 @@ export const deletionScope=(id,operation)=>scope.run(id,operation);
 import {readFile} from 'node:fs/promises';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
+import {refuseNewerFormat} from './stored-format.js';
 
 import {DELETE_MARKER} from './storage-lifecycle-markers.js';
 export {DELETE_MARKER};
@@ -13,7 +14,7 @@ export async function workspaceDeletion(root){
  const file=path.join(root,DELETE_MARKER),stat=await assertRegular(file,{missing:true});if(!stat)return null;
  if(stat.size>16384)throw new AppError('STORAGE_DELETE_STATE');
  let value;try{value=JSON.parse(await readFile(file,'utf8'));}catch{throw new AppError('STORAGE_DELETE_STATE');}
- if(value?.version!==1||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.id)||!path.isAbsolute(value.source??''))throw new AppError('STORAGE_DELETE_STATE');return value;
+ refuseNewerFormat(value?.version,1);if(value?.version!==1||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.id)||!path.isAbsolute(value.source??''))throw new AppError('STORAGE_DELETE_STATE');return value;
 }
 export async function assertNotDeleting(root,id){
  // A parent fence closes admission to its dedicated descendants as well.
