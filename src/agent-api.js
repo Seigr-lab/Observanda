@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {recordBrowse} from './web/record-query.js';
 import {RECORD_TYPES,STATUSES} from './web/record-types.js';
+import {RELATION_TYPES} from './web/record-model.js';
 import {markdownRichText,richTextForAgents} from './agent-markdown.js';
 
 export const AGENT_API_VERSION='1.0.0';
@@ -29,7 +30,9 @@ const book={projectId:id,labBookId:id};
 const recordOutput={type:'object',properties:{
  id,revision:{type:'string',description:'Pass this as expectedRevision when you update the record.'},type:{type:'string'},title:{type:'string'},status:{type:'string'},tags:{type:'array',items:{type:'string'}},
  occurredOn:{type:['string','object']},text:{type:'string',description:'The record text as plain text.'},
- sections:{type:'array',items:{type:'object',properties:{id,title:{type:'string'},text:{type:'string'}}}},createdAt:{type:'string'},updatedAt:{type:'string'}}};
+ sections:{type:'array',items:{type:'object',properties:{id,title:{type:'string'},text:{type:'string'}}}},
+ links:{type:'array',items:{type:'object',properties:{id,type:{type:'string'},label:{type:'string'},recordId:id,sameLabBook:{type:'boolean'}}}},createdAt:{type:'string'},updatedAt:{type:'string'}}};
+const written={type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}};
 
 export const AGENT_OPERATIONS=Object.freeze([
  {name:'me',method:'GET',access:'read',summary:'Describe this key: its name, workspace, scope, access and expiry.',output:{type:'object'}},
@@ -49,7 +52,14 @@ export const AGENT_OPERATIONS=Object.freeze([
   output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}}},
  {name:'records/update',method:'POST',access:'write',summary:'Change a record. Only the fields you send change; expectedRevision must be the revision you last read.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','changes'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},changes:{type:'object',additionalProperties:false,minProperties:1,properties:recordFields}}},
-  output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}}}
+  output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}}},
+ {name:'records/link',method:'POST',access:'write',summary:'Link a record to another record, in the same lab book or another lab book of the same project.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','link'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},
+   link:{type:'object',additionalProperties:false,required:['recordId'],properties:{type:{type:'string',minLength:1,maxLength:80,description:'How the records relate, for example: '+RELATION_TYPES.join(', ')+'. Defaults to Related to.'},recordId:{...id,description:'The record to link to.'},labBookId:{...id,description:'Its lab book, when it is not this one. It must be in the same project.'}}}}},
+  output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'},linkId:id}}},
+ {name:'records/unlink',method:'POST',access:'write',summary:'Remove a link from a record.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','linkId'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},linkId:id}},
+  output:written}
 ]);
 const byName=new Map(AGENT_OPERATIONS.map(operation=>[operation.name,operation]));
 
@@ -116,7 +126,8 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
  if(operation.name==='records/get'){
   const {record,revision}=await read(input.recordId);
   return {id:record.id,revision,type:record.type,title:record.title,status:record.status,tags:record.tags,occurredOn:dateOutput(record.occurredOn),text:richTextForAgents(record.body),
-   sections:record.sections.map(section=>({id:section.id,title:section.title,text:richTextForAgents(section.body)})),createdAt:record.createdAt,updatedAt:record.updatedAt};
+   sections:record.sections.map(section=>({id:section.id,title:section.title,text:richTextForAgents(section.body)})),
+   links:record.relations.filter(link=>link.target.kind==='record').map(link=>({id:link.id,type:link.type,label:link.label,recordId:link.target.id,sameLabBook:link.target.workspaceId===workspaceId})),createdAt:record.createdAt,updatedAt:record.updatedAt};
  }
  const sections=(values,existing=[])=>values.map(section=>{
   if(section.id&&!existing.some(item=>item.id===section.id))throw new AppError('INVALID',[{field:'sections'}]);
@@ -139,6 +150,21 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
   const recordId=randomUUID();
   const record=apply({id:recordId,notebookId:input.labBookId,type:'note',title:'',body:markdownRichText(''),contributors:[],relations:[],tags:[],occurredOn:{kind:'unknown'},createdAt:at,updatedAt:at,share:false,figures:[],status:'draft',sections:[],attachments:[]},input.record);
   return save(recordId,null,record);
+ }
+ if(operation.name==='records/link'){
+  const {record,revision}=await read(input.recordId);if(revision!==input.expectedRevision)throw new AppError('RECORD_CHANGED');
+  // The target's lab book must be one this key reaches, in the same project.
+  const targetBook=input.link.labBookId??input.labBookId;if(!inScope(key,{projectId:input.projectId,labBookId:targetBook}))forbidden();
+  const targetPrefix='/api/projects/'+input.projectId+'/lab-books/'+targetBook,targetWorkspace=targetBook===input.labBookId?workspaceId:(await run(targetPrefix+'/workspace/read/start',{})).metadata.id;
+  const target=(await run(targetPrefix+'/workspace/read/selection',{workspaceId:targetWorkspace,ids:[input.link.recordId]})).book?.entries?.find(entry=>entry.id===input.link.recordId);
+  if(!target)throw new AppError('NOT_FOUND');
+  const linkId=randomUUID(),relations=[...record.relations,{id:linkId,type:input.link.type??'Related to',target:{workspaceId:targetWorkspace,kind:'record',id:target.id},label:target.title}];
+  return {...await save(record.id,revision,{...record,relations,updatedAt:at}),linkId};
+ }
+ if(operation.name==='records/unlink'){
+  const {record,revision}=await read(input.recordId);if(revision!==input.expectedRevision)throw new AppError('RECORD_CHANGED');
+  if(!record.relations.some(link=>link.id===input.linkId))throw new AppError('NOT_FOUND');
+  return save(record.id,revision,{...record,relations:record.relations.filter(link=>link.id!==input.linkId),updatedAt:at});
  }
  if(operation.name==='records/update'){
   const {record,revision}=await read(input.recordId);

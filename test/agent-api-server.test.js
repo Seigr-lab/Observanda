@@ -58,6 +58,18 @@ test('agents learn the API from the app and work only through their key, scope a
  assert.deepEqual((await result(await f.agent('/api/v1/agent/lab-books/list',{key:scoped,data:{projectId:project.projectId}}))).labBooks.map(item=>item.title),['Release log']);
  assert.equal((await result(await f.agent('/api/v1/agent/records/list',{key:scoped,data:{projectId:project.projectId,labBookId:other.labBookId}}),403)).code,'AGENT_KEY_SCOPE');
  assert.equal((await result(await f.agent('/api/v1/agent/records/get',{key:scoped,data:{...place,recordId:created.id}}))).id,created.id);
+ // Links reach records in the same lab book and in another lab book of the project.
+ const decision=await result(await f.agent('/api/v1/agent/records/create',{key,data:{...place,record:{type:'decision',title:'Choose the parser'}}}));
+ const design=await result(await f.agent('/api/v1/agent/records/create',{key,data:{projectId:project.projectId,labBookId:other.labBookId,record:{type:'note',title:'Parser design'}}}));
+ let current=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));
+ const linked=await result(await f.agent('/api/v1/agent/records/link',{key,data:{...place,recordId:created.id,expectedRevision:current.revision,link:{type:'Builds on',recordId:decision.id}}}));
+ const across=await result(await f.agent('/api/v1/agent/records/link',{key,data:{...place,recordId:created.id,expectedRevision:linked.revision,link:{recordId:design.id,labBookId:other.labBookId}}}));
+ current=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));
+ assert.deepEqual(current.links.map(link=>[link.id,link.type,link.label,link.recordId,link.sameLabBook]),[[linked.linkId,'Builds on','Choose the parser',decision.id,true],[across.linkId,'Related to','Parser design',design.id,false]]);
+ assert.equal((await result(await f.agent('/api/v1/agent/records/link',{key:scoped,data:{...place,recordId:created.id,expectedRevision:current.revision,link:{recordId:design.id,labBookId:other.labBookId}}}),403)).code,'AGENT_KEY_SCOPE');
+ const unlinked=await result(await f.agent('/api/v1/agent/records/unlink',{key,data:{...place,recordId:created.id,expectedRevision:current.revision,linkId:linked.linkId}}));
+ current=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));assert.equal(current.revision,unlinked.revision);assert.deepEqual(current.links.map(link=>link.id),[across.linkId]);
+ assert.deepEqual((await result(await f.owner('/api/security/agent-keys/activity',{}))).activity.slice(0,3).map(entry=>entry.operation),['records/unlink','records/link','records/link']);
  // Once the owner locks the workspace, no key works until it is unlocked again.
  await result(await f.owner('/api/access/lock',{}));
  assert.equal((await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}),401)).code,'ACCESS_LOCKED');
