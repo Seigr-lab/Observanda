@@ -93,3 +93,23 @@ test('closing the app withdraws its agent address',{timeout:600000},async t=>{
  const f=await agentServerFixture(t),keys=new AgentKeyStore(f.device.file+'.agents');
  assert.equal((await keys.endpoint()).origin,f.app.origin);await f.app.close();assert.equal(await keys.endpoint(),null);
 });
+
+test('agents attach files from a folder on this computer through the checked intake',{timeout:600000},async t=>{
+ const f=await agentServerFixture(t),{create}=await keys(f),project=await f.createProject('Software notes'),book=await f.createBook(project.projectId,'Release log');
+ const key=await create({kind:'workspace'}),place={projectId:project.projectId,labBookId:book.labBookId};
+ const {mkdir,writeFile}=await import('node:fs/promises'),pathModule=(await import('node:path')).default,source=pathModule.join(f.directory,'build-output');
+ await mkdir(pathModule.join(source,'logs'),{recursive:true});await writeFile(pathModule.join(source,'report.txt'),'All 412 tests passed.\n');await writeFile(pathModule.join(source,'logs','build.log'),'Built in 3.2 s\n');
+ const record=await result(await f.agent('/api/v1/agent/records/create',{key,data:{...place,record:{type:'run',title:'Build 1.2.0'}}}));
+ const read=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:record.id}}));
+ const readOnly=await create({kind:'workspace'},'read');
+ assert.equal((await result(await f.agent('/api/v1/agent/files/attach',{key:readOnly,data:{...place,recordId:record.id,expectedRevision:read.revision,source,paths:['report.txt'],title:'Refused'}}),403)).code,'AGENT_KEY_SCOPE');
+ const attached=await result(await f.agent('/api/v1/agent/files/attach',{key,data:{...place,recordId:record.id,expectedRevision:read.revision,source,paths:['report.txt','logs/build.log'],title:'Build output',tool:'ci',toolVersion:'1',sourceRevision:'abc123'}}));
+ assert.equal(attached.id,record.id);assert.match(attached.pin,/^[a-f0-9]{64}$/);
+ const wait=async states=>{for(let i=0;i<300;i++){const value=await result(await f.agent('/api/v1/agent/files/status',{key,data:{...place,recordId:record.id,proposalId:attached.proposalId}}));if(states.includes(value.state))return value;await new Promise(resolve=>setTimeout(resolve,200));}throw Error('The attachment did not reach '+states.join(' or '));};
+ const prepared=await wait(['prepared']);assert.deepEqual(prepared.files.map(file=>file.path).sort(),['logs/build.log','report.txt']);assert.equal(prepared.completed,false);
+ assert.equal((await result(await f.agent('/api/v1/agent/files/apply',{key,data:{...place,recordId:record.id,proposalId:attached.proposalId,pin:'0'.repeat(64)}}),422)).code,'INTAKE_CHANGED');
+ await result(await f.agent('/api/v1/agent/files/apply',{key,data:{...place,recordId:record.id,proposalId:attached.proposalId,pin:attached.pin}}));
+ const done=await wait(['completed']);assert.equal(done.completed,true);
+ const changes=(await result(await f.owner('/api/security/agent-keys/activity',{}))).activity;
+ assert.deepEqual(changes.slice(0,2).map(entry=>[entry.operation,entry.title]),[['files/attach','Build 1.2.0'],['records/create','Build 1.2.0']]);
+});

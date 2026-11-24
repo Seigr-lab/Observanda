@@ -59,7 +59,20 @@ export const AGENT_OPERATIONS=Object.freeze([
   output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'},linkId:id}}},
  {name:'records/unlink',method:'POST',access:'write',summary:'Remove a link from a record.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','linkId'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},linkId:id}},
-  output:written}
+  output:written},
+ {name:'files/attach',method:'POST',access:'write',activity:null,summary:'Bring files from a folder on this computer into a record. Observanda checks and copies them in the background; then call files/apply.',
+  description:'The folder must be outside the workspace. Each path is relative to it, with forward slashes. The files are hashed now and checked again before they are copied; a file that changes stops the attachment.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','source','paths','title'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},
+   source:{type:'string',minLength:1,maxLength:4096,description:'Absolute path of the folder holding the files.'},paths:{type:'array',minItems:1,maxItems:1000,items:{type:'string',minLength:1,maxLength:1024}},
+   title:{type:'string',minLength:1,maxLength:300,description:'What these files are, as shown on the record.'},purpose:{type:'string',enum:['evidence','preparation','analysis'],description:'Defaults to evidence.'},
+   method:{type:'string',maxLength:3000},tool:{type:'string',maxLength:200},toolVersion:{type:'string',maxLength:200},sourceRevision:{type:'string',maxLength:500,description:'For example the commit the files came from.'}}},
+  output:{type:'object',properties:{id,title:{type:'string'},proposalId:id,pin:{type:'string'},state:{type:'string'}}}},
+ {name:'files/status',method:'POST',access:'read',summary:'See how an attachment is progressing: staging, prepared (ready for files/apply), applying or completed.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','proposalId'],properties:{...book,recordId:id,proposalId:id}},
+  output:{type:'object',properties:{id,proposalId:id,pin:{type:'string'},state:{type:'string'},files:{type:'array'},job:{type:['object','null']},completed:{type:'boolean'}}}},
+ {name:'files/apply',method:'POST',access:'write',activity:'files/attach',summary:'Add prepared files to the record. Call it once files/status reports prepared.',
+  input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','proposalId','pin'],properties:{...book,recordId:id,proposalId:id,pin:{type:'string',pattern:'^[a-f0-9]{64}$'}}},
+  output:{type:'object',properties:{id,title:{type:'string'},proposalId:id,state:{type:'string'}}}}
 ]);
 const byName=new Map(AGENT_OPERATIONS.map(operation=>[operation.name,operation]));
 
@@ -151,6 +164,20 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
   const record=apply({id:recordId,notebookId:input.labBookId,type:'note',title:'',body:markdownRichText(''),contributors:[],relations:[],tags:[],occurredOn:{kind:'unknown'},createdAt:at,updatedAt:at,share:false,figures:[],status:'draft',sections:[],attachments:[]},input.record);
   return save(recordId,null,record);
  }
+ const intake=(action,data)=>run(prefix+'/v1/intake/'+action,{version:1,...data});
+ const progress=value=>({id:value.recordId,proposalId:value.id,pin:value.pin,state:value.state,files:value.files.map(({path,size,sha256})=>({path,size,sha256})),job:value.job??null,completed:!!value.receipt});
+ if(operation.name==='files/attach'){
+  const proposalId=randomUUID();
+  const built=await intake('builder-review',{id:proposalId,workspaceId,recordId:input.recordId,expectedRevision:input.expectedRevision,source:input.source,paths:input.paths,purpose:input.purpose??'evidence',title:input.title,
+   method:input.method??'',tool:input.tool??'',toolVersion:input.toolVersion??'',sourceRevision:input.sourceRevision??'',profile:null,adapter:null});
+  const staged=await intake('stage',{source:input.source,workspaceId,recordId:input.recordId,id:proposalId,expectedPin:built.preview.pin,authoredManifest:built.manifest,proof:built.proof});
+  return {id:input.recordId,title:built.targetTitle,proposalId,pin:built.preview.pin,state:staged.state};
+ }
+ if(operation.name==='files/status')return progress(await intake('status',{workspaceId,recordId:input.recordId,id:input.proposalId}));
+ if(operation.name==='files/apply'){
+  const applied=await intake('apply',{workspaceId,recordId:input.recordId,id:input.proposalId,expectedPin:input.pin});
+  return {id:input.recordId,title:(await read(input.recordId)).record.title,proposalId:input.proposalId,state:applied.state};
+ }
  if(operation.name==='records/link'){
   const {record,revision}=await read(input.recordId);if(revision!==input.expectedRevision)throw new AppError('RECORD_CHANGED');
   // The target's lab book must be one this key reaches, in the same project.
@@ -181,7 +208,7 @@ export function agentOpenApi(origin){
  for(const operation of AGENT_OPERATIONS){
   paths['/api/v1/agent/'+operation.name]={[operation.method.toLowerCase()]:{
    operationId:operation.name.replace(/[-/](.)/g,(_,c)=>c.toUpperCase()),summary:operation.summary,
-   description:operation.access==='write'?'Needs a key with read and write access.':'Any key may call this within its scope.',
+   description:(operation.description?operation.description+' ':'')+(operation.access==='write'?'Needs a key with read and write access.':'Any key may call this within its scope.'),
    security:[{agentKey:[]}],
    ...(operation.input?{requestBody:{required:true,content:{'application/json':{schema:operation.input}}}}:{}),
    responses:{200:{description:'Done.',content:{'application/json':{schema:operation.output}}},422:error,401:error,403:error,404:error,409:error,423:error}
