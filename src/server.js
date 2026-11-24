@@ -769,6 +769,28 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         client.access=result.etag;client.expires=Date.now()+8*60*60*1000;return json(result);
        }finally{changing=false;}
       }
+      // The owner creates, lists and revokes agent keys for the open, unlocked workspace.
+      if(req.method==='POST'&&url.pathname.startsWith('/api/security/agent-keys/')){
+       if(!workspace)throw new AppError('MISSING');if(!agentKeys)throw new AppError('DEVICE_UNAVAILABLE');
+       const operation=url.pathname.slice('/api/security/agent-keys/'.length),data=await body(req,16384);
+       if(context!==selectedContext||contextRequired&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
+       if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+       const workspaceId=(await workspace.outline()).metadata.id;
+       if(operation==='list'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return json({workspaceId,agentKeys:await agentKeys.list(workspaceId)});}
+       if(operation==='revoke'){if(!data||Object.keys(data).join()!=='id')throw new AppError('INVALID');activeWrites++;countedWrite=true;return json(await agentKeys.revoke(workspaceId,data.id));}
+       if(operation==='create'){
+        if(!data||Object.keys(data).some(key=>!['name','scope','access','expiresAt'].includes(key)))throw new AppError('INVALID');
+        // A scoped key must name a project, and lab book, that exist in this workspace now.
+        if(data.scope?.kind!=='workspace'){
+         const listing=projectRequest('/api/projects/'+data.scope?.projectId+'/lab-books/list','POST');if(!listing)throw new AppError('INVALID');let after=null,found=false;
+         do{const page=await projectApplication(selectedContext).run(client,listing,{after,limit:50,revision:null},{check:req.checkWriter});found||=page.items.some(item=>item.labBookId===data.scope.labBookId);after=page.next;}while(data.scope.kind==='lab-book'&&!found&&after);
+         if(data.scope.kind==='lab-book'&&!found)throw new AppError('NOT_FOUND');
+        }
+        activeWrites++;countedWrite=true;
+        return json(await agentKeys.create({name:data.name,workspaceId,scope:data.scope,access:data.access,expiresAt:data.expiresAt??null}));
+       }
+       throw new AppError('NOT_FOUND');
+      }
       if(req.method==='GET'&&url.pathname==='/api/storage'){
        const result=await metadata();
        if(context===selectedContext&&result.available)prepareWebsites(selectedContext,client);

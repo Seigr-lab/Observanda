@@ -13,6 +13,7 @@ export const deferredCatalogues=Object.freeze({
  websiteAuthoring:()=>import('./catalogues/websiteAuthoring.js'),
  applicationTexts:()=>import('./catalogues/applicationTexts.js'),
  workspaceSecurity:()=>import('./catalogues/workspaceSecurity.js'),
+ agentKeys:()=>import('./catalogues/agentKeys.js'),
  supportEditors:()=>import('./catalogues/supportEditors.js'),
  materialEditors:()=>import('./catalogues/materialEditors.js'),
  datasetExchange:()=>import('./catalogues/datasetExchange.js'),

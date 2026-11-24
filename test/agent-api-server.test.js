@@ -56,3 +56,17 @@ test('agents learn the API from the app and work only through their key, scope a
  await result(await f.owner('/api/access/lock',{}));
  assert.equal((await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}),401)).code,'ACCESS_LOCKED');
 });
+
+test('the owner creates scoped keys only for existing lab books, lists and revokes them',{timeout:600000},async t=>{
+ const f=await agentServerFixture(t),project=await f.createProject('Software notes'),book=await f.createBook(project.projectId,'Release log');
+ const created=await result(await f.owner('/api/security/agent-keys/create',{name:'Release agent',scope:{kind:'lab-book',projectId:project.projectId,labBookId:book.labBookId},access:'write'}));
+ assert.match(created.key,/^obsk_/);assert.deepEqual(created.agentKey.scope,{kind:'lab-book',projectId:project.projectId,labBookId:book.labBookId});
+ assert.equal((await result(await f.owner('/api/security/agent-keys/create',{name:'Nowhere',scope:{kind:'lab-book',projectId:project.projectId,labBookId:randomUUID()},access:'read'}),404)).code,'NOT_FOUND');
+ assert.equal((await result(await f.owner('/api/security/agent-keys/create',{name:'Extra',scope:{kind:'workspace'},access:'read',owner:'someone'}),422)).code,'INVALID');
+ const listed=await result(await f.owner('/api/security/agent-keys/list',{}));assert.deepEqual(listed.agentKeys.map(key=>key.name),['Release agent']);assert.equal(listed.agentKeys[0].sha256,undefined);
+ assert.equal((await result(await f.agent('/api/v1/agent/me',{key:created.key}))).name,'Release agent');
+ // Agent keys cannot manage keys: these routes need the owner's own session.
+ assert.equal((await result(await f.agent('/api/security/agent-keys/list',{key:created.key,data:{}}),403)).code,'ORIGIN');
+ await result(await f.owner('/api/security/agent-keys/revoke',{id:created.agentKey.id}));
+ assert.equal((await result(await f.agent('/api/v1/agent/me',{key:created.key}),401)).code,'AGENT_KEY_INVALID');
+});

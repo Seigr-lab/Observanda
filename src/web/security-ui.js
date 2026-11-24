@@ -1,10 +1,12 @@
 import './i18n/catalogues/workspaceSecurity.js';
 import {t} from './i18n/index.js';
+import {agentKeysUI} from './agent-keys-ui.js';
 export function securityUI({state,api,esc,field,showDialog,notify,locationFields,reload}){
  const text=(key,args)=>esc(t('workspaceSecurity',key,args));
  let access=null,identity=null,recovery=null,checkpoint=null,checkpointRequest=0;
  document.querySelector('#dialog')?.addEventListener('close',()=>{recovery=null;checkpoint=null;checkpointRequest++;const secret=document.querySelector('[data-recovery-secret]');if(secret){secret.value='';secret.textContent='';}});
  const fingerprint=id=>id.match(/.{1,8}/g).join(' ');
+ const agentKeys=agentKeysUI({api,esc,field,present:(...args)=>present(...args),notify});
  function download(name,text){const url=URL.createObjectURL(new Blob([text],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  function panel(){return `<section class="panel"><h2>${text('sharingRecovery')}</h2><p>${text('sharingHelp')}</p><div class="inline-actions"><button class="button primary" data-action="security-manage">${text('manageAccess')}</button>`+(state.access.deviceAvailable?'<button class="button" data-action="security-identity">'+esc(t('access','deviceRequest'))+'</button>':'')+'<button class="button" data-action="security-checkpoint-import">'+esc(t('access','settingsImport'))+'</button></div></section>';}
  function present(title,body,actions='',formId=''){
@@ -22,10 +24,12 @@ export function securityUI({state,api,esc,field,showDialog,notify,locationFields
    `<details class="security-section"><summary>${text('addDevice')}</summary><form id="security-grant-form">`+field(t('workspaceSecurity','recipientRequest'),`<textarea name="request" required rows="3" spellcheck="false" placeholder="${text('pasteRequest')}"></textarea>`)+field(t('workspaceSecurity','openRequest'),'<input type="file" accept=".observanda-device,application/json" data-security-request>')+`<p class="security-fingerprint" data-recipient-fingerprint aria-live="polite"></p><label class="security-confirm"><input type="checkbox" name="verified" required> ${text('verifiedGrant')}</label><button class="button primary" type="submit">${text('grantAccess')}</button></form></details>`+
    `<section class="security-section"><h3>${text('recovery')}</h3><p>`+(access.recoveryAvailable?t('workspaceSecurity','recoveryConfigured'):t('workspaceSecurity','recoveryCreateHelp'))+'</p><button class="button" data-action="security-recovery-review">'+(access.recoveryAvailable?t('workspaceSecurity','replaceRecovery'):t('workspaceSecurity','createRecovery'))+'</button></section>'+
    `<section class="security-section"><h3>${esc(t('access','settingsCode'))}</h3><p class="security-fingerprint">${esc(fingerprint(access.fingerprint))}</p><p>${esc(t('access','settingsHelp'))}</p><button class="button" data-action="security-checkpoint-export">${esc(t('access','settingsExport'))}</button></section>`+
+   `<section class="security-section"><h3>${esc(t('agentKeys','title'))}</h3><p>${esc(t('agentKeys','summary'))}</p><button class="button" data-action="security-agent-keys">${esc(t('agentKeys','manage'))}</button></section>`+
    `<details class="security-section"><summary>${text('differentGroup')}</summary><p>${text('successorHelp')}</p><button class="button" data-action="storage-encrypt-dialog">${text('privateSuccessor')}</button></details>`);
  }
  function parseRequest(form){try{const value=JSON.parse(form.elements.request.value);if(value.format!=='observanda-device-v1'||!/^[a-f0-9]{64}$/.test(value.id)||typeof value.publicKey!=='string')return null;return value;}catch{return null;}}
  async function input(el){
+  if(await agentKeys.input(el))return true;
   if(el.matches('[data-access-checkpoint]')){
    checkpoint=null;const request=++checkpointRequest,form=el.closest('form'),review=form.querySelector('[data-checkpoint-review]'),file=el.files[0];review.replaceChildren();if(!file)return true;
    if(file.size>524288){notify(t('access','settingsFileInvalid'),true);return true;}
@@ -41,6 +45,7 @@ export function securityUI({state,api,esc,field,showDialog,notify,locationFields
   return true;
  }
  async function action(button){
+  if(await agentKeys.action(button))return true;
   const name=button.dataset.action;
   if(name==='security-checkpoint-import'){
    checkpoint=null;present(t('access','settingsImport'),locationFields(state.storage?.root??'','checkpoint-root',{name:'settingsRoot'})+field(esc(t('access','settingsFile')),'<input type="file" accept=".observanda-access,application/json" data-access-checkpoint required>')+'<div data-checkpoint-review></div>','','security-checkpoint-form');return true;
@@ -58,6 +63,7 @@ export function securityUI({state,api,esc,field,showDialog,notify,locationFields
   return false;
  }
  async function submit(form,data){
+  if(await agentKeys.submit(form,data))return true;
   if(form.id==='security-checkpoint-form'){
    if(!checkpoint){notify(t('access','settingsFileInvalid'),true);return true;}
    await api('/api/access/checkpoint',{operation:'import',root:data.get('settingsRoot'),checkpoint,verifiedFingerprint:String(data.get('verifiedFingerprint')??'').replace(/\s/g,'').toLowerCase(),confirmed:data.get('confirmed')==='on',username:data.get('username')??'',password:data.get('password')??'',recovery:data.get('recovery')??''});
