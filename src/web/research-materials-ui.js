@@ -405,7 +405,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   frame(mt("loadingEvidence"),'<p role="status">'+esc(mt("openingRevision"))+'</p>');
   const generation=jobView,requested=ref(inheritMaterialNamespace(reference,state.book?.id)),doc=retainedDocument??await call('read',{ref:requested});guard();
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
-  selectedRef=requested;opened=doc;page=Math.min(atPage,Math.max(0,(opened.content.pageIndex?.count??opened.content.pages?.length??1)-1));columnOffset=0;
+  selectedRef=requested;opened=doc;page=Math.min(atPage,Math.max(0,(opened.content.pageIndex?.count??1)-1));columnOffset=0;
   if(opened.kind==='dataset'){table.open(selectedRef,opened,tableView);return datasetView();}
   if(opened.content.comparison)return comparisons.open(selectedRef,{restore:comparisonView});
   const correctionControls=await corrections.controls(opened,selectedRef);

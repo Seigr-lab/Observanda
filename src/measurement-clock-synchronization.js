@@ -43,9 +43,9 @@ async function selectedCell(materials,locator,options){
  if(doc.kind!==undefined&&doc.kind!=='dataset')fail('MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR');
  const s=locator.selector,savedColumn=await materials.datasetColumn(doc,s.column),column=await resolveScalarDefinitions(materials,savedColumn,options);
  assertSynchronizationColumn(column,{segmented:options.segmented===true});await current(options);
- const indexed=doc.content?.datasetFormat===3,page=await materials.retainedDatasetPage(doc,s.page,indexed?{metadataOnly:true}:{columns:[s.column]});let row=page.rows[s.row];await current(options);
+ const page=await materials.retainedDatasetPage(doc,s.page,{metadataOnly:true});let row=page.rows[s.row];await current(options);
  if(!row||row.excluded)fail('MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR');
- if(indexed)row=(await projectDatasetRows(materials,doc,[row],[s.column])).rows[0];await current(options);
+ row=(await projectDatasetRows(materials,doc,[row],[s.column])).rows[0];await current(options);
  const cell={value:row.cells[0],kind:row.valueKinds?.[0]??'string'};
  if(!present(cell,column))fail('MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR');
  return {column,savedColumn,cell:await resolveScalarOperand(materials,cell,column,{...options,policy:options.policy})};

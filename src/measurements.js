@@ -50,8 +50,8 @@ export class Measurements {
  }
  async cell(source){
   if(!validLocator(source)||source.ref.kind!=='dataset')fail();
-  const {page,row,column}=source.selector,doc=await this.materials.read(source.ref),indexed=doc.content.datasetFormat===3,data=await this.materials.retainedDatasetPage(doc,page,indexed?{metadataOnly:true}:{columns:[column]});
-  let selected=data.rows[row];if(!selected)fail();if(indexed)selected=(await projectDatasetRows(this.materials,doc,[selected],[column])).rows[0];
+  const {page,row,column}=source.selector,doc=await this.materials.read(source.ref),data=await this.materials.retainedDatasetPage(doc,page,{metadataOnly:true});
+  let selected=data.rows[row];if(!selected)fail();selected=(await projectDatasetRows(this.materials,doc,[selected],[column])).rows[0];
   const schema=await this.materials.retainedSchemaPage(doc,{offset:column,limit:1});
   if(!selected||schema.items.length!==1)fail();
   const declaredColumn=schema.items[0],col=effectiveCellColumn(declaredColumn,{...(selected.cellComputations?.[0]!==undefined?{computation:selected.cellComputations[0]}:{})}),kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';

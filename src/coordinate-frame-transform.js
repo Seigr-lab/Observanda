@@ -92,13 +92,10 @@ export async function validateCoordinateFrameColumn(materials,column,{policy,bud
 }
 async function selectedDomain(materials,locator,options){
  const doc=await document(materials,locator.ref,options);let savedColumn,cell;
- if(doc.content?.datasetFormat===3){
-  const {page,row,column}=locator.selector;await current(options);const metadata=await materials.retainedDatasetPage(doc,page,{metadataOnly:true}),selected=metadata.rows[row];await current(options);
-  if(!selected||selected.excluded)fail('COORDINATE_FRAME_INPUT');savedColumn=await materials.datasetColumn(doc,column);const projected=await projectDatasetRows(materials,doc,[selected],[column]);await current(options);const value=projected.rows[0];cell={kind:value.valueKinds[0],value:value.cells[0],...(value.cellComputations?.[0]!==undefined?{computation:value.cellComputations[0]}:{})};savedColumn=effectiveCellColumn(savedColumn,cell);
-  if(!present(cell,savedColumn))fail('COORDINATE_FRAME_INPUT');
- }else{
-  const selected=await materials.measurements.cell(locator);await current(options);if(selected.row.excluded||selected.value.presence!=='value')fail('COORDINATE_FRAME_INPUT');savedColumn=selected.column;cell={kind:'string',value:selected.cellReference??selected.value.spelling};
- }
+ if(locator.ref.kind!=='dataset')fail('MEASUREMENT_INVALID');
+ const {page,row,column:index}=locator.selector;await current(options);const metadata=await materials.retainedDatasetPage(doc,page,{metadataOnly:true}),selected=metadata.rows[row];await current(options);
+ if(!selected||selected.excluded)fail('COORDINATE_FRAME_INPUT');savedColumn=await materials.datasetColumn(doc,index);const projected=await projectDatasetRows(materials,doc,[selected],[index]);await current(options);const value=projected.rows[0];cell={kind:value.valueKinds[0],value:value.cells[0],...(value.cellComputations?.[0]!==undefined?{computation:value.cellComputations[0]}:{})};savedColumn=effectiveCellColumn(savedColumn,cell);
+ if(!present(cell,savedColumn))fail('COORDINATE_FRAME_INPUT');
  if(savedColumn.representation!=='domain')fail('COORDINATE_FRAME_INPUT');const column=await resolveScalarDefinitions(materials,savedColumn,options);if(column.computation!==undefined&&!validComputation(column.computation))fail();return {column,cell};
 }
 // The returned context is serializable and bounded. Its scratch prefix is valid

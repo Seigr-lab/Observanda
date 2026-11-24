@@ -12,7 +12,7 @@ const marker={version:1,kind:'approximate-inputs'};
 function fixture(){
  const files=new Map(),ref={workspaceId:randomUUID(),kind:'dataset',id:randomUUID(),revision:'b'.repeat(64)},recipe={kind:'analysis',id:randomUUID(),revision:'c'.repeat(64)};
  const columns=[0,1,2].map(index=>({...defaultColumn({label:'Column '+index}),representation:'decimal',missing:[]}));columns[0].computation={version:1,kind:'approximate',recipe};
- const doc={content:{columns,rowCount:2}},rows=['1.414','2.718'].map((value,index)=>({id:'r'+index,order:index,cells:[value,'0','0'],excluded:''}));
+ const doc={content:{datasetFormat:3,columns,schemaIndex:{count:columns.length},rowCount:2,includedRowCount:2}},rows=['1.414','2.718'].map((value,index)=>({id:'r'+index,order:index,cells:[value,'0','0'],excluded:''}));
  const workspace={readMetadata:async key=>files.get(key)??null,writeMetadata:async(key,value)=>files.set(key,value)},materials={workspace,sequences:new MaterialSequence(workspace)};
  const inputs={read:async value=>{assert.deepEqual(value,ref);return doc;},datasetColumn:async(_,index)=>structuredClone(columns[index]),datasetPageCount:()=>1,retainedDatasetPage:async(_,page,{columns:indices})=>{assert.equal(page,0);return {rows:rows.map(row=>({...row,columnIndices:indices,cells:indices.map(index=>row.cells[index])}))};}};
  const source=blankAnalysisSource(ref);source.columns.value=0;

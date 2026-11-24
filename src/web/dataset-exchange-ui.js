@@ -52,7 +52,7 @@ export function datasetExchangeUI({call,frame,esc,field,button,guard,owner,scope
   }
  }
  function open(doc,ref){
-  guard();const width=doc.content.schemaIndex?.count??doc.content.columns?.length,rows=doc.content.rowCount;
+  guard();const width=doc.content.schemaIndex?.count,rows=doc.content.rowCount;
   current={ref:{...ref,workspaceId:ref.workspaceId??scope()},width,rows,ranges:[],offset:0,request:0,intent:null};
   const number=(key,max,value)=>field(label(key),'<input data-'+key+' type="number" min="1" max="'+max+'" value="'+value+'" required>');
   frame(exchangeText('heading'),'<div id="dataset-exchange"><p>'+esc(doc.title)+' · '+esc(exchangeText('counts',{rows:sizeText(rows),columns:sizeText(width)}))+'</p>'+

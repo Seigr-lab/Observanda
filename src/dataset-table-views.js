@@ -34,7 +34,7 @@ export async function tableViewRequest(materials,operation,data,{signal,check=as
  const work=async()=>{
   signal?.throwIfAborted();await check();const doc=await materials.read(ref),{recordId}=doc;
   await materials.assertOwner(recordId,{write:!listing});
-  const dir=folder(recordId,ref.id,ref.revision),width=doc.content.schemaIndex?.count??doc.content.columns.length;
+  const dir=folder(recordId,ref.id,ref.revision),width=doc.content.schemaIndex.count;
   const decode=(raw,id)=>decodeDatasetTableView(raw,{id,recordId,ref,width});
   if(listing){
    const result=[];
@@ -76,7 +76,7 @@ export async function transferTableViews(source,target,receipt,{write,check,sign
    if(retained?.ref.id!==tail[0]||retained.ref.revision!==tail[1]){
     const ref={kind:'dataset',id:tail[0],revision:tail[1]},doc=await materials.read(ref);
     if(doc.recordId!==recordId)throw new AppError('CATALOGUE_DAMAGED');
-    retained={ref,width:doc.content.schemaIndex?.count??doc.content.columns.length};
+    retained={ref,width:doc.content.schemaIndex.count};
    }
    decodeDatasetTableView(raw,{...retained,id:tail[2].slice(0,-5),recordId});
    const origin=slot(receipt.id,relative),proof={transferId:receipt.id,recordId,relative,revision:digest(raw)};

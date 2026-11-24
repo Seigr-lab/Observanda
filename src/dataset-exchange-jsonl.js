@@ -41,11 +41,11 @@ async function* frames(materials,doc,ref,selection,{signal,checkSource,check,pro
  if(!validMaterialReference(ref)||ref.kind!=='dataset'||ref.kind!==doc.kind||ref.id!==doc.id||!ref.workspaceId||typeof checkSource!=='function'||typeof check!=='function')throw new AppError('INVALID');
  signal?.throwIfAborted();await checkSource(ref);
  if(sourceDigest(revisionText(doc))!==ref.revision)throw new AppError('MATERIAL_MISSING');
- yield {type:'dataset',format,version:1,ref:materialReference(ref),title:doc.title,selection,sourceRows:doc.content.rowCount,sourceColumns:doc.content.schemaIndex?.count??doc.content.columns.length};
- const {schemaIndex,pageIndex,columns,pages,inputs,inputsIndex,schemaInputsIndex,outputs,outputsIndex,provenanceInputs,aggregationMembersIndex,...interpretation}=doc.content;
+ yield {type:'dataset',format,version:1,ref:materialReference(ref),title:doc.title,selection,sourceRows:doc.content.rowCount,sourceColumns:doc.content.schemaIndex.count};
+ const {schemaIndex,pageIndex,inputs,inputsIndex,schemaInputsIndex,outputs,outputsIndex,provenanceInputs,aggregationMembersIndex,...interpretation}=doc.content;
  // Each selected declaration and source address is exported separately.
  // The storage indexes are private implementation details.
- const width=schemaIndex?.count??columns.length,completeSchema=selection.columns.reduce((n,r)=>n+r.count,0)===width;
+ const width=schemaIndex.count,completeSchema=selection.columns.reduce((n,r)=>n+r.count,0)===width;
  yield {type:'interpretation',value:completeSchema?interpretation:partialInterpretation(interpretation)};
  // Schema and cell references travel with their selected declarations and
  // values. A projection must still honor input grants for the computation,

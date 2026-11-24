@@ -17,7 +17,7 @@ const git=promisify(execFile),root=path.resolve(fileURLToPath(new URL('..',impor
 export const performanceProfiles=Object.freeze({
  work:Object.freeze([
   'record-collection-date','module-browse-index','module-facet-browse',
-  'evaluation-page-cache','dataset-ordinal-cache','disk-capacity',
+  'evaluation-page-cache','disk-capacity',
   'file-content-staging','segmented-file-range','segmented-file-write','media-read-work',
   'content-buffer-admission','content-buffer-budget','native-resource-budget','native-media-admission',
   'request-admission','foreground-capacity','research-job-checkpoints','module-live-updates','website-preview-owner-demand','operational-diagnostics',

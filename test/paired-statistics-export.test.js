@@ -13,7 +13,7 @@ function fixture(){
  const columns=[defaultColumn({label:'Group'}),...values.map(value=>({...defaultColumn({label:value.name}),representation:'rational'}))];
  const rows=[{cells:['A','2/1','4/3','2/1','1/1','2/1'],valueKinds:Array(6).fill('string')},{cells:['One pair','','0/1','','','5/1'],valueKinds:['string','absent','string','absent','absent','string']}];
  const aggregation={version:5,source:{...ref,id:randomUUID()},keys:[0],values,resourcePolicy:defaultDatasetResourcePolicy(),missing:'skip',note:'Private method note'};
- return {aggregation,columns,read:async()=>({content:{rowCount:rows.length,aggregation}}),datasetColumns:async()=>columns,async *iterateDataset(){yield* rows;},retainedSchemaPage:async(_,options)=>({items:columns.slice(options.offset,options.offset+options.limit),total:columns.length}),datasetPageCount:()=>1,retainedDatasetPage:async(_,page,{columns:indices})=>({columnIndices:indices,rows:rows.map(row=>({cells:indices.map(i=>row.cells[i]),valueKinds:indices.map(i=>row.valueKinds[i])}))})};
+ return {aggregation,columns,read:async()=>({content:{rowCount:rows.length,aggregation}}),datasetColumns:async()=>columns,async *iterateDataset(){yield* rows;},retainedSchemaPage:async(_,options)=>({items:columns.slice(options.offset,options.offset+options.limit),total:columns.length}),datasetPageCount:()=>1,datasetRowPosition:async()=>({page:0,row:0,ordinal:0,offset:0}),retainedDatasetPage:async(_,page,{columns:indices})=>({columnIndices:indices,rows:rows.map(row=>({cells:indices.map(i=>row.cells[i]),valueKinds:indices.map(i=>row.valueKinds[i])}))})};
 }
 test('paired-method context follows selected columns and keeps mixed quantiles in paged and retained tables',async()=>{
  const materials=fixture();

@@ -12,7 +12,7 @@ import {Measurements} from '../src/measurements.js';
 const ref=kind=>({kind,id:id(),revision:'a'.repeat(64)});
 const recipe=ref('analysis'),computation={version:1,kind:'approximate',recipe};
 const column=(name,approximate=false)=>({...defaultColumn({label:name}),representation:'decimal',...(approximate?{computation}:{}),quantity:blankQuantity()});
-const materials=columns=>({read:async()=>({content:{columns}}),datasetColumn:async(_doc,i)=>columns[i],datasetColumns:async()=>columns,checkReference:async()=>{},sequences:{}});
+const materials=columns=>({read:async()=>({content:{datasetFormat:3,columns,schemaIndex:{count:columns.length}}}),datasetColumn:async(_doc,i)=>columns[i],datasetColumns:async()=>columns,checkReference:async()=>{},sequences:{}});
 
 test('approximation is a separate declaration with a pinned recipe, not uncertainty or exact encoding',()=>{
  assert.equal(validComputation(computation),true);assert.deepEqual(schemaReferences(column('Result',true)),[recipe]);
@@ -32,7 +32,7 @@ test('grouped values and exact counts retain approximate inputs without an accum
 });
 
 test('comparison-derived values retain approximation even though their decimal encoding has an exact rational identity',async()=>{
- const dataset=ref('dataset'),columns=[column('Value',true)],store=materials(columns);store.read=async reference=>reference.kind==='analysis'?{content:{comparison:{sources:[{dataset,columns:{value:0}}]}}}:{content:{columns}};
+ const dataset=ref('dataset'),columns=[column('Value',true)],store=materials(columns);store.read=async reference=>reference.kind==='analysis'?{content:{comparison:{sources:[{dataset,columns:{value:0}}]}}}:{content:{datasetFormat:3,columns,schemaIndex:{count:columns.length}}};
  const projected=await new DatasetCalculations(store).schema(ref('analysis'),'distribution',{version:3});assert.deepEqual(projected[0].computation,{version:1,kind:'approximate-inputs'});
 });
 

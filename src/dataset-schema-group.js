@@ -30,7 +30,7 @@ async function planGroup(materials,command,{signal,check}){
   !Array.isArray(command.ranges)||!command.ranges.length||!Array.isArray(command.pending))invalid();
  await check?.(command.ref);
  const doc=await materials.read(command.ref);await materials.assertOwner(doc.recordId);
- const width=doc.content.schemaIndex?.count??doc.content.columns.length,original=await materials.datasetColumn(doc,command.sourceIndex);
+ const width=doc.content.schemaIndex.count,original=await materials.datasetColumn(doc,command.sourceIndex);
  if(command.sourceIndex>=width)invalid();
  let end=0,selected=0;
  for(const range of command.ranges){

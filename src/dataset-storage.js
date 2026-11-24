@@ -26,11 +26,10 @@ import {withScratch} from './scratch-work.js';
 import {nativeRowLocator} from './native-mapping.js';
 const fail=(code='MATERIAL_INVALID')=>{throw new AppError(code);};
 export async function* datasetColumns(materials,doc){
- if(doc.content.datasetFormat===2||doc.content.datasetFormat===3){materials.sequences.validate(doc.content.schemaIndex);yield* materials.sequences.items(doc.content.schemaIndex);}else yield* doc.content.columns;
+ materials.sequences.validate(doc.content.schemaIndex);yield* materials.sequences.items(doc.content.schemaIndex);
 }
 export async function* storedDatasetCells(materials,doc,row){
- if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==doc.content.schemaIndex.count)fail('MATERIAL_MISSING');for await(const cell of materials.sequences.items(row.cellIndex))yield validateDatasetCell(materials,cell);}
- else for(let i=0;i<row.cells.length;i++)yield {value:row.cells[i],kind:row.valueKinds?.[i]??'string',...(row.cellPointers?{pointer:row.cellPointers[i]}:{}),...(row.cellSources?.[i]?{sources:row.cellSources[i]}:{})};
+ materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==doc.content.schemaIndex.count)fail('MATERIAL_MISSING');for await(const cell of materials.sequences.items(row.cellIndex))yield validateDatasetCell(materials,cell);
 }
 export async function preparePagedDataset(materials,command,{source,base=null,signal,progress=async()=>{},writePage,columnDefaults=defaultColumn,nativeSize:declaredNativeSize,rows:preparedRows,calculatedColumns,inputReferences,validColumns,preparedWrites=false}={}){
  const prepare=materials=>withScratch(async scratch=>{
@@ -41,7 +40,7 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
  const nativeColumns=nativeMapping?[...new Set(['offsetColumn','lengthColumn','pointerColumn','idColumn'].map(k=>nativeMapping[k]).filter(v=>v!==null))]:[];
  const changes=new Map((command.columnChanges??[]).map(c=>[c.index,c.column])),exclusions=command.exclusions??{},seen=new Set();let schemaIndex,width=0,count=0,included=0,pageIncluded=0,page=[],sourceMapping,aggregationMembersIndex=base?.content.aggregationMembersIndex;
  const flush=async()=>{if(!page.length)return;const hash=digest(revisionText(page)),rows=page;await save(()=>materials.put(materials.metadataFile('tables/'+hash+'.json'),rows));await pages.append({hash,count:rows.length,start:count-rows.length,includedStart:included-pageIncluded,included:pageIncluded});page=[];pageIncluded=0;};
- async function* retained(){yield {columnCount:base.content.schemaIndex?.count??base.content.columns.length,columns:()=>datasetColumns(materials,base),sourceMapping:base.content.sourceMapping,retained:true};
+ async function* retained(){yield {columnCount:base.content.schemaIndex.count,columns:()=>datasetColumns(materials,base),sourceMapping:base.content.sourceMapping,retained:true};
   let order=0;for(let index=0;index<materials.datasetPageCount(base);index++){const data=await materials.retainedDatasetPage(base,index,{metadataOnly:true});for(const row of data.rows){signal?.throwIfAborted();yield {...row,order:++order,cells:()=>storedDatasetCells(materials,base,row)};}await progress({stage:'validating dataset rows',done:order,total:base.content.rowCount});}}
  let hasCoordinateAlignments=false,hasWeightedFits=false,hasSpectralMethods=false,hasTopology=false,hasSequences=false,hasTensors=false,hasDomains=false,hasScalarPolicies=false,hasApproximateComputations=false,hasClockSynchronization=false,hasSegmentedClockSynchronization=false,hasStatisticalUncertainty=false,hasCoordinateFrames=false,hasCellComputations=false,hasSpectra=false,hasCusums=false,hasNumericalExecution=false;
  const input=preparedRows??(base?retained():readPagedDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,progress,size:source.content.size}));
@@ -81,17 +80,16 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
  },{signal});return preparedWrites?prepare(materials):withDatasetPreparationWrites(materials,{writePage,signal},prepare);
 }
 export async function projectDatasetRows(materials,doc,rows,columns){
- const width=doc.content.schemaIndex?.count??doc.content.columns.length;
+ const width=doc.content.schemaIndex.count;
  if(columns===undefined){if(width>256)throw new AppError('MATERIAL_DATASET_LIMIT');columns=Array.from({length:width},(_,i)=>i);}
  if(!Array.isArray(columns)||columns.length>256||new Set(columns).size!==columns.length||columns.some(i=>!Number.isSafeInteger(i)||i<0||i>=width))throw new AppError('INVALID');
  const project=async()=>{const result=[];
  for(const [rowIndex,row] of rows.entries()){const cells=[],valueKinds=[],cellPointers=[],cellSources=[],cellLineages=[],cellComputations=[],cellCoordinateAlignments=[];let cachedOffset=-1,cached=[];
   // Share the existing thirty-two-object authenticated read batch across rows.
   // Cell chunks remain sixteen columns and oversized payloads use point reads.
-  if(doc.content.datasetFormat===3&&columns.length&&rowIndex%32===0)await materials.sequences.prefetchCellPages(rows.slice(rowIndex,rowIndex+32).map(item=>item.cellIndex),columns[0]-columns[0]%16);
-  if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==width)fail('MATERIAL_MISSING');}
-  for(const index of columns){let cell;if(doc.content.datasetFormat===3){const start=index-index%16;if(start!==cachedOffset){cached=(await materials.sequences.page(row.cellIndex,{offset:start,limit:16})).items;cachedOffset=start;}cell=validateDatasetCell(materials,cached[index-start]);}
-   else cell={value:row.cells[index],kind:row.valueKinds?.[index]??'string',pointer:row.cellPointers?.[index],sources:row.cellSources?.[index]};
+  if(columns.length&&rowIndex%32===0)await materials.sequences.prefetchCellPages(rows.slice(rowIndex,rowIndex+32).map(item=>item.cellIndex),columns[0]-columns[0]%16);
+  materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==width)fail('MATERIAL_MISSING');
+  for(const index of columns){const start=index-index%16;if(start!==cachedOffset){cached=(await materials.sequences.page(row.cellIndex,{offset:start,limit:16})).items;cachedOffset=start;}const cell=validateDatasetCell(materials,cached[index-start]);
    cells.push(cell.value);valueKinds.push(cell.kind);cellPointers.push(cell.pointer??null);cellSources.push(retainedCellSources(doc,row,cell));cellLineages.push(cell.lineage??null);cellComputations.push(cell.computation);cellCoordinateAlignments.push(cell.coordinateAlignment);
   }
   const {cellIndex,...metadata}=row;result.push({...metadata,cells,valueKinds,cellPointers,cellSources,cellLineages,cellComputations,...(cellCoordinateAlignments.some(Boolean)?{cellCoordinateAlignments}:{}),columnIndices:columns});

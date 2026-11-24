@@ -1,7 +1,7 @@
 import {AppError} from './errors.js';
 // Selections are bounded working sets; their positions always remain source ordinals.
 export function datasetColumnCount(doc){
- const count=doc.content.schemaIndex?.count??doc.content.columns?.length;
+ const count=doc.content.schemaIndex?.count;
  if(!Number.isSafeInteger(count)||count<1)throw new AppError('MATERIAL_MISSING');
  return count;
 }

@@ -9,7 +9,15 @@ const ref={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)};
 function materials({rows=1205,columns=301,excluded=false}={}){
  const workspace={vault:{id:randomUUID(),key:randomBytes(32)},withCatalogueConnections:fn=>fn(),catalogue:fn=>fn(new ResearchCatalogue(workspace,null))};
  const doc={kind:'dataset',content:{rowCount:rows}},calls=[];
- return {workspace,calls,async read(value){assert.deepEqual(value,ref);return doc;},async retainedSchemaPage(_,options){assert.ok(options.limit<=16);return {items:Array.from({length:Math.min(options.limit,columns-options.offset)},(_,i)=>defaultColumn({label:'Column '+(options.offset+i)})),total:columns};},datasetPageCount(){return Math.ceil(rows/256);},async retainedDatasetPage(_,page,{columns:indices}){assert.ok(indices.length<=16);calls.push({page,indices});return {columnIndices:indices,rows:Array.from({length:Math.min(256,rows-page*256)},(_,i)=>{const ordinal=page*256+i;return {cells:indices.map(column=>ordinal===1204&&column===300?'LAST_EXACT_10000000000000001':'value-'+ordinal+'-'+column),valueKinds:indices.map(column=>ordinal===1&&column===0?'null':'value'),cellPointers:indices.map(column=>'/row/'+ordinal+'/'+column),cellSources:indices.map(()=>[{kind:'authored'}]),...(excluded&&ordinal%3===0?{excluded:'excluded reason'}:{})};})};}};
+ // Seeks like the indexed reader: the page holding the requested included row,
+ // without counting as a page read of the table window.
+ async function datasetRowPosition(_,{offset,includeExcluded}){
+  const pages=Math.ceil(rows/256);if(includeExcluded)return offset>=rows?{page:pages,row:0,ordinal:rows,offset:rows}:{page:Math.floor(offset/256),row:offset%256,ordinal:offset,offset};
+  const before=calls.length;let included=0;
+  try{for(let page=0;page<pages;page++){const count=(await this.retainedDatasetPage(doc,page,{columns:[0]})).rows.filter(row=>!row.excluded).length;if(included+count>offset)return {page,row:0,ordinal:page*256,offset:included};included+=count;}}finally{calls.length=before;}
+  return {page:pages,row:0,ordinal:rows,offset:included};
+ }
+ return {workspace,calls,datasetRowPosition,async read(value){assert.deepEqual(value,ref);return doc;},async retainedSchemaPage(_,options){assert.ok(options.limit<=16);return {items:Array.from({length:Math.min(options.limit,columns-options.offset)},(_,i)=>defaultColumn({label:'Column '+(options.offset+i)})),total:columns};},datasetPageCount(){return Math.ceil(rows/256);},async retainedDatasetPage(_,page,{columns:indices}){assert.ok(indices.length<=16);calls.push({page,indices});return {columnIndices:indices,rows:Array.from({length:Math.min(256,rows-page*256)},(_,i)=>{const ordinal=page*256+i;return {cells:indices.map(column=>ordinal===1204&&column===300?'LAST_EXACT_10000000000000001':'value-'+ordinal+'-'+column),valueKinds:indices.map(column=>ordinal===1&&column===0?'null':'value'),cellPointers:indices.map(column=>'/row/'+ordinal+'/'+column),cellSources:indices.map(()=>[{kind:'authored'}]),...(excluded&&ordinal%3===0?{excluded:'excluded reason'}:{})};})};}};
 }
 test('pinned queries have no inline row/count/width envelope and bounded windows retain exact provenance',async()=>{
  const m=materials(),selection={columns:'all',offset:0,count:null,includeExcluded:false},table=await retainedTable(m,{ref,selection});
@@ -62,9 +70,9 @@ test('late filtered row ranks and authenticated continuations bound navigation a
  m.read=async()=>doc;await assert.rejects(retainedTablePage(m,{ref:{...ref,revision:'b'.repeat(64)},table,cursor:page.cursor}),{code:'DATASET_TABLE'});
 });
 
-test('legacy filtered snapshots scan the first offset only, then page backwards and forwards from exact anchors',async()=>{
+test('filtered tables seek the first offset, then page backwards and forwards from exact anchors',async()=>{
  const m=materials({rows:100005,columns:2,excluded:true}),table=await retainedTable(m,{ref,selection:{columns:'all',offset:5,count:19000,includeExcluded:false}});
- const page=await retainedTablePage(m,{ref,table,offset:12000});assert.ok(m.calls.length>60);m.calls.length=0;
+ const page=await retainedTablePage(m,{ref,table,offset:12000});assert.ok(m.calls.length<=2);m.calls.length=0;
  const next=await retainedTablePage(m,{ref,table,cursor:page.nextCursor});assert.ok(m.calls.length<=2);m.calls.length=0;
  const prior=await retainedTablePage(m,{ref,table,cursor:next.previousCursor});assert.ok(m.calls.length<=2);assert.deepEqual(prior.table.rows.map(row=>row.ordinal),page.table.rows.map(row=>row.ordinal));
  const first=await retainedTablePage(m,{ref,table}),back=await retainedTablePage(m,{ref,table,cursor:(await retainedTablePage(m,{ref,table,cursor:first.nextCursor})).previousCursor});assert.equal(back.offset,0);assert.equal(back.previousCursor,null);assert.deepEqual(back.table.rows.map(row=>row.ordinal),first.table.rows.map(row=>row.ordinal));

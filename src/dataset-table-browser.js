@@ -19,13 +19,10 @@ const point=({ordinal,key})=>({ordinal,key});
 const emptyQuery=query=>!query.id&&!query.filters.length&&!query.sort&&query.inclusion==='all';
 
 async function windowCell(materials,doc,row,column,read){
- if(doc.content.datasetFormat===3){
-  const vector=row.cellIndex;materials.sequences.validate(vector);
-  if(vector.kind!=='cells'||vector.count!==doc.content.schemaIndex.count)damaged();
-  const start=column-column%16,items=await read(vector,start,16);
-  return validateDatasetCell(materials,items[column-start]);
- }
- return {value:row.cells[column],kind:row.valueKinds?.[column]??'string'};
+ const vector=row.cellIndex;materials.sequences.validate(vector);
+ if(vector.kind!=='cells'||vector.count!==doc.content.schemaIndex.count)damaged();
+ const start=column-column%16,items=await read(vector,start,16);
+ return validateDatasetCell(materials,items[column-start]);
 }
 const singular=(kind,value='',empty=false)=>({kind,value,empty});
 function predicateKey(cell,column,raw,mode){
@@ -102,8 +99,8 @@ async function schemaFor(materials,doc,positions){
 }
 
 async function locateOriginalObservation(materials,doc,id){
- const {datasetFormat,inputs,sourceMapping,rowCount,algorithm}=doc.content;
- if(datasetFormat!==3||!id||algorithm||inputs?.length!==1||inputs[0].kind!=='artifact'||!['delimited','json','jsonl','json-nested'].includes(sourceMapping?.format))return null;
+ const {inputs,sourceMapping,rowCount,algorithm}=doc.content;
+ if(!id||algorithm||inputs?.length!==1||inputs[0].kind!=='artifact'||!['delimited','json','jsonl','json-nested'].includes(sourceMapping?.format))return null;
  const prefix=inputs[0].id+':';
  if(!id.startsWith(prefix)||!/^\d+$/.test(id.slice(prefix.length)))return null;
  const row=Number(id.slice(prefix.length)),offset=row-(sourceMapping.format==='delimited'?2:1);
@@ -123,7 +120,7 @@ export async function browseDatasetTable(materials,data,{signal,check=async()=>{
   const grant=async()=>{signal?.throwIfAborted();await check();await materials.assertOwner(recordId);};
   await grant();
   const positions=new Set([...columns,...query.filters.map(f=>f.column),...(query.sort?[query.sort.column]:[])]);
-  const width=doc.content.schemaIndex?.count??doc.content.columns.length;
+  materials.datasetPageCount(doc);const width=doc.content.schemaIndex.count;
   if([...positions].some(n=>n>=width))invalid();
   const schema=await schemaFor(materials,doc,positions),read=datasetSequenceWindows(materials);
   let operands;

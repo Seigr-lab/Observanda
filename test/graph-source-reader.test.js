@@ -9,6 +9,7 @@ import {GraphSourceReader} from '../src/graph-source-reader.js';
 import {MaterialSequence} from '../src/material-sequence.js';
 import {retainDatasetCell} from '../src/dataset-cell-storage.js';
 import {projectDatasetRows} from '../src/dataset-storage.js';
+import {ResearchMaterials} from '../src/research-materials.js';
 const ref={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},binding={source:ref},location=(row=0,page=0)=>({kind:'dataset',page,row,id:'row-'+page+'-'+row,excluded:null});
 
 test('graph source reader authenticates each operation and reuses metadata pages while selected cells stay lazy',async()=>{
@@ -45,9 +46,11 @@ test('the actual graph engine projects only requested retained cells and reuses 
  assert.equal(auth,4);assert.equal(pages,1);assert.deepEqual(selected,rows.map(row=>row.cellIndex.root.hash));denied=true;await assert.rejects(engine.sourceCell(binding,location(),17,options),/denied/);assert.equal(auth,5);assert.equal(pages,1);
 });
 
-test('historical inline graph source rows keep requested-column and explicit null/computation semantics',async()=>{
- let reads=0,pages=0;const doc={content:{datasetFormat:2,columns:[{},{},{}]}},rows=[{id:'row-0-0',cells:['left','selected',''],valueKinds:['string','string','null'],cellComputations:[undefined,null,undefined]}],materials={workspace:{},read:async()=>{reads++;return doc;},retainedDatasetPage:async(_,page,options)=>{pages++;assert.deepEqual(options,{metadataOnly:true});return {rows};}},engine=new GraphCalculations(materials);
- assert.deepEqual(await engine.sourceCell(binding,location(),1),{kind:'string',value:'selected',computation:null});assert.deepEqual(await engine.sourceCell(binding,location(),2),{kind:'null',value:''});assert.equal(reads,2);assert.equal(pages,2);await assert.rejects(engine.sourceCell(binding,location(),3),{code:'INVALID'});
+test('graph source rows from tables stored in an earlier format are refused as needing an upgrade',async()=>{
+ for(const content of [{datasetFormat:2,pageIndex:{count:1},schemaIndex:{count:3},rowCount:1},{pages:[{hash:'f'.repeat(64),count:1}],columns:[{},{},{}],rowCount:1}]){
+  const doc={kind:'dataset',content},materials={workspace:{},read:async()=>doc,datasetPageCount:ResearchMaterials.prototype.datasetPageCount,retainedDatasetPage:ResearchMaterials.prototype.retainedDatasetPage},engine=new GraphCalculations(materials);
+  await assert.rejects(engine.sourceCell(binding,location(),1),{code:'ACCESS_UPGRADE'});
+ }
 });
 
 test('retained calculation verification honors cancellation before reading graph or source state',async()=>{

@@ -145,7 +145,7 @@ export class ResearchTransfer{
     if(doc.kind==='dataset'){
      for await(const column of materials.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
      for(let i=0;i<materials.datasetPageCount(doc);i++){
-      const info=[2,3].includes(doc.content.datasetFormat)?await materials.sequences.item(doc.content.pageIndex,i):doc.content.pages[i];
+      const info=await materials.sequences.item(doc.content.pageIndex,i);
       const {rows}=await materials.retainedDatasetPage(doc,i,{metadataOnly:true});await owner.metadata('.observanda/materials/tables/'+info.hash+'.json',rows);
      }
     }

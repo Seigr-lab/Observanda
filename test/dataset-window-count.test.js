@@ -12,14 +12,14 @@ import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operatio
 const policy=()=>{const value=defaultDatasetResourcePolicy();value.resources.maxMilliseconds=30000;return value;};
 const column={...defaultColumn({label:'Observed'}),representation:'rational',missing:[{value:'NA',meaning:'Missing'}]};
 const node=(width=128,options={})=>({operation:'count',column:0,window:{...defaultWindow(),start:0,end:width-1,boundary:'partial',...options}});
-function fixture(count,{legacy=false}={}){
- const source={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},binding={source},rows=Array.from({length:count},(_,i)=>({id:'row'+i,excluded:null,cells:[String(i)+'/1'],valueKinds:['string'],cellComputations:[null]})),pageSize=legacy?17:64,doc={content:{datasetFormat:legacy?2:3,rowCount:count}};let admitted=0,denied=false,pages=0;
+function fixture(count){
+ const source={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},binding={source},rows=Array.from({length:count},(_,i)=>({id:'row'+i,excluded:null,cells:[String(i)+'/1'],valueKinds:['string'],cellComputations:[null]})),pageSize=64,doc={content:{datasetFormat:3,rowCount:count,includedRowCount:count}};let admitted=0,denied=false,pages=0;
  const materials={read:async()=>{admitted++;if(denied)throw Object.assign(Error('Locked'),{code:'ACCESS_LOCKED'});return doc;},datasetPageCount:()=>Math.ceil(count/pageSize),retainedDatasetPage:async(_,index)=>{pages++;return {rows:rows.slice(index*pageSize,(index+1)*pageSize)};}};
  return {rows,binding,materials,reader:new DatasetWindowReader(materials),location:index=>({kind:'dataset',page:Math.floor(index/pageSize),row:index%pageSize,id:rows[index].id,excluded:rows[index].excluded}),stats:()=>({admitted,pages}),deny:()=>denied=true};
 }
 async function evaluate(f,n,position=0,settings={}){return graphWindowCell(f.materials,n,f.binding,f.location(position),settings.column??column,settings.policy??policy(),{windowReader:f.reader,...settings});}
-for(const legacy of [false,true])test('count summaries preserve exact windows, partial boundaries and per-cell computation across '+(legacy?'variable':'fixed')+' pages',async()=>{
- const f=fixture(259,{legacy}),tracked={...column,computation:{version:2,kind:'per-cell'}};f.rows[5].cells[0]='NA';f.rows[73].excluded='Reviewed';f.rows[90].cellComputations[0]={version:1,kind:'approximate-inputs'};
+test('count summaries preserve exact windows, partial boundaries and per-cell computation across pages',async()=>{
+ const f=fixture(259),tracked={...column,computation:{version:2,kind:'per-cell'}};f.rows[5].cells[0]='NA';f.rows[73].excluded='Reviewed';f.rows[90].cellComputations[0]={version:1,kind:'approximate-inputs'};
  for(const n of [node(128,{missing:'skip',excluded:'skip'}),node(128,{missing:'propagate',excluded:'include'}),node(128,{missing:'skip',start:-63,end:64})])for(const position of [0,64,130,258]){
   const reader=await f.reader.open(n,f.binding,f.location(position)),interpreted=await calculateWindow(n,tracked,{...reader,countSummaries:null},policy(),{cellComputation:true}),summarized=await evaluate(f,n,position,{column:tracked,cellComputation:true});assert.deepEqual(summarized,interpreted);
  }

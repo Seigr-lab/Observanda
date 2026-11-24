@@ -29,7 +29,7 @@ export function plotComputationHeader(header,selection,tracked){
 }
 export async function datasetPlotSelection(materials,doc,mapping,{signal}={}){
  const resolve=async(columns,indices)=>{for(const index of indices){signal?.throwIfAborted();if(measurementScalarPolicies(columns[index]))columns[index]=await resolveScalarDefinitions(materials,columns[index],{signal});}return columns;};
- if(doc.content.datasetFormat!==3||datasetColumnCount(doc)<=256)return {columns:await resolve(await materials.datasetColumns(doc),plotColumnIndices(mapping)),mapping,indices:null};
+ if(datasetColumnCount(doc)<=256)return {columns:await resolve(await materials.datasetColumns(doc),plotColumnIndices(mapping)),mapping,indices:null};
  const {indices,columns}=await selectedDatasetColumns(materials,doc,plotColumnIndices(mapping)),at=i=>i===null||i===undefined?i:indices.indexOf(i);
  return {columns:await resolve(columns,columns.map((_,i)=>i)),indices,mapping:{...mapping,x:at(mapping.x),group:at(mapping.group),values:mapping.values.map(v=>({...v,column:at(v.column),error:at(v.error),...Object.fromEntries([...INTERVAL_FIELDS,'count'].filter(k=>Object.hasOwn(v,k)).map(k=>[k,at(v[k])]))}))}};
 }

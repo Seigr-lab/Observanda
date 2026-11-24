@@ -76,10 +76,9 @@ export function cusumColumns(context,analysis,columnNames=names()){
  const {recipe}=context;return CUSUM_ROLES.map((role,index)=>({...defaultColumn({label:columnNames[index]}),representation:index===7?'text':[1,2].includes(index)?'rational':'integer',radix:10,...(index===7?{}:{resourcePolicy:structuredClone(recipe.resourcePolicy),quantity:{...blankQuantity(),origin:'derived',unitDefinition:structuredClone([1,2].includes(index)?recipe.unitDefinition:blankUnitDefinition())}}),cusum:cusumColumnDescriptor(recipe,analysis,role),...(computedIndices.includes(index)?{computation:{version:2,kind:'per-cell'}}:{})}));
 }
 // Pinned page metadata is bounded; project only the selected row and column.
-function selectedReader(materials,context){let cached=null,fallbackStart=0,fallbackPage=0;
+function selectedReader(materials,context){let cached=null;
  return async(index,{signal}={})=>{
-  signal?.throwIfAborted();if(!natural(index)||index>=context.recipe.range.count)fail();const absolute=context.recipe.range.start+index;let position=await datasetRowPosition(materials,context.doc,{offset:absolute,includeExcluded:true});
-  if(!position){if(!cached||absolute<fallbackStart){cached=null;fallbackStart=0;fallbackPage=0;}for(;;){if(!cached||cached.page!==fallbackPage)cached=await materials.retainedDatasetPage(context.doc,fallbackPage,{metadataOnly:true});if(absolute<fallbackStart+cached.rows.length){position={page:fallbackPage,row:absolute-fallbackStart};break;}fallbackStart+=cached.rows.length;fallbackPage++;if(fallbackPage>=materials.datasetPageCount(context.doc))fail('MATERIAL_MISSING');cached=null;}}
+  signal?.throwIfAborted();if(!natural(index)||index>=context.recipe.range.count)fail();const absolute=context.recipe.range.start+index;const position=await datasetRowPosition(materials,context.doc,{offset:absolute,includeExcluded:true});
   if(!cached||cached.page!==position.page)cached=await materials.retainedDatasetPage(context.doc,position.page,{metadataOnly:true});const row=cached.rows[position.row];if(!row)fail('MATERIAL_MISSING');const projected=(await projectDatasetRows(materials,context.doc,[row],[context.recipe.column])).rows[0];if(!projected)fail('MATERIAL_MISSING');return {row:projected,page:position.page,position:position.row,index};
  };
 }

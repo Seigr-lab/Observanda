@@ -14,7 +14,7 @@ export async function searchDatasetSchema(materials,data,{check,signal}={}){
   signal?.throwIfAborted();await check?.();
   const doc=await materials.read(data.ref);
   await materials.assertOwner(doc.recordId);
-  const total=doc.content.schemaIndex?.count??doc.content.columns.length;
+  const total=doc.content.schemaIndex.count;
   if(data.offset>total)invalid();
   const terms=normalize(data.text).trim().split(/\s+/u).filter(Boolean),items=[];
   let offset=data.offset;

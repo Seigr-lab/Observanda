@@ -60,11 +60,10 @@ export function spectrumColumns(context,analysis,columnNames=names(context.recip
 
 // Original row ranks never use filtered/included ranks. Metadata pages are
 // bounded; native cell projection reads only the selected row and columns.
-function selectedReader(materials,context){let cached=null,fallbackStart=0,fallbackPage=0;
+function selectedReader(materials,context){let cached=null;
  return async(index,{signal}={})=>{
   signal?.throwIfAborted();const absolute=context.recipe.range.start+index;if(!Number.isSafeInteger(index)||index<0||index>=context.recipe.range.count)fail();
-  let position=await datasetRowPosition(materials,context.doc,{offset:absolute,includeExcluded:true});
-  if(!position){if(!cached||absolute<fallbackStart){cached=null;fallbackStart=0;fallbackPage=0;}for(;;){if(!cached||cached.page!==fallbackPage)cached=await materials.retainedDatasetPage(context.doc,fallbackPage,{metadataOnly:true});if(absolute<fallbackStart+cached.rows.length){position={page:fallbackPage,row:absolute-fallbackStart};break;}fallbackStart+=cached.rows.length;fallbackPage++;if(fallbackPage>=materials.datasetPageCount(context.doc))fail('MATERIAL_MISSING');cached=null;}}
+  const position=await datasetRowPosition(materials,context.doc,{offset:absolute,includeExcluded:true});
   if(!cached||cached.page!==position.page)cached=await materials.retainedDatasetPage(context.doc,position.page,{metadataOnly:true});const row=cached.rows[position.row];if(!row)fail('MATERIAL_MISSING');
   const projected=(await projectDatasetRows(materials,context.doc,[row],context.indices)).rows[0];if(!projected)fail('MATERIAL_MISSING');return {row:projected,page:position.page,position:position.row,index};
  };

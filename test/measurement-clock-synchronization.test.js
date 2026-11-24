@@ -4,6 +4,7 @@ import {blankClock,blankQuantity} from '../src/web/measurement-model.js';
 import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {DatasetResourceBudget} from '../src/dataset-resource-budget.js';
 import {validClockSynchronization,validClockSynchronizationDescriptor,validateClockSynchronizationDescriptor,assertSynchronizationColumn,CLOCK_SYNCHRONIZATION_STATUS_NAMESPACE} from '../src/web/measurement-clock-synchronization-model.js';
+import {MaterialSequence} from '../src/material-sequence.js';
 import {prepareClockSynchronization,verifyClockSynchronization,evaluateClockSynchronization,calculateClockSynchronizationNode,clockSynchronizationColumn} from '../src/measurement-clock-synchronization.js';
 const ref=(kind,n)=>({kind,id:'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),revision:String(n).repeat(64)});
 const source=ref('dataset',1),reference=ref('dataset',2),model=ref('analysis',3);
@@ -17,7 +18,8 @@ function fixture(){
  const definition={version:1,method:'two-anchor-affine',source:{ref:source,column:3},anchors:[0,1].map(row=>({source:cell(source,row,3),reference:cell(reference,row,7)})),validity:{lower:scalar('10','radix',6),upper:scalar('20','radix',6)},target:{unit:referenceColumn.unit,quantity:structuredClone(referenceColumn.quantity),time:structuredClone(referenceColumn.time)},rationale:'Explicit observed pairings in one uninterrupted segment.',resourcePolicy:defaultDatasetResourcePolicy()};
  const content={tool:'Observanda clock synchronization',...definition};
  const context={content,sourceColumn,referenceColumn,anchors:[{source:value('10'),reference:value('100')},{source:value('20'),reference:value('160')}]};
- const reads=[],materials={read:async r=>{reads.push(['read',structuredClone(r)]);if(r.id===model.id)return {kind:'analysis',content};return {kind:'dataset',id:r.id};},datasetColumn:async(doc,column)=>{reads.push(['column',doc.id,column]);assert.equal(column,doc.id===source.id?3:7);return doc.id===source.id?sourceColumn:referenceColumn;},retainedDatasetPage:async(doc,page,{columns})=>{reads.push(['page',doc.id,page,columns]);assert.equal(page,0);assert.deepEqual(columns,[doc.id===source.id?3:7]);return {rows:context.anchors.map(pair=>({cells:[doc.id===source.id?pair.source.value:pair.reference.value],valueKinds:['string'],excluded:null}))};}};
+ const files=new Map(),sequences=new MaterialSequence({readMetadata:async key=>files.get(key)??null,writeMetadata:async(key,text)=>files.set(key,text)});
+ const reads=[],materials={sequences,read:async r=>{reads.push(['read',structuredClone(r)]);if(r.id===model.id)return {kind:'analysis',content};return {kind:'dataset',id:r.id,content:{datasetFormat:3,schemaIndex:{count:r.id===source.id?4:8}}};},datasetColumn:async(doc,column)=>{reads.push(['column',doc.id,column]);assert.equal(column,doc.id===source.id?3:7);return doc.id===source.id?sourceColumn:referenceColumn;},retainedDatasetPage:async(doc,page,options)=>{reads.push(['page',doc.id,page,options]);assert.equal(page,0);assert.deepEqual(options,{metadataOnly:true});const width=doc.content.schemaIndex.count,rows=[];for(const [index,pair] of context.anchors.entries()){const cells=materials.sequences.builder('cells',fn=>fn());for(let column=0;column<width;column++)await cells.append(column===width-1?(doc.id===source.id?pair.source:pair.reference):{kind:'string',value:''});rows.push({id:'anchor-'+index,cellIndex:await cells.finish(),excluded:null});}return {rows};}};
  return {definition,content,context,sourceColumn,referenceColumn,materials,reads};
 }
 test('explicit paired cells retain original numeral spelling and exact interpolation',async()=>{
@@ -90,7 +92,7 @@ test('source scalar policy and consumer resource bounds cannot be borrowed or ro
  assert.throws(()=>evaluateClockSynchronization(node,f.sourceColumn,f.context,value('0'.repeat(17)+'13')),{code:'DATASET_CALCULATION_RESOURCE'});
 });
 test('missing, excluded and inaccessible selected anchors refuse model creation',async()=>{
- for(const kind of ['null','absent']){const f=fixture(),page=f.materials.retainedDatasetPage;f.materials.retainedDatasetPage=async(...args)=>{const data=await page(...args);data.rows[1].valueKinds[0]=kind;return data;};await assert.rejects(prepareClockSynchronization(f.materials,f.definition),{code:'MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR'});}
+ for(const kind of ['null','absent']){const f=fixture();f.context.anchors[1].source={kind,value:''};await assert.rejects(prepareClockSynchronization(f.materials,f.definition),{code:'MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR'});}
  const f=fixture(),page=f.materials.retainedDatasetPage;f.materials.retainedDatasetPage=async(...args)=>{const data=await page(...args);data.rows[1].excluded='explicit exclusion';return data;};await assert.rejects(prepareClockSynchronization(f.materials,f.definition),{code:'MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR'});
  const denied=fixture();denied.materials.read=async()=>{throw Object.assign(new Error('denied'),{code:'DENIED'});};await assert.rejects(prepareClockSynchronization(denied.materials,denied.definition));
 });

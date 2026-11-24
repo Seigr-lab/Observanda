@@ -14,7 +14,7 @@ import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.j
 const ref=()=>({kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)});
 const column=(name,representation='integer')=>({...defaultColumn({label:name}),representation});
 function fixture(){
- const reference=ref(),doc={kind:'dataset',content:{schemaIndex:{count:10000},rowCount:2}},reads=[],definitions=new Map([[9000,column('Group','text')],[2,column('Value')],[9999,column('Last')]]),raw=[new Map([[9000,'A'],[2,'2'],[9999,'4']]),new Map([[9000,'A'],[2,'4'],[9999,'8']])];
+ const reference=ref(),doc={kind:'dataset',content:{datasetFormat:3,schemaIndex:{count:10000},rowCount:2,includedRowCount:2}},reads=[],definitions=new Map([[9000,column('Group','text')],[2,column('Value')],[9999,column('Last')]]),raw=[new Map([[9000,'A'],[2,'2'],[9999,'4']]),new Map([[9000,'A'],[2,'4'],[9999,'8']])];
  const materials={async read(r){assert.equal(r.id,reference.id);return doc;},async assertOwner(){},datasetPageCount:()=>1,
   async datasetColumns(){assert.fail('whole schema read');},
   async datasetColumn(d,index){assert.equal(d,doc);assert.ok(definitions.has(index));reads.push(['column',index]);return definitions.get(index);},
@@ -52,7 +52,7 @@ test('column picker requests one schema window and only selected off-window defi
 });
 
 test('wide plot selection retains absolute mapping and rejects substituted v7 denominators',async()=>{
- const f=fixture();f.doc.content.datasetFormat=3;f.definitions.get(9000).unit='group';
+ const f=fixture();f.definitions.get(9000).unit='group';
  const mapping={x:2,xKind:'number',group:9000,values:[{column:9999,error:null}],operation:'raw',kind:'line',order:'source'},selected=await datasetPlotSelection(f.materials,f.doc,mapping);
  assert.deepEqual(selected.indices,[2,9000,9999]);assert.deepEqual(selected.mapping,{...mapping,x:0,group:1,values:[{column:2,error:null}]});assert.equal(mapping.values[0].column,9999);
  const content={tool:'Observanda table mapping',version:'7',inputs:[f.reference],mapping,parameters:JSON.stringify(mapping),denominator:{format:3,dataset:f.reference,columnIndices:selected.indices,rows:2,included:2,excludedCount:0,missing:selected.columns.map((c,i)=>({column:selected.indices[i],name:c.name,count:0}))}};

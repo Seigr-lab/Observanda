@@ -5,19 +5,15 @@ export const DATASET_ROWS_PER_PAGE=64;
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
 const uint=value=>Number.isSafeInteger(value)&&value>=0;
 export function datasetPageInfo(doc,page,info){
- if(doc.content.datasetFormat!==3)return info;
  const c=doc.content;
  if(!uint(c.rowCount)||c.pageIndex.count!==Math.ceil(c.rowCount/DATASET_ROWS_PER_PAGE)||info.count!==Math.min(DATASET_ROWS_PER_PAGE,c.rowCount-page*DATASET_ROWS_PER_PAGE))fail();
- if(c.includedRowCount!==undefined){
-  if(!uint(c.includedRowCount)||c.includedRowCount>c.rowCount||info.start!==page*DATASET_ROWS_PER_PAGE||!uint(info.includedStart)||!uint(info.included)||info.included>info.count||info.includedStart>info.start||info.includedStart+info.included>c.includedRowCount||page===0&&info.includedStart!==0||page===c.pageIndex.count-1&&info.includedStart+info.included!==c.includedRowCount)fail();
- }
+ if(!uint(c.includedRowCount)||c.includedRowCount>c.rowCount||info.start!==page*DATASET_ROWS_PER_PAGE||!uint(info.includedStart)||!uint(info.included)||info.included>info.count||info.includedStart>info.start||info.includedStart+info.included>c.includedRowCount||page===0&&info.includedStart!==0||page===c.pageIndex.count-1&&info.includedStart+info.included!==c.includedRowCount)fail();
  return info;
 }
 export async function datasetRowPosition(materials,doc,{offset,includeExcluded}){
  if(!uint(offset)||typeof includeExcluded!=='boolean')throw new AppError('INVALID');
  const pages=materials.datasetPageCount(doc),c=doc.content;
- if(c.datasetFormat!==3||!includeExcluded&&c.includedRowCount===undefined)return null;
- if(!uint(c.rowCount)||pages!==Math.ceil(c.rowCount/DATASET_ROWS_PER_PAGE)||c.includedRowCount!==undefined&&(!uint(c.includedRowCount)||c.includedRowCount>c.rowCount))fail();
+ if(!uint(c.rowCount)||pages!==Math.ceil(c.rowCount/DATASET_ROWS_PER_PAGE)||!uint(c.includedRowCount)||c.includedRowCount>c.rowCount)fail();
  const total=includeExcluded?c.rowCount:c.includedRowCount;
  if(offset>=total)return {page:pages,row:0,ordinal:c.rowCount,offset:total};
  if(includeExcluded){const page=Math.floor(offset/DATASET_ROWS_PER_PAGE);datasetPageInfo(doc,page,await materials.sequences.item(c.pageIndex,page));return {page,row:offset%DATASET_ROWS_PER_PAGE,ordinal:offset,offset};}

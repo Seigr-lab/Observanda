@@ -11,7 +11,7 @@ export function datasetTableControls({call,esc,guard,refresh,readOnly,notify}){
  function open(ref,doc,restore){
   const key=keyOf(ref);
   if(view?.key!==key){
-   close();view={key,ref,width:doc.content.schemaIndex?.count??doc.content.columns.length,settings:fresh(),offset:0,selected:0,labels:new Map(),panels:new Set(),search:'',searchOffset:0,found:null,views:null,viewAfter:null,savedId:null,savedRevision:null,savedName:'',focus:null,anchor:null};
+   close();view={key,ref,width:doc.content.schemaIndex.count,settings:fresh(),offset:0,selected:0,labels:new Map(),panels:new Set(),search:'',searchOffset:0,found:null,views:null,viewAfter:null,savedId:null,savedRevision:null,savedName:'',focus:null,anchor:null};
   }
   if(restore?.key===key){view.settings=structuredClone(restore.settings);view.offset=restore.offset;view.focus=restore.focus;view.anchor=restore.anchor;view.scroll=restore.scroll;}
  }

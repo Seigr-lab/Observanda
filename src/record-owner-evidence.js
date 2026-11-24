@@ -212,7 +212,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await emit({kind:'metadata',name:part.name,content:JSON.stringify(part.value)});
    if(doc.kind==='dataset'){
     for await(const column of materials.iterateDatasetColumns(doc))for(const input of schemaReferences(column))await enqueue(input);
-    for(let index=0;index<materials.datasetPageCount(doc);index++){signal?.throwIfAborted();const info=[2,3].includes(doc.content.datasetFormat)?await materials.sequences.item(doc.content.pageIndex,index):doc.content.pages[index],{rows}=await materials.retainedDatasetPage(doc,index,{metadataOnly:true});await emit({kind:'metadata',name:'.observanda/materials/tables/'+info.hash+'.json',content:JSON.stringify(rows)});}
+    for(let index=0;index<materials.datasetPageCount(doc);index++){signal?.throwIfAborted();const info=await materials.sequences.item(doc.content.pageIndex,index),{rows}=await materials.retainedDatasetPage(doc,index,{metadataOnly:true});await emit({kind:'metadata',name:'.observanda/materials/tables/'+info.hash+'.json',content:JSON.stringify(rows)});}
    }
    await emit({kind:'metadata',name:'.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',content:JSON.stringify(doc)+'\n'});
    if(doc.content.measurement)for(const input of measurementReferences(doc.content.measurement))await enqueue(input);if(doc.content.method&&!['Observanda clock synchronization','Observanda coordinate frame transform'].includes(doc.content.tool))for(const input of analysisMethodReferences(doc.content.method))await enqueue(input);

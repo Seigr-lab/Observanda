@@ -10,7 +10,7 @@ const ref={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},esc=value=>St
 function fixture(probability){
  const columns=[defaultColumn({label:'Group'}),{...defaultColumn({label:'Selected quantile'}),representation:'rational'}],row={cells:['A','5/2'],valueKinds:['string','string']};
  const aggregation={version:4,source:{...ref,id:randomUUID()},keys:[0],values:[{column:1,operation:'quantile',name:'Selected quantile',method:'linear-n-minus-one-v1',probability}],resourcePolicy:defaultDatasetResourcePolicy(),missing:'skip',note:''};
- return {aggregation,read:async()=>({content:{rowCount:1,aggregation}}),datasetColumns:async()=>columns,async *iterateDataset(){yield row;},retainedSchemaPage:async(_,options)=>({items:columns.slice(options.offset,options.offset+options.limit),total:columns.length}),datasetPageCount:()=>1,retainedDatasetPage:async(_,page,{columns:indices})=>({columnIndices:indices,rows:[{cells:indices.map(i=>row.cells[i]),valueKinds:indices.map(i=>row.valueKinds[i])}]})};
+ return {aggregation,read:async()=>({content:{rowCount:1,aggregation}}),datasetColumns:async()=>columns,async *iterateDataset(){yield row;},retainedSchemaPage:async(_,options)=>({items:columns.slice(options.offset,options.offset+options.limit),total:columns.length}),datasetPageCount:()=>1,datasetRowPosition:async()=>({page:0,row:0,ordinal:0,offset:0}),retainedDatasetPage:async(_,page,{columns:indices})=>({columnIndices:indices,rows:[{cells:indices.map(i=>row.cells[i]),valueKinds:indices.map(i=>row.valueKinds[i])}]})};
 }
 test('retained table formats attach probability and method to the selected quantile column only',async()=>{
  const materials=fixture({spelling:'1/4',representation:'rational',radix:10});

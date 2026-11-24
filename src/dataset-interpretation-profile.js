@@ -85,7 +85,7 @@ export async function openProfileTemplate(materials,ref,{check,verify,signal}={}
  await check?.(original);
  const mapping=content.sourceMapping.format==='delimited'?datasetMapping(content.sourceMapping):
   datasetMapping({...content.sourceMapping,fields:'all'});
- const width=content.schemaIndex?.count??content.columns?.length;
+ const width=content.schemaIndex?.count;
  if(!natural(width)||!width)damaged();
  async function* fields(){
   for(let start=0;start<width;){

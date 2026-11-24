@@ -47,11 +47,11 @@ async function tableColumns(materials,source,selection,offset,limit){
  for(const index of indices)columns.push((await materials.retainedSchemaPage(source.doc,{offset:index,limit:1})).items[0]);
  return {indices,columns,quantiles:indices.map(index=>quantileMetric(source.doc,index)),pairedStatistics:indices.map(index=>pairedMetric(source.doc,index))};
 }
-// Current datasets seek indexed ranks. Legacy filtered sources scan only the
-// first offset, then authenticated physical anchors continue without replay.
+// Datasets seek indexed ranks; authenticated physical anchors continue a
+// window without replay.
 async function* tableRows(materials,source,selection,indices,{offset=0,limit=Infinity,anchor=null,signal}={}){
  const reverse=anchor?.direction==='backward',pages=materials.datasetPageCount(source.doc);
- const start=anchor??await materials.datasetRowPosition?.(source.doc,{offset:selection.offset+offset,includeExcluded:selection.includeExcluded})??{page:0,row:0,ordinal:0,offset:0};
+ const start=anchor??await materials.datasetRowPosition(source.doc,{offset:selection.offset+offset,includeExcluded:selection.includeExcluded});
  let matching=anchor?anchor.offset:start.offset-selection.offset,ordinal=start.ordinal,emitted=0;
  for(let page=start.page;page>=0&&page<pages;page+=reverse?-1:1){
   signal?.throwIfAborted();const data=await materials.retainedDatasetPage(source.doc,page,{columns:indices});

@@ -10,7 +10,7 @@ const invalid=()=>{throw new AppError('INVALID');};
 // Offsets and ranges refer to the original acquisition order and retained
 // schema. Withholding excluded rows never shifts the user's range selection.
 export function datasetExchangeSelection(doc,selection){
- const width=doc.content.schemaIndex?.count??doc.content.columns?.length;
+ const width=doc.content.schemaIndex?.count;
  if(doc.kind!=='dataset'||!natural(width)||!width||!natural(doc.content.rowCount))throw new AppError('MATERIAL_MISSING');
  if(!exact(selection,['offset','count','columns','includeExcluded'])||!natural(selection.offset)||selection.offset>doc.content.rowCount||selection.count!==null&&!natural(selection.count)||typeof selection.includeExcluded!=='boolean')invalid();
  if(selection.count!==null&&selection.count>doc.content.rowCount-selection.offset)invalid();
@@ -42,13 +42,13 @@ export async function* exchangeRows(materials,doc,selection,{signal,check,progre
  if(!selection.count)return;
  const pages=materials.datasetPageCount(doc),end=selection.offset+selection.count;
  const start=await materials.datasetRowPosition(doc,{offset:selection.offset,includeExcluded:true});
- let position=start?.ordinal??0,written=0;
- for(let page=start?.page??0;page<pages&&position<end;page++){
+ let position=start.ordinal,written=0;
+ for(let page=start.page;page<pages&&position<end;page++){
   signal?.throwIfAborted();
   await check?.();
   const read=()=>materials.retainedDatasetPage(doc,page,{metadataOnly:true});
   const {rows}=await (materials.workspace?.catalogue?materials.workspace.catalogue(read):read());
-  for(let i=page===start?.page?start.row:0;i<rows.length&&position<end;i++,position++){
+  for(let i=page===start.page?start.row:0;i<rows.length&&position<end;i++,position++){
    if(position>=selection.offset&&(selection.includeExcluded||!rows[i].excluded)){
     yield {index:position,row:rows[i]};written++;
    }
@@ -59,20 +59,6 @@ export async function* exchangeRows(materials,doc,selection,{signal,check,progre
 }
 
 export async function* exchangeCells(materials,doc,row,selection,{signal,readWindow}={}){
- if(doc.content.datasetFormat!==3){
-  let i=0,r=0;
-  const last=selection.columns.at(-1);
-  const end=last.offset+last.count;
-  for await(const cell of materials.iterateDatasetCells(doc,row)){
-   signal?.throwIfAborted();
-   while(r<selection.columns.length&&i>=selection.columns[r].offset+selection.columns[r].count)r++;
-   if(r===selection.columns.length)return;
-   if(i>=selection.columns[r].offset)yield {index:i,cell};
-   i++;
-   if(i===end)return;
-  }
-  throw new AppError('MATERIAL_MISSING');
- }
  materials.sequences.validate(row.cellIndex);
  if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==doc.content.schemaIndex.count)throw new AppError('MATERIAL_MISSING');
  for(const range of selection.columns){

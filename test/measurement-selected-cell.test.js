@@ -18,7 +18,10 @@ test('measurement reads project only the selected retained row and preserve its 
  const denied=Object.assign(new Error('Unavailable'),{code:'ACCESS_DENIED'});materials.read=async()=>{throw denied;};await assert.rejects(new Measurements(materials).cell(locator()),error=>error===denied);
 });
 
-test('earlier retained rows preserve explicit missing/null semantics through the existing reader',async()=>{
- const column=defaultColumn({label:'Observation'}),rows=[{id:'null',cells:[''],valueKinds:['null']},{id:'missing',cells:[''],valueKinds:['string']}],doc={content:{datasetFormat:2}},materials={read:async()=>doc,retainedDatasetPage:async(_,page,options)=>{assert.equal(page,0);assert.deepEqual(options,{columns:[17]});return {rows};},retainedSchemaPage:async()=>({items:[column]})},measurements=new Measurements(materials);
+test('retained rows preserve explicit missing/null semantics through the existing reader',async()=>{
+ const stored=new Map(),sequences=new MaterialSequence({readMetadata:async name=>stored.get(name)??null,writeMetadata:async(name,text)=>stored.set(name,text)}),column=defaultColumn({label:'Observation'}),rows=[];
+ for(const [id,kind] of [['null','null'],['missing','string']]){const cells=sequences.builder('cells',fn=>fn());for(let col=0;col<18;col++)await cells.append(col===17?{kind,value:''}:{kind:'string',value:'unused'});rows.push({id,order:rows.length+1,excluded:null,cellIndex:await cells.finish()});}
+ const doc={kind:'dataset',content:{datasetFormat:3,schemaIndex:{count:18}}},materials={sequences,read:async()=>doc,retainedDatasetPage:async(_,page,options)=>{assert.equal(page,0);assert.deepEqual(options,{metadataOnly:true});return {rows};},retainedSchemaPage:async()=>({items:[column]})},measurements=new Measurements(materials);
  assert.equal((await measurements.cell(locator(0))).value.presence,'null');assert.equal((await measurements.cell(locator(1))).value.presence,'missing');assert.equal((await measurements.cell(locator(1))).pageRows,2);
 });
+

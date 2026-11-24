@@ -10,7 +10,7 @@ const ref={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},esc=value=>St
 function fixture(){
  const policy=defaultStructuredCalculationPolicy(),computation={version:2,kind:'approximate',method:'pearson-centered-pairs-v1',engine:4,policy},column={...defaultColumn({label:'Correlation'}),representation:'rational',computation:{version:2,kind:'per-cell'}},metric={operation:'correlation',method:'pearson-centered-pairs-v1',pairing:'complete-rows-v1',calculationPolicy:policy},rows=[{cells:['1/1'],valueKinds:['string'],cellComputations:[null]},{cells:['7071067811865475/10000000000000000'],valueKinds:['string'],cellComputations:[computation]},{cells:[''],valueKinds:['absent'],cellComputations:[null]}];
  const doc={content:{rowCount:3,aggregation:{version:6,source:{...ref,id:randomUUID()},keys:[],values:[metric],note:'Private research note'}}};
- return {doc,read:async()=>doc,datasetColumns:async()=>[column],retainedSchemaPage:async()=>({items:[column],total:1}),datasetPageCount:()=>1,retainedDatasetPage:async()=>({columnIndices:[0],rows})};
+ return {doc,read:async()=>doc,datasetColumns:async()=>[column],retainedSchemaPage:async()=>({items:[column],total:1}),datasetPageCount:()=>1,datasetRowPosition:async()=>({page:0,row:0,ordinal:0,offset:0}),retainedDatasetPage:async()=>({columnIndices:[0],rows})};
 }
 test('mixed public tables distinguish exact, approximate and unavailable values without disclosing source identifiers',async()=>{
  const materials=fixture(),table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
