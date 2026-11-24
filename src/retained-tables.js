@@ -2,50 +2,30 @@ import {coordinateAlignmentPublicPage} from './coordinate-alignment.js';
 import {publicCusumContext} from './web/dataset-cusum-model.js';
 import {publicCoordinateFrameContext} from './web/coordinate-frame-schema.js';
 import {publicSpectrumContext} from './web/dataset-spectrum-model.js';
-import {statisticalUncertaintyContextText} from './web/statistical-uncertainty-context.js';
-import {measurementUnitContextText} from './web/measurement-unit-context.js';
-import {aggregationQuantileContextText,aggregationPairContextText} from './web/dataset-aggregation-context.js';
-import {resolveScalarOperand} from './measurement-scalar-storage.js';
-import {resolveScalarDefinitions} from './measurement-scalar-storage.js';
-import {clockSynchronizationContextText} from './web/measurement-clock-context.js';
-import {computationLabel,resolveCellComputation,perCellComputation,effectiveCellColumn} from './web/measurement-computation.js';
+import {resolveCellComputation,effectiveCellColumn} from './web/measurement-computation.js';
 import {AppError} from './errors.js';
 import {readTableCursor,tableCursors} from './retained-table-cursor.js';
 const tableReads=async(materials,operation)=>materials.workspace?.withCatalogueConnections?materials.workspace.withCatalogueConnections(operation):operation();
 import {measurementRef} from './web/measurement-model.js';
 import {validTableSelection,validRetainedTable} from './web/retained-table-model.js';
-export const hasPagedResultTables=results=>results?.statements?.some(statement=>statement?.table?.version===3||statement?.tableSelection!==undefined&&!validTableSelection(statement.tableSelection))??false;
+export const hasPagedResultTables=results=>results?.statements?.some(statement=>statement?.table!==undefined||statement?.tableSelection!==undefined)??false;
 export async function pagedTableDocument(document){
  if(!await document.reference(['results','statements']))return false;
  for await(const item of document.items(['results','statements'])){
-  if((await document.tree.selected(item.value,['table','version'])).value===3)return true;
-  const selection=await document.tree.selected(item.value,['tableSelection']);if(selection.found&&!validTableSelection(selection.value))return true;
+  if((await document.tree.selected(item.value,['table'])).found||(await document.tree.selected(item.value,['tableSelection'])).found)return true;
  }
  return false;
 }
 export const retainedTable=(materials,command)=>tableReads(materials,()=>readRetainedTable(materials,command));
-async function readRetainedTable(materials,{ref,selection,version=2}){
- if(version===3){await retainedTableSource(materials,ref,selection);return {version:3,selection:structuredClone(selection)};}
- if(!measurementRef(ref)||ref.kind!=='dataset'||!validTableSelection(selection)||![1,2].includes(version))throw new AppError('DATASET_TABLE');
- const doc=await materials.read(ref),columns=await materials.datasetColumns(doc);if(selection.columns.some(index=>perCellComputation(columns[index])||columns[index]?.spectrum||columns[index]?.cusum||columns[index]?.coordinateAlignment||columns[index]?.weightedFit))throw new AppError('DATASET_TABLE');
- if(selection.columns.some(i=>i>=columns.length))throw new AppError('DATASET_TABLE');
- for(const index of selection.columns)if(columns[index].synchronization)columns[index]={...columns[index],...(await resolveScalarDefinitions(materials,{synchronization:columns[index].synchronization}))};
- for(const index of selection.columns)if(columns[index].quantity?.unitDefinition)columns[index]={...columns[index],...(await resolveScalarDefinitions(materials,{quantity:columns[index].quantity}))};
- const quantileContexts=new Map();for(const index of selection.columns)quantileContexts.set(index,await legacyQuantileContext(materials,doc,index));
- const table={version,selection,headers:selection.columns.map(i=>columns[i].name+(columns[i].unit?' ['+columns[i].unit+']':'')+(computationLabel(columns[i])?' ['+computationLabel(columns[i])+']':'')+(columns[i].synchronization?' ['+clockSynchronizationContextText(columns[i].synchronization)+']':'')+(columns[i].statisticalUncertainty?' ['+statisticalUncertaintyContextText(columns[i].statisticalUncertainty)+']':'')+(quantileContexts.get(i)?' ['+quantileContexts.get(i)+']':'')+(pairedMetric(doc,i)?' ['+aggregationPairContextText(pairedMetric(doc,i))+']':'')+(columns[i].quantity?.unitDefinition?' ['+measurementUnitContextText(columns[i].quantity.unitDefinition)+']':'')),rows:[],...(version===2?{formats:selection.columns.map(i=>({representation:columns[i].representation,radix:columns[i].radix,...(columns[i].domain?{domain:columns[i].domain}:{})}))}:{})};let count=0;
- for await(const row of materials.iterateDataset(ref)){
-  if(row.excluded&&!selection.includeExcluded)continue;if(count++<selection.offset)continue;
-  table.rows.push({cells:selection.columns.map(i=>row.cells[i]),presence:selection.columns.map(i=>['null','absent'].includes(row.valueKinds?.[i])?row.valueKinds[i]:columns[i].missing.some(m=>m.value===row.cells[i])?'missing':'value'),exclusion:row.excluded??null});
-  if(!validRetainedTable(table))throw new AppError('DATASET_TABLE');if(table.rows.length===selection.count)break;
- }
- if(!table.rows.length)throw new AppError('DATASET_TABLE');return table;
+async function readRetainedTable(materials,{ref,selection}){
+ await retainedTableSource(materials,ref,selection);return {version:3,selection:structuredClone(selection)};
 }
 
 
-// A result pins its dataset through statement.source. Version 3 keeps only the
+// A result pins its dataset through statement.source. A table keeps only the
 // selected query; previews and export traverse that immutable revision directly.
 export async function retainedTableSource(materials,ref,selection){
- if(!measurementRef(ref)||ref.kind!=='dataset'||!validTableSelection(selection,{paged:true}))throw new AppError('DATASET_TABLE');
+ if(!measurementRef(ref)||ref.kind!=='dataset'||!validTableSelection(selection))throw new AppError('DATASET_TABLE');
  const doc=await materials.read(ref),first=await materials.retainedSchemaPage(doc,{offset:0,limit:1}),columnCount=first.total;
  if(!columnCount||selection.columns!=='all'&&selection.columns.some(i=>i>=columnCount)||selection.offset>=doc.content.rowCount)throw new AppError('DATASET_TABLE');
  return {doc,columnCount,selectedColumns:selection.columns==='all'?columnCount:selection.columns.length};
@@ -59,11 +39,6 @@ function pairedMetric(doc,index){
  if(!metric||!['covariance','linear-fit','correlation'].includes(metric.operation))return null;
  const {operation,method,pairing}=metric;
  return {operation,method,pairing,...(operation==='correlation'?{calculationPolicy:metric.calculationPolicy}:operation==='covariance'?{normalization:metric.normalization}:{coefficient:metric.coefficient})};
-}
-async function legacyQuantileContext(materials,doc,index){
- const quantile=quantileMetric(doc,index);if(!quantile)return '';
- const probability=quantile.probability,policy=doc.content.aggregation.resourcePolicy,cell=await resolveScalarOperand(materials,{kind:'string',value:probability.spelling},{representation:probability.representation,radix:probability.radix,missing:[],resourcePolicy:policy},{policy});
- return aggregationQuantileContextText({...quantile,probability:{...probability,spelling:cell.value}});
 }
 const natural=n=>Number.isSafeInteger(n)&&n>=0;
 async function tableColumns(materials,source,selection,offset,limit){

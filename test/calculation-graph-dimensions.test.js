@@ -54,7 +54,7 @@ test('graph dimensions grow independently while paged reads and complete exports
   return (await leased(job,async()=>jobs.queue.complete(id,job.lease.token,await jobs.queue.definition(job).prepare(job,{signal:t.signal})))).result;
  }
  async function table(ref,{reader=m}={}){
-  const retained=await request('retained-table',{ref,selection,version:3}),rows=[];
+  const retained=await request('retained-table',{ref,selection}),rows=[];
   for await(const block of retainedTableBlocks(reader,{ref,table:retained},{signal:t.signal})){assert.ok(block.table.rows.length<=16);assert.ok(block.table.headers.length<=8);rows.push(...block.table.rows);}
   let html='';for await(const chunk of retainedTableHTML(reader,{source:ref,table:retained},{signal:t.signal}))html+=chunk;
   assert.equal((html.match(/<tbody>/g)??[]).length,Math.ceil(rows.length/16));

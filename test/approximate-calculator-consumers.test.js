@@ -15,12 +15,14 @@ function fixture(){
  const columns=[{...defaultColumn({label:'Approximate <value>'}),representation:'decimal',computation:{version:1,kind:'approximate',recipe}},{...defaultColumn({label:'Derived'}),representation:'decimal',computation:{version:1,kind:'approximate-inputs'}},{...defaultColumn({label:'Exact'}),representation:'rational'}],cells=['1.414213562373095048801688724209698078569671875376948073176679738','-0','1/3'],row={cells,valueKinds:['number','number','number']};
  return {columns,cells,read:async()=>({content:{rowCount:1}}),datasetColumns:async()=>columns,async *iterateDataset(){yield row;},retainedSchemaPage:async(_,options)=>({items:columns.slice(options.offset,options.offset+options.limit),total:columns.length}),datasetPageCount:()=>1,retainedDatasetPage:async(_,page,{columns:indices})=>({columnIndices:indices,rows:[{...row,cells:indices.map(i=>cells[i]),valueKinds:indices.map(i=>row.valueKinds[i])}]})};
 }
-test('bounded legacy retained tables preserve exact spellings and computation labels without a new persisted shape',async()=>{
- const materials=fixture(),selection={columns:[0,1,2],offset:0,count:1,includeExcluded:false};
- for(const version of [1,2]){const table=await retainedTable(materials,{ref,selection,version});assert.equal(validRetainedTable(table),true);assert.deepEqual(table.rows[0].cells,materials.cells);assert.deepEqual(table.headers,['Approximate <value> [Approximate computation]','Derived [Computed from approximate inputs]','Exact']);const html=retainedTableView(table,esc);assert.match(html,/Approximate &lt;value&gt; \[Approximate computation\]/);assert.match(html,/Computed from approximate inputs/);assert.doesNotMatch(html,new RegExp(recipe.id));assert.equal(table.formats?.[0].computation,undefined);}
+test('a bounded selection stores only its query and its window keeps exact spellings and computation labels',async()=>{
+ const materials=fixture(),selection={columns:[0,1,2],offset:0,count:1,includeExcluded:false},table=await retainedTable(materials,{ref,selection});
+ assert.deepEqual(table,{version:3,selection});assert.equal(validRetainedTable(table),true);const blocks=[];for await(const value of retainedTableBlocks(materials,{ref,table}))blocks.push(value.table);
+ assert.equal(blocks.length,1);const [block]=blocks;assert.deepEqual(block.rows.map(row=>row.cells),[materials.cells]);assert.deepEqual(block.headers,['Approximate <value>','Derived','Exact']);assert.deepEqual(block.formats.map(format=>format.computation),[materials.columns[0].computation,materials.columns[1].computation,undefined]);
+ const html=retainedTableView(block,esc);assert.match(html,/Approximate &lt;value&gt; \[Approximate computation\]/);assert.match(html,/Derived \[Computed from approximate inputs\]/);assert.doesNotMatch(html,new RegExp(recipe.id));
 });
 test('paged browser and frozen table HTML distinguish approximations while exporting every stored digit',async()=>{
- const materials=fixture(),table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false},version:3}),statement={source:ref,table};let block;
+ const materials=fixture(),table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false}}),statement={source:ref,table};let block;
  for await(const value of retainedTableBlocks(materials,{ref,table}))block=value.table;
  assert.deepEqual(block.formats[0].computation,materials.columns[0].computation);assert.match(retainedTableView(block,esc),/Approximate computation/);let html='';for await(const text of retainedTableHTML(materials,statement))html+=text;
  assert.match(html,/Approximate &lt;value&gt; \[Approximate computation\]/);assert.match(html,/Computed from approximate inputs/);

@@ -15,18 +15,16 @@ function fixture(synchronization){
  const columns=[{...defaultColumn({label:'Synchronized coordinate'}),representation:'rational',unit:'reference intervals',synchronization},{...defaultColumn({label:'Unchanged'}),representation:'integer'}],cells=['5/2','4'],row={cells,valueKinds:['string','string']};
  return {columns,cells,read:async()=>({content:{rowCount:1}}),datasetColumns:async()=>[...columns],async *iterateDataset(){yield row;},retainedSchemaPage:async(_,options)=>({items:columns.slice(options.offset,options.offset+options.limit),total:columns.length}),datasetPageCount:()=>1,retainedDatasetPage:async(_,page,{columns:indices})=>({columnIndices:indices,rows:[{...row,cells:indices.map(i=>cells[i]),valueKinds:indices.map(i=>row.valueKinds[i])}]})};
 }
-test('table capture retains declared clock validity and source units without changing unrelated columns',async()=>{
- const materials=fixture(context()),selection={columns:[0,1],offset:0,count:1,includeExcluded:false};
- for(const version of [1,2]){
-  const table=await retainedTable(materials,{ref,selection,version});assert.equal(validRetainedTable(table),true);assert.deepEqual(table.rows[0].cells,materials.cells);
-  const html=retainedTableView(table,esc);assert.match(html,/two-anchor affine model/);assert.match(html,/0 \(radix, base 6\) to 10 \(radix, base 6\) \[source intervals\]/);assert.match(html,/Reference &lt;origin&gt;/);assert.equal(table.headers[1],'Unchanged');assert.equal(table.formats?.[0].synchronization,undefined);
- }
+test('table capture stores only the query and its window keeps declared clock validity and source units without changing unrelated columns',async()=>{
+ const materials=fixture(context()),selection={columns:[0,1],offset:0,count:1,includeExcluded:false},table=await retainedTable(materials,{ref,selection});
+ assert.deepEqual(table,{version:3,selection});assert.equal(validRetainedTable(table),true);let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;assert.deepEqual(block.rows[0].cells,materials.cells);
+ const html=retainedTableView(block,esc);assert.match(html,/two-anchor affine model/);assert.match(html,/0 \(radix, base 6\) to 10 \(radix, base 6\) \[source intervals\]/);assert.match(html,/Reference &lt;origin&gt;/);assert.equal(block.headers[1],'Unchanged');assert.equal(block.formats[1].synchronization,undefined);
  assert.equal(clockSynchronizationContextText(null),'');
 });
 test('paged export streams complete validity bounds and never emits private scalar references',async()=>{
  const c=context(),upper='1.'+'23450'.repeat(1900),privateRef={format:'dataset-cell',privateStorageId:'do-not-publish-storage-identity',characters:upper.length};c.validity.upper={spelling:privateRef,representation:'decimal',radix:10};
  const materials=fixture(c),windows=[];materials.readDatasetCell=async(value,{offset,limit})=>{assert.deepEqual(value,privateRef);windows.push({offset,limit});const text=upper.slice(offset,offset+limit);return {text,offset,total:upper.length,next:offset+text.length<upper.length?offset+text.length:null};};
- const table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false},version:3});let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
+ const table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
  assert.deepEqual(block.formats[0].synchronization,c);const preview=retainedTableView(block,esc);assert.match(preview,/retained scalar/);assert.doesNotMatch(preview,/do-not-publish-storage-identity/);
  let html='';for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;
  assert.ok(html.includes(upper+' (decimal, base 10) [source intervals]'));assert.match(html,/Reference &lt;origin&gt;/);assert.match(html,/<td>5\/2<\/td>/);assert.doesNotMatch(html,/do-not-publish-storage-identity|resourcePolicy|observanda-exact/);assert.equal(windows.length,3);assert.ok(windows.every(w=>w.limit<=4096));
@@ -36,11 +34,9 @@ test('paged export streams complete validity bounds and never emits private scal
 test('segmented clock headers describe disjoint ranges without inventing a global clock interval',async()=>{
  const descriptor={version:2,method:'segmented-piecewise-affine-v1',segmentCount:19,epoch:'Reference <origin>',sourceUnit:'source intervals',sourceReference:'Acquisition clock',resourcePolicy:defaultDatasetResourcePolicy()},materials=fixture(descriptor);
  const description=clockSynchronizationContextText(descriptor);assert.match(description,/segmented piecewise-affine model/);assert.match(description,/19 declared segments/);assert.match(description,/no extrapolation or interpolation across resets/);assert.doesNotMatch(description,/source validity .* to /);
- for(const version of [1,2,3]){
-  const table=await retainedTable(materials,{ref,selection:{columns:[0,1],offset:0,count:1,includeExcluded:false},version});assert.equal(validRetainedTable(table),true);
-  let html='';if(version===3)for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;else html=retainedTableView(table,esc);
-  assert.match(html,/19 declared segments/);assert.match(html,/adjacent anchors/);assert.match(html,/Reference &lt;origin&gt;/);assert.match(html,/<td>5\/2<\/td>/);assert.doesNotMatch(html,/resourcePolicy|clock-sync-segments|observanda-exact/);
- }
+ const table=await retainedTable(materials,{ref,selection:{columns:[0,1],offset:0,count:1,includeExcluded:false}});assert.equal(validRetainedTable(table),true);
+ let html='';for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;
+ assert.match(html,/19 declared segments/);assert.match(html,/adjacent anchors/);assert.match(html,/Reference &lt;origin&gt;/);assert.match(html,/<td>5\/2<\/td>/);assert.doesNotMatch(html,/resourcePolicy|clock-sync-segments|observanda-exact/);
  assert.throws(()=>clockSynchronizationContextText({...descriptor,segmentCount:0}),RangeError);
  assert.throws(()=>clockSynchronizationContextText({...descriptor,segmentCount:1.5}),RangeError);
  const decorated={...descriptor,segmentsIndex:{privateStorageId:'never-export-this-identity'},source:{privatePath:'never-export-private-path'}};assert.doesNotMatch(clockSynchronizationContextText(decorated),/never-export/);

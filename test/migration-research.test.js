@@ -81,12 +81,12 @@ test('unavailable research references stop review and all writes roll back if a 
  await f.workspace.withLock(()=>materials.retainRecord(retained));await f.service.commit({...reviewed.command,review:reviewed.batch.review});assert.equal((await f.workspace.read()).book.entries.length,before.book.entries.length+4);
 });
 
-test('retained table values must match their source during review, before an import can be approved',async t=>{
+test('retained tables must resolve against their pinned source during review, before an import can be approved',async t=>{
  const f=await fixture(t),materials=new ResearchMaterials(f.workspace),recordId=f.book.entries[0].id,bytes=Buffer.from('Counter\n900719925474099312345\n');
  const upload=await materials.startImport({recordId,name:'readings.csv',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id);
  const dataset=await materials.dataset({recordId,title:'Exact readings',artifact,columns:[{...defaultColumn({label:'Counter'}),representation:'integer'}]}),table=await retainedTable(materials,{ref:dataset,selection:{columns:[0],offset:0,count:10,includeExcluded:false}});
  f.facts.results.statements.push({id:'readings',kind:'table',basis:'retained',source:dataset,title:'Returned readings',text:'Exact retained counters.',limitations:'Synthetic example.',table:structuredClone(table)});
- f.facts.results.statements.at(-1).table.rows[0].cells[0]='900719925474099312346';const before=await f.workspace.read(),blocked=await stage(f);
+ f.facts.results.statements.at(-1).table.selection.columns=[1];const before=await f.workspace.read(),blocked=await stage(f);
  assert.equal(blocked.batch.state,'mapping');assert.equal((await f.service.detail({...blocked.command,index:1})).problem.code,'DATASET_TABLE');assert.equal((await f.workspace.read()).etag,before.etag);
  f.facts.results.statements.at(-1).table=table;await applied(f);const record=(await f.workspace.read()).book.entries.find(r=>r.title==='morning-one');assert.deepEqual(record.results.statements.at(-1).table,table);
 });

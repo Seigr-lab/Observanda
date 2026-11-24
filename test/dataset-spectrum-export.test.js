@@ -17,15 +17,14 @@ function fixture(version=1){
  return {source,analysis,text,step,column,doc,read:async()=>doc,datasetColumns:async()=>[column],retainedSchemaPage:async()=>({items:[column],total:1}),datasetPageCount:()=>1,retainedDatasetPage:async()=>({columnIndices:[0],rows}),readDatasetCell:async(value,{offset,limit})=>{assert.deepEqual(value,step);return {text:text.slice(offset,offset+limit),next:offset+limit<text.length?offset+limit:null};}};
 }
 test('published spectra retain the full sampling declaration and method without private source identifiers',async()=>{
- const materials=fixture(),table=await retainedTable(materials,{ref:materials.source,version:3,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref:materials.source,table}))block=item.table;
+ const materials=fixture(),table=await retainedTable(materials,{ref:materials.source,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref:materials.source,table}))block=item.table;
  let exported='';for await(const part of retainedTableHTML(materials,{source:materials.source,table}))exported+=part;
  assert.ok(exported.includes(materials.text));assert.ok(!JSON.stringify(block.formats[0].spectrum).includes(materials.analysis.id));
  for(const html of [retainedTableView(block,esc),exported]){assert.match(html,/Fourier|radix/i);assert.match(html,/Nyquist/i);assert.match(html,/selected sample|selected.*index/i);assert.match(html,/not.*(watts|power spectral)/i);assert.match(html,/64/);assert.match(html,/Exact computational value/);for(const privateValue of [materials.source.id,materials.analysis.id,materials.source.revision,'Unpublished interpretation'])assert.ok(!html.includes(privateValue));}
- await assert.rejects(retainedTable(materials,{ref:materials.source,version:2,selection:{columns:[0],offset:0,count:2,includeExcluded:false}}),{code:'DATASET_TABLE'});
 });
 
 test('public v2 spectral tables retain the authored execution limits without private work state',async()=>{
- const materials=fixture(2),table=await retainedTable(materials,{ref:materials.source,version:3,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref:materials.source,table}))block=item.table;
+ const materials=fixture(2),table=await retainedTable(materials,{ref:materials.source,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref:materials.source,table}))block=item.table;
  assert.equal(block.formats[0].spectrum.version,2);assert.deepEqual(block.formats[0].spectrum.executionPolicy,materials.column.spectrum.executionPolicy);let exported='';for await(const part of retainedTableHTML(materials,{source:materials.source,table}))exported+=part;
  for(const html of [retainedTableView(block,esc),exported]){for(const limit of [170000,9000,7000,1000])assert.ok(html.includes(String(limit)));for(const privateValue of [materials.source.id,materials.analysis.id,'commandHash','reservation'])assert.ok(!html.includes(privateValue));}
 });

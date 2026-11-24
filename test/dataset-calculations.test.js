@@ -16,7 +16,7 @@ import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.j
 import {enqueueDataset} from '../src/dataset-jobs.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {calculateStep,validOperand} from '../src/web/dataset-calculation-model.js';
-import {retainedTable} from '../src/retained-tables.js';
+import {retainedTable,retainedTablePage} from '../src/retained-tables.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
@@ -37,15 +37,15 @@ async function fixture(t){
 }
 test('derived values feed figures and verified publication tables while revisions, original files and other columns stay private',async t=>{
  const f=await fixture(t),source=await f.dataset('key,ticks,private\na,3,PRIVATE_SENTINEL\nb,6,PRIVATE_SENTINEL',[col('key'),col('ticks','integer','ticks'),col('private')]),c=recipe(source);c.steps=[step('Duration','divide',column(1),constant('5','Hz'),'s')];
- const derived=await f.m.dataset({recordId:f.recordId,title:'PRIVATE_DERIVED',calculation:c}),selection={columns:[0,3],offset:0,count:20,includeExcluded:false},table=await retainedTable(f.m,{ref:derived,selection});assert.equal(table.rows[0].cells[1],'3/5');
+ const derived=await f.m.dataset({recordId:f.recordId,title:'PRIVATE_DERIVED',calculation:c}),selection={columns:[0,3],offset:0,count:20,includeExcluded:false},table=await retainedTable(f.m,{ref:derived,selection});assert.equal((await retainedTablePage(f.m,{ref:derived,table})).table.rows[0].cells[1],'3/5');
  const figure=await f.m.plot({recordId:f.recordId,title:'Durations',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:3,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'safe'}});assert.equal((await plottedY(f.m,figure.figure))[0],0.6);
  const snapshot=await f.workspace.read(),record=snapshot.book.entries.find(r=>r.id===f.recordId),result={id:randomUUID(),kind:'table',basis:'retained',source:derived,title:'Durations',text:'Exact durations calculated from retained counts.',limitations:'Synthetic source only.',table},next={...record,share:true,results:{version:1,statements:[result]}};
- const bad=structuredClone(next);bad.results.statements[0].table.rows[0].cells[1]='100';const records=new ResearchRecords(f.workspace,{});
+ const bad=structuredClone(next);bad.results.statements[0].table.selection.columns=[0,99];const records=new ResearchRecords(f.workspace,{});
  await assert.rejects(records.save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:bad}]}),{code:'DATASET_TABLE'});
  await records.save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:next}]});
  const html=(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===record.id))).html;assert.match(html,/3\/5/);assert.match(html,/retained-result-table/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes('PRIVATE_DERIVED'));assert.ok(!html.includes(source.id));
  const prior=await f.m.read(derived),recipe2=structuredClone(c);recipe2.steps[0].right=constant('10','Hz');await f.m.dataset({recordId:f.recordId,title:prior.title,id:derived.id,expectedRevision:derived.revision,calculation:recipe2});
- const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));assert.deepEqual(await retainedTable(restored,{ref:derived,selection}),table);await restored.verify();
+ const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));assert.deepEqual(await retainedTable(restored,{ref:derived,selection}),table);assert.equal((await retainedTablePage(restored,{ref:derived,table})).table.rows[0].cells[1],'3/5');await restored.verify();
 });
 test('paired calculations preserve exact counters, calibration, exclusions and inspectable input cells over bounded pages',async t=>{
  const f=await fixture(t),columns=[col('Visit'),col('Stage'),col('Counter','integer','ticks'),...Array.from({length:33},(_,i)=>col('Context '+i))];
@@ -75,7 +75,7 @@ test('typed constants retain their numeral context through calculation, recalcul
  assert.deepEqual(page.rows.map(r=>r.cells.slice(2)),[['12/1','3/1'],['37/6','1/12']]);
  assert.deepEqual((await f.m.read(result)).content.calculation,c);
  const inspected=await f.m.measurements.inspect({ref:result,selector:{kind:'cell',page:0,row:1,column:2}});assert.deepEqual(inspected.exact,{numerator:'37',denominator:'6'});assert.equal(inspected.derivedSources[0].ref.id,source.id);
- const table=await retainedTable(f.m,{ref:result,selection:{columns:[0,2,3],offset:0,count:20,includeExcluded:false}});assert.equal(table.rows[1].cells[1],'37/6');
+ const table=await retainedTable(f.m,{ref:result,selection:{columns:[0,2,3],offset:0,count:20,includeExcluded:false}});assert.equal((await retainedTablePage(f.m,{ref:result,table})).table.rows[1].cells[1],'37/6');
  const legacy=structuredClone(c);legacy.steps[0].right=constant('10');const next=await f.m.dataset({recordId:f.recordId,title:'Decimal reinterpretation explicitly revised',id:result.id,expectedRevision:result.revision,calculation:legacy});assert.equal((await f.m.datasetPage(next)).rows[0].cells[2],'16/1');assert.equal((await f.m.datasetPage(result)).rows[0].cells[2],'12/1');
  const numeric=await f.dataset('state,value\na,10\nb,20',[col('state'),{...col('value','radix'),radix:6}]);const plot=await f.m.plot({recordId:f.recordId,title:'Exact senary coordinates',dataset:numeric,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:1,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'safe'}});assert.deepEqual(await plottedY(f.m,plot.figure),[6,12]);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'typed-restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));assert.deepEqual(await retainedTable(restored,{ref:result,selection:table.selection}),table);assert.deepEqual((await restored.read(result)).content.calculation,c);await restored.verify();

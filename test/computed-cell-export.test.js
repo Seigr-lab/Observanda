@@ -13,8 +13,7 @@ function fixture(){
  return {doc,read:async()=>doc,datasetColumns:async()=>[column],retainedSchemaPage:async()=>({items:[column],total:1}),datasetPageCount:()=>1,retainedDatasetPage:async()=>({columnIndices:[0],rows})};
 }
 test('mixed public tables distinguish exact, approximate and unavailable values without disclosing source identifiers',async()=>{
- const materials=fixture(),table=await retainedTable(materials,{ref,version:3,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
+ const materials=fixture(),table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
  let exported='';for await(const part of retainedTableHTML(materials,{source:ref,table}))exported+=part;
  for(const html of [retainedTableView(block,esc),exported]){assert.match(html,/Pearson/i);assert.match(html,/Nearest, ties to even/);assert.match(html,new RegExp('1/1<small[^>]*>Exact computational value'));assert.match(html,new RegExp('7071067811865475/10000000000000000<small[^>]*>Approximate Pearson'));assert.match(html,new RegExp('<td>(<span data-observanda-label="retainedTables:absent">)?Absent(</span>)?</td>'));for(const privateValue of [ref.id,ref.revision,materials.doc.content.aggregation.source.id,'Private research note'])assert.ok(!html.includes(privateValue));}
- await assert.rejects(retainedTable(materials,{ref,version:2,selection:{columns:[0],offset:0,count:3,includeExcluded:false}}),{code:'DATASET_TABLE'});
 });

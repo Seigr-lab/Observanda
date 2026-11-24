@@ -46,7 +46,7 @@ test('edit and publish a grouped laboratory table alongside one permitted retain
   const upload=await materials.startImport({recordId:record.id,name:'measurements.csv',size:csv.length});
   await materials.appendImport(upload.id,0,[csv]);
   const ref=await materials.dataset({recordId:record.id,title:'Source observations',artifact:await materials.finishImport(upload.id),columns:['Station','Measured','pin'].map(label=>defaultColumn({label}))});
-  const selected=await retainedTable(materials,{ref,selection:{columns:[0,1],offset:0,count:1,includeExcluded:false},version:3});
+  const selected=await retainedTable(materials,{ref,selection:{columns:[0,1],offset:0,count:1,includeExcluded:false}});
   const result=randomUUID();record.results={version:1,statements:[{id:result,kind:'table',title:'Observed concentration',text:'Approved measurements',basis:'retained',source:ref,table:selected,limitations:'One station'}]};
   async function project(){
    const converted=await convertPublicationRecord(fixture.workspace,book,record);

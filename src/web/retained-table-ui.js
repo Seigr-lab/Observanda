@@ -37,7 +37,7 @@ export function retainedTableUI({root,call,esc,field,guard,notify,onTable=()=>{}
   };
   root.querySelector('[data-table-load]').onclick=()=>{void read().then(async table=>{guard();if(root.isConnected){onTable(table);await paintRetainedTable(root.querySelector('[data-table-preview]'),{call,ref:source,table,esc,guard});}}).catch(error=>notify(error.message,true));};
   await schema(0);if(request!==generation||!root.isConnected)return;
-  if(table){if(table.version===3)await paintRetainedTable(root.querySelector('[data-table-preview]'),{call,ref:source,table,esc,guard});else root.querySelector('[data-table-preview]').innerHTML=retainedTableView(table,esc,{message:tableText});}
+  if(table)await paintRetainedTable(root.querySelector('[data-table-preview]'),{call,ref:source,table,esc,guard});
  }
  function selected(){
   if(!selection)return null;
@@ -48,7 +48,7 @@ export function retainedTableUI({root,call,esc,field,guard,notify,onTable=()=>{}
  }
  async function read(){
   if(!source||!root.querySelector('[data-table-offset]'))throw Error(tableText('invalid'));
-  const selectedValue=selected(),request=generation,requested=JSON.stringify(selectedValue),table=await call('retained-table',{ref:source,selection:selectedValue,version:3});
+  const selectedValue=selected(),request=generation,requested=JSON.stringify(selectedValue),table=await call('retained-table',{ref:source,selection:selectedValue});
   guard();if(request!==generation||requested!==JSON.stringify(selected()))throw Error(tableText('invalid'));return table;
  }
  return {load,read,selected,stop(){generation++;}};

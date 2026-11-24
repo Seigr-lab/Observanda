@@ -18,17 +18,16 @@ function fixture({approximate=true}={}){
 }
 const selection={columns:[2,0,1],offset:0,count:1,includeExcluded:false};
 
-test('uncertainty method, role and numerical policy follow selected columns in retained and paged readers',async()=>{
+test('uncertainty method, role and numerical policy follow selected columns in query windows',async()=>{
  const materials=fixture();
- for(const version of [1,2]){const table=await retainedTable(materials,{ref,version,selection});assert.equal(validRetainedTable(table),true);assert.match(table.headers[0],/combined standard uncertainty/);assert.match(table.headers[0],/80 working digits; half-even; mathjs/);assert.match(table.headers[1],/nominal value/);assert.match(table.headers[2],/combined variance/);assert.match(table.headers[2],/length\^2/);}
- const table=await retainedTable(materials,{ref,version:3,selection});let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
- assert.deepEqual(block.formats.map(f=>f.statisticalUncertainty.role),['standard','nominal','variance']);const view=retainedTableView(block,esc);assert.match(view,/First-order covariance propagation/);assert.match(view,/Approximate square root; 80 working digits/);assert.ok(view.includes(materials.rows[0].cells[2]));
+ const table=await retainedTable(materials,{ref,selection});assert.equal(validRetainedTable(table),true);let block;for await(const item of retainedTableBlocks(materials,{ref,table}))block=item.table;
+ assert.deepEqual(block.formats.map(f=>f.statisticalUncertainty.role),['standard','nominal','variance']);const view=retainedTableView(block,esc);assert.match(view,/First-order covariance propagation/);assert.match(view,/Approximate square root; 80 working digits/);assert.ok(view.includes(materials.rows[0].cells[2]));const headers=[...view.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map(match=>match[1]);assert.match(headers[0],/combined standard uncertainty/);assert.match(headers[0],/80 working digits; half-even; mathjs/);assert.match(headers[1],/nominal value/);assert.match(headers[2],/combined variance/);assert.match(headers[2],/length\^2/);
 });
 
 test('published uncertainty tables stream complete values and exclude private model identities and resource settings',async()=>{
  const materials=fixture(),long='7'.repeat(9001),cell={format:'dataset-cell',version:1,characters:long.length,sha256:'d'.repeat(64),parts:{format:1,kind:'cell-text',root:{count:1,height:1,hash:'e'.repeat(64),key:'f'.repeat(64)},count:1,chunkSize:16}},windows=[];materials.rows[0].cells[0]=cell;
  materials.readDatasetCell=async(selected,{offset,limit})=>{assert.deepEqual(selected,cell);windows.push({offset,limit});const text=long.slice(offset,offset+limit);return {text,next:offset+text.length<long.length?offset+text.length:null};};
- const table=await retainedTable(materials,{ref,version:3,selection:{...selection,columns:'all'}});let html='';for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;
+ const table=await retainedTable(materials,{ref,selection:{...selection,columns:'all'}});let html='';for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;
  assert.ok(html.includes('<td>'+long+'</td>'));assert.ok(html.includes(materials.rows[0].cells[2]));assert.match(html,/combined variance/);assert.match(html,/Approximate square root; 80 working digits; half-even; mathjs/);assert.match(html,/length\^2/);assert.equal(windows.length,3);assert.ok(windows.every(w=>w.limit<=4096));
  for(const privateValue of [ref.id,definition.id,analysis.id,definition.revision,analysis.revision,cell.sha256,cell.parts.root.key,'maxBits','resourcePolicy','statisticalUncertainty'])assert.ok(!html.includes(privateValue));
 });
