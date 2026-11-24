@@ -21,6 +21,9 @@ import {revisionId} from './web/revision-model.js';
 import {reconcilePdfPlacements} from './web/pdf-placement-review.js';
 import {validPdfDocumentHeader,validPdfSection} from './web/pdf-layout-model.js';
 const bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
+// A removed document's current revision records its lifecycle (version 2).
+// Removed documents without it were written only before the first release.
+const checkLifecycle=(value,removed)=>{if(value.version!==2){if(removed)throw new AppError('ACCESS_UPGRADE');return;}if(value.lifecycle.archived!==removed)bad();};
 const invalid=()=>{throw new AppError('INVALID');};
 const hash=value=>digest(serialize(value));
 const ordinal=value=>String(value).padStart(16,'0');
@@ -121,7 +124,7 @@ export class PdfDocumentStore{
   if(revision!==null&&!revisionId(revision))invalid();
   const {id}=head,selected=revision??head.revision;
   if(selected!==head.revision&&!await this.index(id).find({root:head.versions},selected))throw new AppError('NOT_FOUND');
-  const value=await this.revision(id,selected);if(selected===head.revision&&value.version===2&&value.lifecycle.archived!==head.removed)bad();
+  const value=await this.revision(id,selected);if(selected===head.revision)checkLifecycle(value,head.removed);
   return {revision:selected,header:value.header,count:value.order?.count??0,sequence:head.sequence,currentRevision:head.revision,...(value.starter?{starter:value.starter}:{})};
  }
  async open(id,{revision=null}={}){return this.openHead(await this.head(id),revision);}
@@ -189,7 +192,7 @@ export class PdfDocumentStore{
   if(receipt){if(!exact(receipt,'fingerprint,revision')||!revisionId(receipt.revision))bad();if(receipt.fingerprint!==fingerprint)throw new AppError('MODULE_REPLAY');await this.revision(id,receipt.revision);return {revision:receipt.revision,replayed:true};}
   let previous=null,current;
   if(expectedRevision===null){if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
-  else{previous=await this.head(id,{removed:operation.type==='restore-document'});if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');if(operation.type==='restore-document'&&!previous.removed)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));if(current.version===2&&current.lifecycle.archived!==previous.removed)bad();}
+  else{previous=await this.head(id,{removed:operation.type==='restore-document'});if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');if(operation.type==='restore-document'&&!previous.removed)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));checkLifecycle(current,previous.removed);}
   const format=operation.type.startsWith('template-')?9:operation.type==='duplicate'?7:requiredPdfDomainFormat(operation);if(format>1)await requirePdfDomainFormat(this.store,format);
   const index=this.index(id),orderIndex=this.index(id),tree=new RecordValueTree(new PdfBlocks(this.store,id)),directory=await this.directory();
   const put=async(section,position)=>{if(requiredPdfDomainFormat({section})===10&&format<10)await requirePdfDomainFormat(this.store,10);for(const image of section.images??[])await new PdfDocumentImages(this.store,id).descriptor(image.asset);const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
@@ -303,10 +306,8 @@ export class PdfDocumentStore{
    signal?.throwIfAborted();const id=key.slice('pdf:head:'.length),head=await this.head(id,{removed:true}),listed=await directoryIndex.find(directory,id);
    if(head.removed?listed:!listed||listed.revision!==head.revision)bad();
    const archivedRow=await archiveIndex.find(archive,id),current=await this.revision(id,head.revision);
-   if(current.version===2&&current.lifecycle.archived!==head.removed)bad();
-   // Legacy removed v1 documents remain readable by explicit ID. They predate
-   // the archive directory; new lifecycle editions must always be indexed.
-   if(!head.removed&&archivedRow||archivedRow&&archivedRow.revision!==head.revision||head.removed&&current.version===2&&!archivedRow)bad();
+   checkLifecycle(current,head.removed);
+   if(!head.removed&&archivedRow||archivedRow&&archivedRow.revision!==head.revision||head.removed&&!archivedRow)bad();
    if(archivedRow)archived++;
    const index=this.index(id);let count=0,currentFound=false;
    for await(const entry of index.entries({root:head.history})){

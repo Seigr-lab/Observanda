@@ -56,14 +56,15 @@ test('PDF archive pages use the authenticated directory and reject missing, stal
  const headKey='pdf:head:'+first.id;data.delete(headKey);await assert.rejects(d.verify(),{code:'CATALOGUE_DAMAGED'});data.set(headKey,first);assert.deepEqual(await d.verify(),{documents:1,editions:79});
 });
 
-test('legacy removed v1 PDF documents remain explicitly recoverable without a migration or an archive read write',async()=>{
+test('removed PDF documents without a lifecycle revision are refused as an earlier format without changing storage',async()=>{
  const {documents:d,data}=memory(),create=creation('Legacy retained report'),saved=await d.change(create),head=await d.head(create.id),index=d.index(create.id),directoryIndex=d.index('directory');
- // The old remove protocol kept the v1 content hash and appended that same
- // edition to history. It had no archive directory.
+ // The remove protocol before the first release kept the v1 content hash and
+ // appended that same edition to history. It had no archive directory.
  head.sequence++;head.history=await index.change(head.history,String(head.sequence).padStart(16,'0'),saved.revision);await index.flush(head.history);head.removed=true;data.set('pdf:head:'+create.id,head);
  const directory=await d.directory();directory.root=await directoryIndex.remove(directory.root,create.id);await directoryIndex.flush(directory.root);data.set('pdf:directory',directory);
- const before=structuredClone([...data]);assert.deepEqual(await d.archive(),{items:[],next:null});assert.equal((await d.openArchived(create.id)).revision,saved.revision);assert.deepEqual([...data],before);assert.deepEqual(await d.verify(),{documents:0,editions:2});
- const restored=await d.change(command(create.id,saved.revision,'restore-document'));assert.notEqual(restored.revision,saved.revision);assert.equal((await d.open(create.id,{revision:saved.revision})).header.name,create.operation.header.name);assert.deepEqual(await d.verify(),{documents:1,editions:3});
+ const before=structuredClone([...data]);assert.deepEqual(await d.archive(),{items:[],next:null});
+ await assert.rejects(d.openArchived(create.id),{code:'ACCESS_UPGRADE'});await assert.rejects(d.verify(),{code:'ACCESS_UPGRADE'});
+ await assert.rejects(d.change(command(create.id,saved.revision,'restore-document')),{code:'ACCESS_UPGRADE'});assert.deepEqual([...data],before);
 });
 
 test('PDF domain archive transitions roll back atomically while retained exports and unrelated objects remain readable',{timeout:120000},async t=>{
