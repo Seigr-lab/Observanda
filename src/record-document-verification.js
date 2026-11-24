@@ -34,7 +34,7 @@ export async function verifyRecordDocument(store,row,metadata,summaries,media,{s
   }
   const expected=await recordDocumentSummary(document,header,encoding,{signal,collections:row.collections}),{position,queryRevision,summaryRevision,...stored}=row;
   void position;void queryRevision;void summaryRevision;
-  for(const key of ['notebookId','share','updatedAt','occurredOn','template','cardItems'])if(row[key]===undefined)delete expected[key];
+  if(row.occurredOn===undefined)delete expected.occurredOn;
   if(digest(revisionText(stored))!==digest(revisionText(expected)))fail();
   for await(const ref of document.items(['figures'],{signal}))await validateFigureSources(store.workspace,{figures:[await document.tree.read(ref.value)]});
   if(media)for await(const ref of document.items(['attachments'],{signal}))await media.record({attachments:[await document.tree.read(ref.value)]});

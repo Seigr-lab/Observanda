@@ -666,7 +666,6 @@ export class ResearchMaterials {
    let figure=null;
    if(head.figureId){
     const position=await new RecordMemberCollections(store).position(owner,'figures',head.figureId);if(position>=0)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>(await document.field(['figures',String(position)],{signal})).value);
-    else if(!owner.collections&&!owner.cardItems)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>{for await(const item of document.items(['figures'])){signal?.throwIfAborted();if((await document.tree.selected(item.value,['id'])).value===head.figureId)return document.tree.read(item.value);}return null;});
    }
    const file=head.kind==='artifact'?(await this.read(head)).content:null;
    statuses.push({...head,...(file?{file:{name:file.name,size:file.size,sha256:file.sha256,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(file.sourcePurpose?{sourcePurpose:file.sourcePurpose}:{})}}:{}),changed:[],changedCount:null,dependencyStatus:'unchecked',figureState:head.figureHash?figure?figureFingerprint(figure)===head.figureHash?'matches':'edited':'not-attached':null});

@@ -21,7 +21,7 @@ export const validMember=row=>row&&id(row.id)&&revision(row.revision)&&id(row.no
  (row.occurredOn===undefined||validRecordDate(row.occurredOn))&&
  (typeof row.updatedAt==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(row.updatedAt)&&Number.isFinite(Date.parse(row.updatedAt)))&&
  (row.template===null||id(row.template.id)&&typeof row.template.label==='string'&&row.template.label.length<=160)&&
- (row.cardItems===undefined||row.cardItems&&Object.keys(row.cardItems).sort().join()==='attachments,contributors,figures,relations'&&Object.values(row.cardItems).every(values=>Array.isArray(values)&&values.every(id)&&new Set(values).size===values.length))&&
+ (row.collections?row.cardItems===undefined:row.cardItems&&Object.keys(row.cardItems).sort().join()==='attachments,contributors,figures,relations'&&Object.values(row.cardItems).every(values=>Array.isArray(values)&&values.every(id)&&new Set(values).size===values.length))&&
  (row.queryRevision===undefined||revision(row.queryRevision))&&
  (row.summaryRevision===undefined||revision(row.summaryRevision)&&revision(row.queryRevision))&&
  (row.collections?validMemberCollections(row.collections)&&row.sections===undefined&&row.cardItems===undefined:Array.isArray(row.sections)&&row.sections.every(id))&&

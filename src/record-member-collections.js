@@ -88,7 +88,7 @@ export class RecordMemberCollections extends ObjectIndex{
  async retain(row){
   if(row.collections)return row;
   // Encoding choice only: no workload is rejected at this boundary.
-  if(!row.cardItems||memberCollectionFields.reduce((n,field)=>n+memberCollectionCount(row,field),0)<=64)return row;
+  if(memberCollectionFields.reduce((n,field)=>n+memberCollectionCount(row,field),0)<=64)return row;
   await this.persistWith(store=>requireMemberCollections(store.db));const collections={};
   for(const field of memberCollectionFields)collections[field]=await this.build(field==='sections'?row.sections:row.cardItems[field]);
   const {sections,cardItems,...rest}=row;void sections;void cardItems;return {...rest,collections};

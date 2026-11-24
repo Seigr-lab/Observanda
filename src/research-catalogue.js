@@ -604,7 +604,6 @@ export class ResearchCatalogue{
    }
    const record=await this.record(row.id,row.revision),{position,queryRevision,summaryRevision,...stored}=row,expected=summary(record);void position;void queryRevision;void summaryRevision;
    if(row.occurredOn===undefined)delete expected.occurredOn;
-   if(row.cardItems===undefined)delete expected.cardItems;
    if(hash(stored)!==hash(expected))fail();
    if(media)await media.record(record);
    await validateFigureSources(this.workspace,record);
