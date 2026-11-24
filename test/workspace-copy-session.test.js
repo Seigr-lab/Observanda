@@ -12,7 +12,7 @@ import {withWorkspaceCopySession} from '../src/workspace-copy-session.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {captureWorkspaceCopyDirectory} from '../src/workspace-copy-directory.js';
 import {workspaceEncryptedCopyAccess} from '../src/workspace-encrypted-copy.js';
-import {workspaceManifest} from '../src/locations.js';
+import {workspaceManifest} from './workspace-copy-helpers.js';
 import {readAccess,verifyAccess} from '../src/access.js';
 import {clearVault,encrypted} from '../src/encryption.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';

@@ -27,7 +27,6 @@ export function requiredPdfDomainFormat({header,section}={}){
  if(header&&(Object.hasOwn(header,'press')||Object.hasOwn(header,'outputProfile'))||section?.notes?.some(note=>note.kind==='page-footnote')||section?.research&&Object.hasOwn(section.research,'blockId'))return 2;
  return 1;
 }
-export const requiresPdfDomainFormat=value=>requiredPdfDomainFormat(value)>1;
 async function ownerValue(store){
  if(!store.workspace?.vault)bad();const owner=await store.object('owner'),expected=moduleDomainOwner(store.workspace,store.namespaceId);
  if(!owner||store.domain!=='pdf'||Object.keys(owner).sort().join()!==['domain','namespaceId','projectId','vaultId','version',...(Object.hasOwn(owner,'pdfFormat')?['pdfFormat']:[])].sort().join()||owner.domain!==store.domain||owner.version!==expected.version||owner.projectId!==expected.projectId||owner.namespaceId!==store.namespaceId||owner.vaultId!==store.workspace.vault.id)bad();

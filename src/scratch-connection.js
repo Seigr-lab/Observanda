@@ -50,4 +50,3 @@ export function withScratchConnections(operation){
 // scratch owner of its own, opened outside any database scope.
 export function withSeparateScratchConnections(operation){return withoutDatabaseScope(()=>context.run(new ScratchOwner(null),operation));}
 export const scratchConnectionOwner=()=>context.getStore();
-export const scratchWorkConnection=signal=>{const owner=context.getStore();if(!owner)throw new AppError('INVALID');return owner.acquire(signal);};

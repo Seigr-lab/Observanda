@@ -28,10 +28,6 @@ export const moduleEntityBytes=entity=>{
  while((offset=text.indexOf('\n',offset+1))!==-1)lines++;
  return Buffer.byteLength(text)+4*lines;
 };
-export const moduleCurrentBytes=(workspaceId,revision,members)=>{
- const count=Array.isArray(members)?members.length:members.count,bytes=Array.isArray(members)?members.reduce((sum,m)=>sum+m.bytes,0):members.bytes;
- return Buffer.byteLength(serialize({formatVersion:1,workspaceId,revision,entities:[]}))+bytes+(count?2*count+2:0);
-};
 // Calculators with a structured engine or a calculation policy need catalogue features that
 // lock the catalogue format table until their transaction commits. In a project domain
 // transaction they run after the final check, just before commit (see project-domains.js).

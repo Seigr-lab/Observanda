@@ -8,7 +8,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
-import {readDatasetExchange} from '../../src/dataset-exchange-reader.js';
+import {readDatasetExchange} from '../dataset-exchange-reading.js';
 import {openEvidence} from './record-editor-helper.js';
 
 test('export selected fields and observations, download the checked archive and retire the prepared copies',async({page})=>{

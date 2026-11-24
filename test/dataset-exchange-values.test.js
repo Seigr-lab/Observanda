@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {DATASET_TEXT_CHARS} from '../src/dataset-cell-storage.js';
 import {datasetTextStream} from '../src/dataset-text-stream.js';
-import {datasetExchangeSelection,delimitedDataset} from '../src/dataset-exchange-table.js';
+import {datasetExchangeSelection,exchangeColumns,exchangeRows,exchangeCells} from '../src/dataset-exchange-table.js';
 
 async function text(stream){
  let result='';
@@ -23,7 +23,7 @@ test('long source spelling preserves a surrogate crossing native parts and check
  await assert.rejects(text(datasetTextStream(materials,cell)),{code:'MATERIAL_MISSING'});
 });
 
-test('delimited exchange seeks the chosen rows and columns and treats an excluded observation as its original position',async()=>{
+test('exchange reading seeks the chosen rows and columns and treats an excluded observation as its original position',async()=>{
  const source={kind:'dataset',content:{datasetFormat:3,schemaIndex:{count:3210},rowCount:1000000}};
  const request=datasetExchangeSelection(source,{offset:999997,count:3,columns:[{offset:3209,count:1}],includeExcluded:false});
  const read=[];
@@ -35,7 +35,10 @@ test('delimited exchange seeks the chosen rows and columns and treats an exclude
   retainedSchemaPage:async(_doc,{offset,limit})=>{read.push([offset,limit]);return {items:[{name:'=formula'}]};},
   sequences:{validate(){},page:async(_index,{offset,limit})=>{read.push([offset,limit]);return {items:[{kind:'string',value:'9007199254740993'}]};}}
  };
- assert.equal(await text(delimitedDataset(materials,source,request,{format:'csv'})),'"\'=formula"\r\n"9007199254740993"\r\n"9007199254740993"\r\n');
+ const columns=[],rows=[];
+ for await(const {column} of exchangeColumns(materials,source,request))columns.push(column.name);
+ for await(const {index,row} of exchangeRows(materials,source,request)){const values=[];for await(const {cell} of exchangeCells(materials,source,row,request))values.push(cell.value);rows.push([index,values]);}
+ assert.deepEqual(columns,['=formula']);assert.deepEqual(rows,[[999997,['9007199254740993']],[999999,['9007199254740993']]]);
  assert.deepEqual(read,[[3209,1],[3209,1],[3209,1]]);
  assert.throws(()=>datasetExchangeSelection(source,{...request,columns:[{offset:3209,count:2}]}),{code:'INVALID'});
 });

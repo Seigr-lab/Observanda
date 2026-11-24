@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {workspaceManifest} from '../src/locations.js';
+import {workspaceManifest} from './workspace-copy-helpers.js';
 import {sampleNotebook} from '../src/sample.js';
 import {temporaryWriteName,temporaryStreamName} from '../src/storage-temporary.js';
 

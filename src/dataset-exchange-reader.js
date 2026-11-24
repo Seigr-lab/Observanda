@@ -126,10 +126,3 @@ export async function* validatedExchangeFrames(chunks,{signal}={}){
  }
 }
 
-export async function readDatasetExchange(chunks,stage,options){
- let receipt;
- for await(const frame of validatedExchangeFrames(chunks,options)){
-  if(frame.type==='complete')receipt=frame;else await stage(frame);
- }
- return receipt;
-}

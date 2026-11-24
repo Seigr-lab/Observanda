@@ -4,7 +4,8 @@ import {mkdtemp,mkdir,writeFile,readFile,rename,symlink,readdir,rm} from 'node:f
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../src/sample.js';
-import {copyWorkspaceTo,prepareCopyDestination,workspaceManifest} from '../src/locations.js';
+import {prepareCopyDestination} from '../src/locations.js';
+import {copyWorkspaceTo,workspaceManifest} from './workspace-copy-helpers.js';
 import {withNativeDestination} from '../src/native-destination.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';

@@ -11,7 +11,8 @@ import {RecordQueryDocuments} from '../src/record-query-documents.js';
 import {RecordValueTree} from '../src/record-value-tree.js';
 import {RecordBlockStore} from '../src/record-block-store.js';
 import {withChangedRecordTerms,withRecordTerms} from '../src/record-search-stream.js';
-import {documentTerms,referenceTerm} from '../src/record-search-terms.js';
+import {referenceTerm} from '../src/record-search-terms.js';
+import {documentTerms} from './record-search-oracle.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-search-changes-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);

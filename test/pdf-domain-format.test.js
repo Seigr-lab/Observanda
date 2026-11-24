@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {PdfDocumentStore} from '../src/pdf-document-store.js';
 import {checkProjectDomainOwner} from '../src/project-domain-registry.js';
-import {requiresPdfDomainFormat,requirePdfDomainFormat} from '../src/pdf-domain-format.js';
+import {requiredPdfDomainFormat,requirePdfDomainFormat} from '../src/pdf-domain-format.js';
 import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
 import {pdfStructureDefaults,pdfCaptionDefaults} from '../src/web/pdf-structure-model.js';
 import {pdfNoteCall} from '../src/web/pdf-notes-model.js';
@@ -155,7 +155,7 @@ test('ordinary PDF editions retain their exact legacy owner and both ownership s
   await f.change({id:command.id,commandId:randomUUID(),expectedRevision:saved.revision,operation:{type:'section',section:{...command.operation.section,notes:[{id:randomUUID(),kind:'footnote',block:0,content:'Existing section note'}]}}});
   assert.deepEqual(f.values.get('owner'),f.owner);assert.equal((await f.run(store=>new PdfDocumentStore(store).verify())).documents,1);
  }
- assert.equal(requiresPdfDomainFormat({header:{outputProfile:'a-future-explicit-profile'}}),true);
+ assert.ok(requiredPdfDomainFormat({header:{outputProfile:'a-future-explicit-profile'}})>1);
 });
 
 test('new PDF fields acquire the owner marker before immutable writes, retain it for history and roll back atomically',async()=>{

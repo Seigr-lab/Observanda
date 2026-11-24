@@ -116,16 +116,6 @@ const text=(v,max=1000)=>typeof v==='string'&&v.length<=max&&!/[\u0000-\u0008\u0
 const required=(v,max)=>text(v,max)&&v.trim();
 export const materialRef=validMaterialReference;
 const refOf=doc=>({kind:doc.kind,id:doc.id,revision:digest(revisionText(doc))});
-function integerSpelling(value,radix=10){
- if(typeof value!=='string'||!Number.isInteger(radix)||radix<2||radix>36||! /^[+-]?[0-9a-z]+$/i.test(value))fail();
- const source=value.replace(/^[+-]/,'').toLowerCase();
- for(const digit of source)if(parseInt(digit,36)>=radix)fail();return source;
-}
-export function exactInteger(value,radix=10){
- const source=integerSpelling(value,radix);let result=0n;
- for(const digit of source)result=result*BigInt(radix)+BigInt(parseInt(digit,36));
- return value.startsWith('-')?-result:result;
-}
 export function validColumns(columns,width){
  return Array.isArray(columns)&&columns.length===width&&columns.every(c=>
   c&&(c.weightedFit===undefined||validWeightedFitContext(c.weightedFit))&&(c.coordinateAlignment===undefined||validCoordinateAlignmentColumn(c.coordinateAlignment))&&(c.coordinateAxis===undefined||validCoordinateAlignmentAxis(c.coordinateAxis))&&(c.cusum===undefined||validCusumDescriptor(c.cusum))&&(c.spectrum===undefined||validSpectrumDescriptor(c.spectrum))&&validColumnCoordinateFrame(c)&&(c.statisticalUncertainty===undefined||validStatisticalUncertaintyDescriptor(c.statisticalUncertainty))&&(c.synchronization===undefined||validClockSynchronizationDescriptor(c.synchronization))&&(c.computation===undefined||validComputation(c.computation))&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&

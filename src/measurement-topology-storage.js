@@ -5,7 +5,7 @@ import {AppError} from './errors.js';
 import {DatasetResourceBudget,numericalOperation} from './dataset-resource-budget.js';
 import {DatasetResourceError} from './web/dataset-resource-policy.js';
 import {withScalarPolicy,scalarTextReference,isScalarResourceFailure} from './web/measurement-scalar-policy.js';
-import {MeasurementTopologyError,validTopologyDefinition,validTopologyKey,validTopologyVertex,validTopologyEdge,topologyCount,TOPOLOGY_PAGE_SIZE} from './web/measurement-topology-model.js';
+import {MeasurementTopologyError,validTopologyDefinition,validTopologyVertex,validTopologyEdge,topologyCount,TOPOLOGY_PAGE_SIZE} from './web/measurement-topology-model.js';
 import {evaluateTopology} from './measurement-topology.js';
 import {withScratch} from './scratch-work.js';
 import {validIndexRef} from './object-index.js';
@@ -82,10 +82,6 @@ export async function retainTopologyValue(materials,cell,definition,save,options
 }
 export async function topologyValuePage(materials,value,{collection='vertices',offset=0,limit=TOPOLOGY_PAGE_SIZE,...options}={}){
  validateTopologyValue(materials,value);if(!collections.includes(collection)||!topologyCount(offset)||offset>value.topology[collection].count||!Number.isSafeInteger(limit)||limit<1||limit>TOPOLOGY_PAGE_SIZE)throw new AppError('INVALID');const c=context(value.definition,options),page=await readPage(materials,value,collection,offset,limit,c);await c.current();return {...page,items:page.items.map((item,index)=>({...item,index:offset+index})),collection,definition:value.definition,supported:true,complete:true};
-}
-export async function readTopologyItem(materials,value,{collection='vertices',index,...options}={}){if(!topologyCount(index))throw new AppError('INVALID');const page=await topologyValuePage(materials,value,{collection,offset:index,limit:1,...options});if(!page.items.length)throw new AppError('INVALID');return {...page.items[0],collection};}
-export async function findTopologyKey(materials,value,{collection='vertices',key,...options}={}){
- validateTopologyValue(materials,value);if(!collections.includes(collection)||!validTopologyKey(key))throw new AppError('INVALID');const c=context(value.definition,options),count=value.topology[collection].count;for(let offset=0;offset<count;offset+=TOPOLOGY_PAGE_SIZE){const page=await readPage(materials,value,collection,offset,TOPOLOGY_PAGE_SIZE,c);for(let i=0;i<page.items.length;i++)if(page.items[i].key===key){await c.current();return {...page.items[i],index:offset+i,collection};}}throw new MeasurementTopologyError('MEASUREMENT_TOPOLOGY_KEY');
 }
 export async function verifyTopologyValue(materials,value,options={}){
  validateTopologyValue(materials,value);const c=context(value.definition,options),digest=digests(value.definition),cached={vertices:null,edges:null};try{

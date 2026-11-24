@@ -9,7 +9,8 @@ import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '..
 import {clearVault} from '../src/encryption.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE} from '../src/research-catalogue.js';
-import {browseFolders,createFolder,initializeLocation,inspectLocation,probeLocation,copyPlan,copyWorkspace,workspaceManifest,readPreference,rememberLocation} from '../src/locations.js';
+import {browseFolders,createFolder,initializeLocation,inspectLocation,probeLocation,copyPlan,copyWorkspace,readPreference,rememberLocation} from '../src/locations.js';
+import {workspaceManifest} from './workspace-copy-helpers.js';
 // The database travels as its own archive; every other file is copied byte for byte.
 const copiedOnly=files=>files.filter(file=>![CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path));
 const copiedFiles=async root=>copiedOnly(await workspaceManifest(root));

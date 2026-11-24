@@ -6,7 +6,6 @@ import path from 'node:path';
 import {intakeFixture} from './fixtures/local-intake.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {privateDirectory,Workspace} from '../src/storage.js';
-import {withMetadataBatch,withFlushedMetadataBatch} from '../src/metadata-batch.js';
 import {FileContent} from '../src/file-content.js';
 import {checkpointedFileName} from '../src/checkpointed-file-copy.js';
 import {recordOwnerTransferFingerprint,writeRecordOwnerTransfer,setRecordOwnerFence,withRecordOwnerTransferWrite} from '../src/record-owner-transfer-state.js';
@@ -111,32 +110,5 @@ test('resource adoption follows transactions on reused connections and explicit 
   await ws.withLock(()=>ws.catalogue(async store=>{assert.equal(store.db,writeDb);assert.equal(await adoptRecordOwnerResource(store,state(value)),true,'The next writer must protect adopted allocations');}));
   await cancel(active);await assertRetained(value);
   await ws.withLock(()=>ws.catalogue(async store=>{assert.equal(store.db,writeDb);assert.equal(await recordOwnerResourcesTracking(store),false);}));
-
-  // Durable batch owners may explicitly commit inside the same writer context.
-  // A failed boundary callback must invalidate both its former and inner proofs,
-  // including the path with no metadata buffer to flush.
-  for(const buffered of [false,true]){
-   const next=receipt(),kept={data:'adopted after explicit commit '+buffered},requested=Promise.withResolvers(),installed=Promise.withResolvers();
-   // Schedule the independent writer outside the held writer's async context.
-   const staging=requested.promise.then(()=>install(next,kept));staging.then(installed.resolve,installed.reject);
-   try{
-    await ws.withLock(()=>ws.catalogue(async store=>{
-     assert.equal(await recordOwnerResourcesTracking(store),false);
-     const operation=async()=>{
-      await assert.rejects(withFlushedMetadataBatch(store,async()=>{
-       await store.db.run('COMMIT');requested.resolve();await installed.promise;
-       await store.db.run('BEGIN');await store.db.lock();
-       assert.equal(await recordOwnerResourcesTracking(store),true,'A committed boundary must not reuse its prior inactive proof');
-       throw Error('Injected boundary callback failure');
-      }),/Injected boundary callback failure/);
-      assert.equal(await recordOwnerResourcesTracking(store),true,'A failed callback must not restore the former proof');
-      assert.equal(await adoptRecordOwnerResource(store,state(kept)),true);
-     };
-     if(buffered)await withMetadataBatch(store,operation);else await operation();
-    }));
-   }catch(error){requested.reject(error);throw error;}
-   finally{await staging;}
-   await cancel(next);await assertRetained(kept);
-  }
  });
 });

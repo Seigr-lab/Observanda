@@ -7,7 +7,6 @@ const scalar=spelling=>({spelling,representation:'rational',radix:10});
 const context={version:1,representation:'rational',radix:10};
 function checked(operation){try{return operation();}catch(error){if(isScalarResourceFailure(error)||error.name==='AbortError')throw error;fail();}}
 function probability(value,policy,budget){const exact=validatePolicyScalar(value,policy,{budget});if(exact.numerator<0n||exact.numerator>exact.denominator)fail();return exact;}
-export function validateQuantileProbability(value,policy,{budget}={}){return checked(()=>probability(value,policy,budget));}
 // Explicit linear interpolation at (k-1)/(n-1), the Type 7 definition described at
 // https://stat.ethz.ch/R-manual/R-devel/library/stats/html/quantile.html .
 // This operation uses exact rationals without floating fuzz or endpoint clamping.

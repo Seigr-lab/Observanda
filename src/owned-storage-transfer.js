@@ -10,7 +10,7 @@ import {projectCopyBoundaries,retainedCopyRoots} from './project-copy-boundaries
 import {realpath} from 'node:fs/promises';
 import {resolveLocation} from './locations.js';
 import {withNativeDestination} from './native-destination.js';
-import {workspaceFiles,hashWorkspaceFile} from './workspace-inventory.js';
+import {hashWorkspaceFile} from './workspace-inventory.js';
 import {workspaceFile,assertRegular,atomicWrite,serialize} from './storage.js';
 import {catalogueBinding,CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION} from './postgres-activation.js';
 import {transferCatalogue,openCatalogue,catalogueArchiveDigest,backupCatalogue,prepareTransferredCatalogue} from './postgres.js';
@@ -148,25 +148,5 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},beforeVer
  });
 }
 
-// Only recovery rechecks a published transfer against a source which may have
-// changed after interruption. Normal copying verifies each file and archive as
-// it is transferred, without reading the database a second time.
-async function verify(source,target,receipt){
- if(receipt.source!==source.root||receipt.destination!==target.root||receipt[ownerId]!==source[ownerId]||receipt.vaultId!==source.vault.id||!receipt.archiveDigest)throw new AppError('STORAGE_COPY');
- return withNativeDestination(target.root,async admitted=>{
- if(!identity(receipt.destinationIdentity)||!identity(receipt.internalIdentity))throw new AppError('STORAGE_COPY');await admitted.admit({identity:receipt.destinationIdentity,internalIdentity:receipt.internalIdentity});admittedReceipt(receipt,admitted);
- for(const storage of [source,target]){
-  const db=await storage.openCatalogue({detached:true});
-  try{if(await catalogueArchiveDigest(db)!==receipt.archiveDigest)throw new AppError('CONFLICT');}finally{await db.close();}
- }
- for await(const file of workspaceFiles(source.root,{includeDatabase:false,projectRoots:retainedCopyRoots(receipt),vault:source.vault})){
-  if(controls.has(file.path))continue;
-  const saved=await admitted.member(path.join(target.root,file.path),(directory,name)=>directory.hash(name));
-  if(saved.bytes!==file.bytes||saved.sha256!==file.sha256)throw new AppError('CONFLICT');
- }
- await admitted.assertNamed();
- });
-}
-
-return {copy,receipt:intent,verify};
+return {copy,receipt:intent};
 }

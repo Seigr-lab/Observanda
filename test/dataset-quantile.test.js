@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateQuantileProbability,quantileSelection,interpolateQuantile} from '../src/dataset-quantile.js';
+import {quantileSelection,interpolateQuantile} from '../src/dataset-quantile.js';
 import {PagedMedian} from '../src/paged-median.js';
 import {DatasetResourceBudget} from '../src/dataset-resource-budget.js';
 import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
@@ -19,7 +19,7 @@ function fixture(options={}){
  return {files,state,writes,settings,sorter:new PagedMedian(settings)};
 }
 test('exact probability retains its declared context and rejects unsupported or out-of-range values even for no observations',()=>{
- for(const p of [scalar('1/2'),scalar('0.5','decimal'),scalar('0.3','radix-fraction',6)]){const before=structuredClone(p);assert.deepEqual(validateQuantileProbability(p,policy()),{numerator:1n,denominator:2n});assert.equal(quantileSelection(0,p,policy()),null);assert.deepEqual(p,before);}
+ for(const p of [scalar('1/2'),scalar('0.5','decimal'),scalar('0.3','radix-fraction',6)]){const before=structuredClone(p);assert.deepEqual(quantileSelection(2,p,policy()),{lower:0,upper:1,weight:scalar('1/2')});assert.equal(quantileSelection(0,p,policy()),null);assert.deepEqual(p,before);}
  for(const p of [scalar('-1/100'),scalar('101/100'),scalar('NaN','decimal'),scalar('0.6','radix-fraction',6),scalar('1/2','binary64'),scalar('1/2','rational',6),{...scalar('1/2'),unexpected:true},scalar({format:'dataset-cell'})])assert.throws(()=>quantileSelection(0,p,policy()),{code:'DATASET_AGGREGATION'});
  for(const n of [-1,1.5,Infinity,NaN,Number.MAX_SAFE_INTEGER+1,'2'])assert.throws(()=>quantileSelection(n,scalar('1/2'),policy()),{code:'DATASET_AGGREGATION'});
 });

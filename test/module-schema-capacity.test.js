@@ -14,7 +14,7 @@ import {ModuleDrafts} from '../src/modules/drafts.js';
 import {ModuleDraftTransfer} from '../src/modules/draft-transfer.js';
 import {writeModuleCheckpoint} from '../src/web/modules/draft-transfer.js';
 import {ModuleReader} from '../src/modules/reader.js';
-import {moduleCurrentBytes,moduleEntityBytes} from '../src/modules/catalogue.js';
+import {serialize} from '../src/storage-format.js';
 import {MODULE_BYTES} from '../src/modules/capacity.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
@@ -26,7 +26,7 @@ test('schema near the 64 MiB single-command boundary can be edited and recovered
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const modules=workspaceModules(f.workspace),command=(expectedRevision,value)=>({workspaceId:book.id,commandId:randomUUID(),action:'category.save',payload:{id,expectedRevision,data:value}}),started=performance.now();
  await modules.execute(command(null,data),{compact:true});const createMs=performance.now()-started;
- const entity=(await new ModuleReader(f.workspace).selected({workspaceId:book.id,id})).entity,admitted=moduleCurrentBytes(book.id,1,{count:1,bytes:moduleEntityBytes(entity)});
+ const entity=(await new ModuleReader(f.workspace).selected({workspaceId:book.id,id})).entity,admitted=Buffer.byteLength(serialize({formatVersion:1,workspaceId:book.id,revision:1,entities:[entity]}));
  assert.ok(admitted>MODULE_BYTES-16384&&admitted<MODULE_BYTES);
  const {drafts,transfer}=moduleDraftOwners(f.workspace,book.id,'resources'),checkpoint={workspaceId:book.id,moduleId:'resources',id:randomUUID(),etag:null,drafts:[{id,type:'category',expectedRevision:1,baseRevision:1,data:{...data,name:'Recovered boundary schema'}}]};
  let largest=0;const before=performance.now();

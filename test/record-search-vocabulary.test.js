@@ -7,7 +7,7 @@ import {RetainedTableIndex} from '../src/retained-table-index.js';
 import {retainSearchVocabulary,verifySearchVocabulary,changedSearchVocabulary} from '../src/record-search-vocabulary.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {recordSearchText} from '../src/web/record-query.js';
-import {documentTerms} from '../src/record-search-terms.js';
+import {documentTerms} from './record-search-oracle.js';
 import {sampleNotebook} from '../src/sample.js';
 import {attemptFixture} from './fixtures/attempts.js';
 function memory(){const nodes=new Map();return {nodes,reads:0,writes:0,async put(kind,value){const raw=serialize(value),revision=digest(raw);assert.ok(Buffer.byteLength(raw)<=65536);nodes.set(kind+':'+revision,raw);this.writes++;return revision;},async read(kind,revision){this.reads++;return JSON.parse(nodes.get(kind+':'+revision));},tree(){return new RecordValueTree(this);}};}

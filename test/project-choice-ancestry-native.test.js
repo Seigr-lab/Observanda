@@ -8,7 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {createNotebook} from '../src/model.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
-import {installDatabaseProvider,scopedDatabaseEnvironment,databaseScope} from '../src/workspace-database-context.js';
+import {installDatabaseProvider,scratchDatabaseEnvironment,databaseScope} from '../src/workspace-database-context.js';
 import {runtimeStorageDirectory} from '../src/database-runtime-environment.js';
 import {withProjectChoiceWork} from '../src/project-choice-work.js';
 import {projectChoiceAncestry} from '../src/project-choice-ancestry.js';
@@ -21,7 +21,7 @@ test('managed ancestry scratch admits its actual volume, encrypts summaries and 
  t.after(async()=>{await clearVault(f?.vault);await runtime.close();detach();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-ancestry-'));await rm(directory,{recursive:true,force:true});});
  f=await encryptedFixture(path.join(directory,'workspace'),createNotebook('Ancestry'));
  await f.workspace.catalogue(async()=>{
-  const environment=scopedDatabaseEnvironment(),physical=runtimeStorageDirectory(environment);assert.ok(physical);assert.notEqual(physical,f.workspace.root);
+  const environment=await scratchDatabaseEnvironment(),physical=runtimeStorageDirectory(environment);assert.ok(physical);assert.notEqual(physical,f.workspace.root);
   const observer=await scratchDatabase(),prototype=Object.getPrototypeOf(observer),run=prototype.run,tables=new Set();let writes=0;
   t.mock.method(prototype,'run',async function(sql,...values){const match=/CREATE TEMP TABLE (obs_work_[a-f0-9]+)/.exec(sql);if(match)tables.add(match[1]);if(sql.startsWith('INSERT INTO pg_temp.obs_work_')){writes++;for(const value of values)if(Buffer.isBuffer(value))assert.equal(value.includes(Buffer.from('Private ancestry marker')),false);}return run.call(this,sql,...values);});
   try{

@@ -12,7 +12,7 @@ import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {ProjectApplication} from '../src/project-application.js';
 import {withWorkspaceCopySession} from '../src/workspace-copy-session.js';
 import {workspaceEncryptedCopyAccess} from '../src/workspace-encrypted-copy.js';
-import {workspaceManifest} from '../src/locations.js';
+import {workspaceManifest} from './workspace-copy-helpers.js';
 import {clearVault} from '../src/encryption.js';
 import {writeContent,FileContent,contentBuffer} from '../src/file-content.js';
 import {verifiedStagingReservationNamespace} from '../src/staging-reservations.js';

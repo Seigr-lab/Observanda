@@ -71,10 +71,3 @@ export async function* exchangeLineFrames(chunks,{signal}={}){
  yield receipt;
 }
 
-export async function readExchangeLines(chunks,accept,options){
- let receipt;
- for await(const frame of exchangeLineFrames(chunks,options)){
-  if(frame.type==='complete')receipt=frame;else await accept(frame);
- }
- return receipt;
-}

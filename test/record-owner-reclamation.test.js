@@ -16,7 +16,7 @@ import {ResearchMaterials} from '../src/research-materials.js';
 import {recordEncoding} from '../src/record-encoding.js';
 import {withRecordDocument} from '../src/record-document.js';
 import {digest} from '../src/storage-format.js';
-import {copyWorkspaceTo} from '../src/locations.js';
+import {copyWorkspaceTo} from './workspace-copy-helpers.js';
 import {retainedHistoryGeneration} from '../src/retained-record-history.js';
 import {verifyRecordOwnerResources} from '../src/record-owner-resources.js';
 const media={get:async()=>{throw Error('Unexpected synthetic media');}};

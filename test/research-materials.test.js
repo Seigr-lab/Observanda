@@ -11,7 +11,7 @@ import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
-import {ResearchMaterials,EVIDENCE_CHUNK,exactInteger} from '../src/research-materials.js';
+import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
 import {recordRevision} from '../src/research.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {researchReference,parseResearchReference} from '../src/web/research-reference.js';
@@ -79,7 +79,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  const schema=[column('Group'),column('Run'),column('Measurement','decimal',{unit:'mV'}),column('Counter','integer',{time:{kind:'counter',reference:'Device start',resolution:'1 tick',uncertainty:'unknown'}}),column('Senary','radix',{radix:6}),column('Order','integer',{time:{kind:'acquisition-order',reference:'Acquisition order',resolution:'1 observation',uncertainty:''}})];
  const dataset=await store.dataset({recordId:run1.id,title:'Measurement source',artifact:tableArtifact,columns:schema});
  const doc=await store.read(dataset);assert.equal(doc.content.rowCount,4000);assert.equal(doc.content.pageIndex.count,Math.ceil(4000/DATASET_ROWS_PER_PAGE));assert.ok(!('rows' in doc.content));
- const table=await store.datasetRows(dataset);assert.equal(table[0].cells[3],large);assert.equal(table[0].cells[4],senary);assert.equal(exactInteger(large),18446744073709551615n);assert.equal(exactInteger('10',6),6n);
+ const table=await store.datasetRows(dataset);assert.equal(table[0].cells[3],large);assert.equal(table[0].cells[4],senary);
  const baseFigure=createFigure();baseFigure.title='Comparison of the recovered observations';
  // These grouped means are repeating fractions. A checked projection must
  // refuse them; approximation is an explicit presentation choice, made only

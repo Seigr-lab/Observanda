@@ -124,6 +124,3 @@ export async function mergeInventoryProjection(plans,resources,row,{work,scope,s
  signal?.throwIfAborted();
 }
 
-export async function projectedInventoryScope(plans,scope,{signal}={}){
- signal?.throwIfAborted();const visible=new Set();for(const {index,head} of plans)for(const place of scope)for await(const {id} of index.entries(head,'scope:'+placeKey(place)+':',{signal}))visible.add(id.slice(-36));signal?.throwIfAborted();return visible;
-}

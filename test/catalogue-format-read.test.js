@@ -2,7 +2,6 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {catalogueFormat} from '../src/catalogue-format.js';
 import {withCatalogueFormatRead} from '../src/catalogue-format-read.js';
-import {withCatalogueCacheBoundary} from '../src/catalogue-context.js';
 const fixture=()=>{
  let version=3,reads=0;const sql=[];
  return {db:{schema:'synthetic_catalogue',async all(query){reads++;sql.push(query);return [{version}];}},get reads(){return reads;},sql,set(value){version=value;}};
@@ -19,13 +18,12 @@ test('format scalar is reused only inside the exact active immutable transaction
  await withCatalogueFormatRead(f.db,async()=>assert.equal(await catalogueFormat(f.db),4));assert.equal(f.reads,3);
  f.set(5);assert.equal(await catalogueFormat(f.db),5);f.set(6);assert.equal(await catalogueFormat(f.db),6);assert.equal(f.reads,5);
 });
-test('format reads reject damaged generations and invalidate at explicit transaction boundaries',async()=>{
+test('format reads reject damaged generations and invalidate when the catalogue changes',async()=>{
  const f=fixture();
  await withCatalogueFormatRead(f.db,async()=>{
   f.set('broken');await assert.rejects(catalogueFormat(f.db),{code:'CATALOGUE_DAMAGED'});
   f.set(3);assert.equal(await catalogueFormat(f.db),3);assert.equal(f.reads,2);
-  await withCatalogueCacheBoundary({db:f.db},async()=>{f.set(4);assert.equal(await catalogueFormat(f.db),4);f.set(5);assert.equal(await catalogueFormat(f.db),5);});
-  assert.equal(await catalogueFormat(f.db),5);assert.equal(await catalogueFormat(f.db),5);assert.equal(f.reads,5);
-  f.db.schema='another_catalogue';f.set(6);assert.equal(await catalogueFormat(f.db),6);assert.equal(f.reads,6);
+  assert.equal(await catalogueFormat(f.db),3);assert.equal(f.reads,2);
+  f.db.schema='another_catalogue';f.set(6);assert.equal(await catalogueFormat(f.db),6);assert.equal(f.reads,3);
  });
 });

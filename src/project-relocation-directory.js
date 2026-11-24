@@ -7,12 +7,6 @@ import path from 'node:path';
 import {AppError} from './errors.js';
 const same=(a,b,keys)=>keys.every(key=>a?.[key]===b?.[key]);
 const identity=['projectId','namespaceId','vaultId'];
-export function assertProjectPresent(value,{projectId,namespaceId}){
- const matches=entry=>projectId!==undefined?entry.projectId===projectId:entry.namespaceId===namespaceId;
- if(value.deleted?.some(matches))throw new AppError('PROJECT_DELETED');
- const moved=value.relocated?.find(matches);
- if(moved){const error=new AppError('PROJECT_MOVED');error.projectId=moved.projectId;error.workspaceId=moved.workspaceId;throw error;}
-}
 export function acceptRelocatedProject(value,entry){
  const prior=value.relocated?.find(item=>item.projectId===entry.projectId);
  if(prior&&!same(prior,entry,identity))throw new AppError('DATABASE_LOCATION');

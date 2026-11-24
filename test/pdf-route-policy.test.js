@@ -1,17 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {pdfDocumentRoutes,pdfDocumentRequest} from '../src/pdf-route-policy.js';
+import {pdfDocumentRequest} from '../src/pdf-route-policy.js';
 import {pdfDocumentRequest as dispatched,executePdfRequest} from '../src/pdf-document-requests.js';
 import {workspaceSnapshotRequest} from '../src/workspace-read-admission.js';
 import {requestLane,RequestAdmission} from '../src/request-admission.js';
 import {projectContentHttp} from '../src/project-content-http.js';
 
 const id='00000000-0000-4000-8000-000000000001';
+const declared=['list','archive','library-query','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download','settings-draft-list','settings-draft-read','composition-proof','template-list','template-read','template-inspect','template-style','template-review','library-details','library-labels','library-review','library-prepare','print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume','settings-draft-save','settings-draft-discard','settings-draft-submit','template-publish','library-pin','library-label-edit','library-batch'];
+const pdfDocumentRoutes=Object.fromEntries(declared.map(name=>[name,pdfDocumentRequest('/api/pdf/'+name)]));
 test('PDF dispatch, snapshot and request admission use the same declared contracts',()=>{
  assert.equal(dispatched,pdfDocumentRequest);assert.equal(Object.keys(pdfDocumentRoutes).length,51);
  for(const [name,route] of Object.entries(pdfDocumentRoutes)){
-  assert.ok(Object.isFrozen(route));
+  assert.ok(route,name);assert.ok(Object.isFrozen(route));
   for(const key of ['method','input','schema','authority','owner','admission','cancellation','output'])assert.equal(typeof route[key],'string',name+': '+key);
   assert.ok(Number.isSafeInteger(route.limit)&&route.limit>0);assert.equal(typeof route.binary,'boolean');assert.equal(route.snapshot,!route.write);
   const pathname='/api/pdf/'+name;assert.equal(pdfDocumentRequest(pathname),route);assert.equal(pdfDocumentRequest(pathname,'GET'),null);

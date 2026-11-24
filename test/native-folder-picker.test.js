@@ -7,7 +7,8 @@ import {createFolderPicker,detectFolderPicker,dialogInvocation,dialogResult,init
 import {testServer,TestDeviceStore} from './device-fixture.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {createNotebook} from '../src/model.js';
-import {copyPlan,copyWorkspace,encryptedCopy,initializeLocation,workspaceManifest} from '../src/locations.js';
+import {copyPlan,copyWorkspace,encryptedCopy,initializeLocation} from '../src/locations.js';
+import {workspaceManifest} from './workspace-copy-helpers.js';
 import {Workspace} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
 

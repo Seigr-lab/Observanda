@@ -2,10 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {workspaceModules} from '../src/modules/index.js';
-import {moduleDomainCommands,moduleCommandPlan} from '../src/modules/domain-command-plan.js';
+import {moduleCommandPlan} from '../src/modules/domain-command-plan.js';
 
 test('each registered module command declares its storage owners without a catch-all writer',()=>{
- assert.deepEqual(moduleDomainCommands,Object.keys(workspaceModules({root:'.'}).definitions.commands).sort());
+ for(const action of Object.keys(workspaceModules({root:'.'}).definitions.commands))assert.ok(moduleCommandPlan({action}).write.length,action);
  assert.throws(()=>moduleCommandPlan({action:'unknown.save'}),{code:'MODULE_FORMAT'});
  for(const action of ['calculation.save','sheet.save','reaction.save','chemical.save','timeline-view.save']){const plan=moduleCommandPlan({action});assert.equal(plan.read.length,0);assert.deepEqual(plan.write,[plan.primary]);}
  assert.deepEqual(moduleCommandPlan({action:'task.save'}),{primary:'tasks',read:[],write:['tasks']});

@@ -20,7 +20,7 @@ for(const [write,names] of [[false,reads],[true,writes]])for(const pdf of names)
   write,binary,authority:'unlocked-selected-owner',owner:'selected-publication-owner',admission:controls.has(pdf)?'control':'work',
   snapshot:!write,cancellation:'domain-managed-disconnect',output:binary?'private-download':'private-json'});
 }
-export const pdfDocumentRoutes=Object.freeze(routes);
+Object.freeze(routes);
 export function pdfDocumentRequest(route,method='POST'){
  const prefix='/api/pdf/';if(method!=='POST'||!route.startsWith(prefix))return null;
  const pdf=route.slice(prefix.length);return Object.hasOwn(routes,pdf)?routes[pdf]:null;

@@ -11,7 +11,7 @@ import {startServer} from '../src/server.js';
 import {clearVault} from '../src/encryption.js';
 import {WorkspaceDeletions} from '../src/workspace-deletion.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../src/security/dashboard-storage.js';
-import {copyWorkspaceTo} from '../src/locations.js';
+import {copyWorkspaceTo} from './workspace-copy-helpers.js';
 import {DashboardEdits} from '../src/dashboard-edits.js';
 
 async function fixture(t){

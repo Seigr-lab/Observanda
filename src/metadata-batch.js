@@ -7,7 +7,7 @@ import {AppError} from './errors.js';
 import {writeCatalogueRows,GROUPED_METADATA_OBJECTS} from './catalogue-writes.js';
 export {GROUPED_METADATA_OBJECTS};
 import {CatalogueReadCache} from './catalogue-read-cache.js';
-import {withCatalogueCacheBoundary,catalogueContext,catalogueCacheEpoch} from './catalogue-context.js';
+import {catalogueContext,catalogueCacheEpoch} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
 export const withoutMetadataBatch=operation=>batches.exit(operation);
 // Call inside the workspace's writer lock.
@@ -104,11 +104,3 @@ export async function withMetadataBatch(store,operation,{prefetchIds=[],signal}=
  }finally{batch.clear();}
 }
 
-// An explicit transaction boundary for owners with durable batch cursors. Flush
-// buffered rows and roots, suspend this cache while the owner commits, then
-// reload identities on subsequent writes instead of retaining pre-commit roots.
-export async function withFlushedMetadataBatch(store,operation){
- if(typeof operation!=='function')throw new AppError('INVALID');const batch=metadataBatchIndex(store);
- if(batch){await batch.save();batch.clear();}
- return withCatalogueCacheBoundary(store,()=>batch?batches.run(null,operation):operation());
-}

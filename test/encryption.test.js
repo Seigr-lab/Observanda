@@ -75,7 +75,7 @@ test('laboratory history and publishing configuration use the same encrypted bou
  current=await lab.change({etag:current.etag,action:'create-sample',sample:{code:'Private sample sentinel',material:'Synthetic',source:'Private source sentinel',collectedOn:'2026-09-25',receivedOn:'2026-09-26'}});
  await lab.change({etag:current.etag,action:'create-sample',sample:{code:'Second sample',material:'Synthetic',source:'',collectedOn:'2026-09-25',receivedOn:'2026-09-26'}});
  const publisher=new Publisher(root,{},vault),config=defaultPublishing();config.github.owner='private-owner';config.github.repository='private-destination';await publisher.save(config,'new');
- const {workspaceManifest}=await import('../src/locations.js');for(const file of await workspaceManifest(root)){
+ const {workspaceManifest}=await import('./workspace-copy-helpers.js');for(const file of await workspaceManifest(root)){
   // The access file is a readable keyring: only its wrapped keys are encrypted, and it names no research.
   if(file.path==='.observanda/access.json'){const raw=await readFile(path.join(root,file.path),'utf8');assert.equal(JSON.parse(raw).formatVersion,3);for(const text of ['Private sample sentinel','Private source sentinel','private-owner','private-destination',vault.key.toString('hex'),vault.key.toString('base64')])assert.ok(!raw.includes(text),text);continue;}
   await assertEncryptedFile(root,file.path);

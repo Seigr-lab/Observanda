@@ -10,7 +10,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {serialize} from '../src/storage-format.js';
 import {workspaceModules} from '../src/modules/index.js';
-import {ModuleCatalogue,moduleCurrentBytes,moduleEntityBytes} from '../src/modules/catalogue.js';
+import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {ModuleReader} from '../src/modules/reader.js';
 import {PlanningDashboard} from '../src/modules/dashboard.js';
 import {seedModuleCurrent} from './module-current-fixture.js';
@@ -24,12 +24,6 @@ async function fixture(t,count=3,decorate=(entity)=>entity,prepareBook=book=>boo
  const command=(entity,values={})=>({workspaceId:book.id,commandId:randomUUID(),action:'task.save',payload:{id:entity.id,expectedRevision:entity.revision,data:{...entity.data,...values}}});
  return {...f,book,modules,data,command};
 }
-test('incremental module capacity equals the serialized current representation',()=>{
- for(const entities of [[],[{id:'x',data:{text:'à\n🙂'}}],[{id:'x'}, {id:'y',data:['long\ntext',null]}]])for(const revision of [0,9,10,100]){
-  const data={formatVersion:1,workspaceId:randomUUID(),revision,entities};
-  assert.equal(moduleCurrentBytes(data.workspaceId,revision,entities.map(entity=>({bytes:moduleEntityBytes(entity)}))),Buffer.byteLength(serialize(data)));
- }
-});
 for(const count of [65,650])test('selected module commands do not read '+count+' unrelated originals',async t=>{
  const f=await fixture(t,count,(e,i,book)=>({...e,data:{...e.data,links:[{workspaceId:book.id,type:'record',id:book.entries[i%2].id}]}})),original=ModuleCatalogue.prototype.selected,loaded=[];
  ModuleCatalogue.prototype.selected=async function(head,id){const entity=await original.call(this,head,id);if(entity)loaded.push(id);return entity;};

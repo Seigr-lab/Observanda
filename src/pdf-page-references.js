@@ -30,7 +30,6 @@ function installMeasurement(refs,markers,key){
   return {references:refs.length};
  }catch(error){state.appendix?.remove();state.style?.remove();for(const field of fields)field.node.textContent=field.text;delete globalThis[symbol];throw error;}
 }
-function cleanupMeasurement(key){const symbol=Symbol.for(key),state=globalThis[symbol];if(!state)return;state.appendix?.remove();state.style?.remove();for(const field of state.fields)field.node.textContent=field.text;delete globalThis[symbol];}
 function applyMeasurement(refs,labels,key){
  const fail=()=>{throw Object.assign(Error('PDF_PAGE_REFERENCES'),{code:'PDF_PAGE_REFERENCES'});},symbol=Symbol.for(key),state=globalThis[symbol];if(!refs.length)return {references:0};
  if(!state||JSON.stringify(state.refs)!==JSON.stringify(refs))fail();
@@ -42,7 +41,6 @@ function applyMeasurement(refs,labels,key){
 }
 const script=(fn,args)=>'('+fn.toString()+')('+args.map(value=>JSON.stringify(value).replace(/</g,'\\u003c')).join(',')+')';
 export function pdfPageReferenceMeasurementScript(refs){validate(refs);return script(installMeasurement,[refs,tokens(refs),stateKey]);}
-export const pdfPageReferenceCleanupScript=script(cleanupMeasurement,[stateKey]);
 export function pdfPageReferenceApplyScript(refs,measurement){
  validate(refs);if(!measurement||!Number.isSafeInteger(measurement.pages)||measurement.pages<0||!Array.isArray(measurement.labels)||measurement.labels.length!==refs.length)throw new PdfLayoutError('PDF_PAGE_REFERENCES');
  for(let index=0;index<refs.length;index++){const ref=refs[index],label=measurement.labels[index];if(!label||label.id!==ref.id||label.target!==ref.target||!Number.isSafeInteger(label.pageIndex)||label.pageIndex<0||label.pageIndex>=measurement.pages||label.label!==formatPdfPageReference(label.pageIndex,ref.style,ref.start))throw new PdfLayoutError('PDF_PAGE_REFERENCES');}

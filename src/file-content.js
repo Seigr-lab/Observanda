@@ -1,4 +1,3 @@
-import {scopedFileVerification} from './file-verification-context.js';
 import {contentBufferAdmission} from './content-buffer-admission.js';
 import {checkpointedFileCopy} from './checkpointed-file-copy.js';
 import {withNativeContentFile} from './native-content-file.js';
@@ -143,10 +142,10 @@ export class FileContent {
   }
   stream(start=0,end=this.size-1,options={}){return Readable.from(this.read(start,end,options));}
   async verify({signal,onProgress,reportProgress=true}={}){
-   return scopedFileVerification(this,()=>{const run=async()=>{
+   const run=async()=>{
     signal?.throwIfAborted();let size=0;const hash=createHash('sha256');await requireContentKey(this.workspace);const handle=await open(this.file,'r');
     try{const stat=await handle.stat({bigint:true});if(!stat.isFile()||stat.nlink>1n)throw new AppError('UNSAFE');await onProgress?.(0,this.size);for await(const chunk of decoded(handle,this.workspace,this.file)){signal?.throwIfAborted();size+=chunk.length;hash.update(chunk);if(reportProgress)operationAdvance(chunk.length);await onProgress?.(size,this.size);}if(size!==this.size||hash.digest('hex')!==this.sha256||!sameFile(stat,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');}finally{await handle.close();}return this;
-   };return reportProgress?operationStage('verify-file',{total:this.size,unit:'bytes',item:path.basename(this.file)},run):run();},{signal,onProgress});
+   };return reportProgress?operationStage('verify-file',{total:this.size,unit:'bytes',item:path.basename(this.file)},run):run();
   }
 }
 export const contentSize=value=>value instanceof FileContent?value.size:Buffer.byteLength(value);

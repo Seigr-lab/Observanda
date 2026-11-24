@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {ObjectIndex} from '../src/object-index.js';
-import {withMetadataBatch,withFlushedMetadataBatch,metadataBatchIndex} from '../src/metadata-batch.js';
+import {withMetadataBatch,metadataBatchIndex} from '../src/metadata-batch.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {CatalogueReadCache} from '../src/catalogue-read-cache.js';
 import {digest,serialize} from '../src/storage-format.js';
@@ -245,8 +245,6 @@ test('missing proofs are bounded and discarded at handoff, cancellation and fail
   owner=metadataBatchIndex(f.store);assert.equal(owner.missingObjects.size,32);
   await owner.prefetchObjects([key(101)]);assert.equal(owner.missingObjects.size,32);assert.equal(owner.missingObjects.has(ids[0]),false);
   assert.equal(await f.store.object(ids[0]),null);assert.deepEqual(f.reads.objects,[ids[0]],'Evicted misses use the ordinary read');
-  await withFlushedMetadataBatch(f.store,async()=>{assert.equal(owner.missingObjects.size,0);f.objects.set(ids[1],Buffer.from(serialize({stray:true})));});
-  await assert.rejects(f.store.object(ids[1]),{code:'CATALOGUE_DAMAGED'});f.objects.delete(ids[1]);
  },{prefetchIds:ids});
  const controller=new AbortController(),before=f.snapshot();f.onObjects(()=>controller.abort());
  await assert.rejects(edit(f,ids,{prefetch:true,signal:controller.signal}),{name:'AbortError'});assert.deepEqual(f.snapshot(),before);f.onObjects(null);

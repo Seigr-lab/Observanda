@@ -8,13 +8,12 @@ import {idleConnections,idleConnectionKey,idleConnectionScope} from './database-
 import {checkServerIdentity} from 'node:tls';
 import {retainRuntimeEnvironment,runtimeStorageDirectory} from './database-runtime-environment.js';
 import {databaseClusterIdentity} from './database-cluster-identity.js';
-import {operationStage,operationAdvance} from './operation-progress.js';
+import {operationStage} from './operation-progress.js';
 import {diagnosticMeasurement} from './operational-diagnostics.js';
 import {diskCapacity} from './disk-capacity.js';
 import path from 'node:path';
-import {readFile,unlink,realpath} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
 import {withNativeContentFile} from './native-content-file.js';
-import {nativeDestination} from './native-destination.js';
 import {writeFilePart} from './segmented-file-io.js';
 import {writeCatalogueArchive,readCatalogueArchive,readCatalogueStream} from './postgres-archive.js';
 import {PassThrough} from 'node:stream';
@@ -23,10 +22,10 @@ import {Client} from 'pg';
 import {setTimeout as delay} from 'node:timers/promises';
 import {AppError} from './errors.js';
 import {assertCatalogueOwner,assertCatalogueEnvironment} from './project-catalogue-owner.js';
-import {assertRegular,serialize} from './storage.js';
+import {assertRegular} from './storage.js';
 import {catalogueIndexesSQL,ensureCatalogueIndexes} from './postgres-indexes.js';
 import {catalogueFormat} from './catalogue-format.js';
-import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION,catalogueBinding,catalogueActivation,beginCatalogueActivation,publishCatalogueBinding,finishCatalogueActivation} from './postgres-activation.js';
+import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,catalogueBinding,catalogueActivation,beginCatalogueActivation,publishCatalogueBinding,finishCatalogueActivation} from './postgres-activation.js';
 import {databaseScope,databaseProvider,acquireWorkspaceDatabaseEnvironment,scratchDatabaseEnvironment} from './workspace-database-context.js';
 
 export {CATALOGUE_FILE,CATALOGUE_ARCHIVE} from './postgres-activation.js';
@@ -322,21 +321,6 @@ export async function transferCatalogue(source,target){
   if(written.status==='rejected')throw written.reason;if(read.status==='rejected')throw read.reason;
   await source.run('COMMIT');return written.value;
  }catch(error){await source.run('ROLLBACK').catch(()=>{});throw error;}finally{stream.destroy();}
-}
-
-// Called with the source writer held. Only an unadopted, identified conversion
-// target can be discarded when its source changed during an interruption.
-export async function resetCataloguePreparation(root,stagingRoot,id,env){
- if(stagingRoot!==path.join(root,'.observanda','database-transition')||(await catalogueBinding(root))?.id===id)throw new AppError('CONFLICT');
- const binding=await catalogueBinding(stagingRoot),activation=await catalogueActivation(stagingRoot);
- if(!binding&&!activation||[binding,activation].some(value=>value&&value.id!==id))throw new AppError('CONFLICT');
- const schema=schemaFor(id),client=await connect(env);
- try{
-  await databaseQuery(client,'BEGIN');
-  if(!(await databaseQuery(client,'SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',[id])).rows[0].locked)throw new AppError('LOCKED');
-  await databaseQuery(client,'DROP SCHEMA IF EXISTS "'+schema+'" CASCADE');await databaseQuery(client,'COMMIT');
-  for(const relative of [CATALOGUE_FILE,CATALOGUE_ACTIVATION]){const file=path.join(stagingRoot,relative),admitted=nativeDestination(file);if(admitted?.directory)await admitted.remove(file,{missing:true});else if(await assertRegular(file,{missing:true}))await unlink(file);}
- }finally{await databaseQuery(client,'ROLLBACK').catch(()=>{});await client.end();}
 }
 
 export async function catalogueArchiveDigest(db,{transaction=false}={}){

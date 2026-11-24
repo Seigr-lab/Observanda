@@ -15,7 +15,6 @@ export async function copyProjectLocation(source,input,options={}){
  }finally{books.close();}
 }
 export const projectTransferReceipt=transfer.receipt;
-export const verifyProjectTransfer=transfer.verify;
 
 // The tree importer composes all owners itself, including mixed native/archive books.
 export const copyProjectOwnerLocation=transfer.copy;

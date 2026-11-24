@@ -6,17 +6,6 @@ import {resultValueId} from './web/record-result-value.js';
 import {validateResultSources} from './result-statements.js';
 import {findRetainedFigureTarget,retainedFigureRootTarget,retainedFigureTargetPage} from './retained-figure-targets.js';
 
-// Figure choices carry names and identities only, never embedded observations.
-export async function resultFigureTargets(document,position,{signal}={}){
- const path=['figures',String(position)],field=async parts=>(await document.field([...path,...parts],{signal})).value;
- const id=await field(['id']),title=await field(['title']);if(!id)return [];
- const targets=[{id,title}];
- if(await field(['kind'])==='panels')for await(const panel of document.items([...path,'panels'],{signal})){
-  const get=async parts=>(await document.tree.selected(panel.value,parts)).value;
-  targets.push({id:await get(['figure','id']),title:title+' · '+await get(['label'])+' · '+await get(['figure','title'])});
- }
- return targets;
-}
 // Top-level choices and child pages keep independent offsets. Retained roots
 // contain only a compact descriptor; inline panels are read by header fields.
 async function retainedDescriptor(document,path,{signal}={}){

@@ -8,7 +8,8 @@ import {performance} from 'node:perf_hooks';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
-import {copyPlan,copyWorkspace,workspaceManifest} from '../src/locations.js';
+import {copyPlan,copyWorkspace} from '../src/locations.js';
+import {workspaceManifest} from './workspace-copy-helpers.js';
 import {workspaceInventory,workspaceFiles} from '../src/workspace-inventory.js';
 import {databaseCapacity} from '../src/postgres.js';
 

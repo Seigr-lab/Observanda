@@ -11,7 +11,7 @@ import {RecordValueTree} from '../src/record-value-tree.js';
 import {RecordQuery} from '../src/record-query.js';
 import {RecordSearchIndex} from '../src/record-search-index.js';
 import {withRecordTerms,withChangedRecordTerms,recordTerms} from '../src/record-search-stream.js';
-import {documentTerms} from '../src/record-search-terms.js';
+import {documentTerms} from './record-search-oracle.js';
 import {recordQueryDocument,recordBrowse} from '../src/web/record-query.js';
 import {queryTextMatches} from '../src/record-query-storage.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';

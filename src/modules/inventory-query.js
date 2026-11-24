@@ -3,7 +3,7 @@ import {localBOMResource} from '../web/modules/bom-model.js';
 import {AppError} from '../errors.js';
 import {add,negate} from '../web/modules/quantities.js';
 import {stockTracked,assetPlacement} from '../web/modules/inventory-model.js';
-import {mergeInventoryProjection,projectedInventoryScope} from './inventory-projection.js';
+import {mergeInventoryProjection} from './inventory-projection.js';
 
 // Quantities are accumulated from authenticated constraint facts. Never infer
 // a balance from the subset of ledger originals displayed on the current page.
@@ -59,27 +59,6 @@ export async function inventoryQuantities(context,ids,{signal,scope=null}={}){
  }
  return new Map([...resources].map(([id,item])=>[id,{...item,locations:[...item.locations.values()].map(value=>({...value,available:stockTracked(item.data)?add(value.physical,negate(value.reserved)):item.data.status==='available'?value.physical:'0'}))}]));
  },{signal});
-}
-
-// Scope membership includes recorded placements even when their current stock
-// is zero. Ownership alone must not hide stock allocated to another project.
-export async function inventoryScopeItems(context,scope,{signal}={}){
- if(!scope)return null;
- const plans=await context.stockProjection?.();if(plans)return projectedInventoryScope(plans,scope,{signal});
- const visible=new Set();
- for await(const member of context.members({signal})){
-  signal?.throwIfAborted();if(member.type&&!['resource','movement','reservation','stock-transfer'].includes(member.type))continue;
-  const entity=await context.constraint(member),d=entity.data;
-  if(entity.type==='resource'){
-   if(scope.has(stockTracked(d)?d.projectId??null:assetPlacement(entity)))visible.add(entity.id);
-  }else if(entity.type==='stock-transfer'){
-   if(scope.has(d.fromProjectId)||scope.has(d.toProjectId))visible.add(d.resourceId);
-  }else if(['movement','reservation'].includes(entity.type)){
-   if(Object.hasOwn(d,'projectId')){if(scope.has(d.projectId))visible.add(d.resourceId);}
-   // Unassigned older facts follow ownership, covered by the resource above.
-  }
- }
- return visible;
 }
 
 export function sumInventoryRows(rows){

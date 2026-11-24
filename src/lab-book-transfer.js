@@ -4,4 +4,3 @@ import {LAB_BOOK_ARCHIVE_IDENTITY,readLabBookArchiveIdentity,writeLabBookArchive
 const transfer=ownedStorageTransfer({Storage:LabBookStorage,placement:'lab-book',ownerId:'labBookId',archiveFile:LAB_BOOK_ARCHIVE_IDENTITY,readArchive:readLabBookArchiveIdentity,writeArchive:writeLabBookArchiveIdentity});
 export const copyLabBookLocation=transfer.copy;
 export const labBookTransferReceipt=transfer.receipt;
-export const verifyLabBookTransfer=transfer.verify;

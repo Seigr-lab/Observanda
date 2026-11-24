@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {InventoryProjection} from '../src/modules/inventory-projection.js';
-import {inventoryQuantities,inventoryScopeItems} from '../src/modules/inventory-query.js';
+import {inventoryQuantities} from '../src/modules/inventory-query.js';
 import {moduleConstraintSource} from '../src/modules/constraint-source.js';
 import {moduleConstraint} from '../src/modules/constraints.js';
 import {balance} from '../src/web/modules/quantities.js';
@@ -25,7 +25,6 @@ async function fixture(values,workspaceId=randomUUID()){
 const normalize=map=>[...map.values()].map(item=>({...item,locations:[...item.locations].sort((a,b)=>String(a.projectId).localeCompare(String(b.projectId)))}));
 async function compare(f,ids,scope=null){
  const expected=await inventoryQuantities({...f.context,stockProjection:undefined},ids,{scope}),actual=await inventoryQuantities(f.context,ids,{scope});assert.deepEqual(normalize(actual),normalize(expected));
- if(scope)assert.deepEqual([...await inventoryScopeItems(f.context,scope)].sort(),[...await inventoryScopeItems({...f.context,stockProjection:undefined},scope)].sort());
 }
 
 test('inventory projections match ledger quantities, zero placements and build deduplication across owner scopes',async()=>{

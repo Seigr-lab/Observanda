@@ -1,8 +1,6 @@
 import {AppError} from './errors.js';
 import {exact} from './modules/validation.js';
 import {validateDatasetCell} from './dataset-cell-storage.js';
-import {csvCell,csvCellChunks} from './web/csv-cell.js';
-import {datasetTextStream} from './dataset-text-stream.js';
 
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
 const invalid=()=>{throw new AppError('INVALID');};
@@ -73,24 +71,3 @@ export async function* exchangeCells(materials,doc,row,selection,{signal,readWin
  }
 }
 
-// The delimited file is a spreadsheet-safe rendition of the source spelling.
-// The accompanying typed exchange preserves distinctions such as null/absent.
-export async function* delimitedDataset(materials,doc,selection,{format,signal,check,progress}={}){
- if(!['csv','tsv'].includes(format))invalid();
- const separator=format==='csv'?',':'\t';
- let first=true;
- for await(const {column} of exchangeColumns(materials,doc,selection,{signal,check})){
-  if(!first)yield separator;
-  first=false;yield csvCell(column.name);
- }
- yield '\r\n';
- for await(const {row} of exchangeRows(materials,doc,selection,{signal,check,progress})){
-  first=true;
-  for await(const {cell} of exchangeCells(materials,doc,row,selection,{signal})){
-   if(!first)yield separator;
-   first=false;
-   yield* csvCellChunks(datasetTextStream(materials,cell.value,{signal}));
-  }
-  yield '\r\n';
- }
-}

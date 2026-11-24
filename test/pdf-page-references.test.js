@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from '@playwright/test';
-import {validPdfPageReferences,formatPdfPageReference,pdfPageReferenceMeasurementScript,pdfPageReferenceApplyScript,pdfPageReferenceCleanupScript,extractPdfPageReferences} from '../src/pdf-page-references.js';
+import {validPdfPageReferences,formatPdfPageReference,pdfPageReferenceMeasurementScript,pdfPageReferenceApplyScript,extractPdfPageReferences} from '../src/pdf-page-references.js';
 const reference=(id='field-first',target='pdf-section-first',style='decimal',start=1)=>({id,target,style,start});
 
 test('page-reference requests admit exact stable fields and shared targets, not executable selectors or ambiguous identities',()=>{
@@ -36,7 +36,7 @@ test('actual PDF annotation measurements produce exact second-pass page labels w
   }finally{await task.destroy();}
   assert.deepEqual(await extractPdfPageReferences(second,[]),{pages:3,labels:[]});
   // A duplicate same-row destination must not be guessed from array order.
-  await page.setContent(html);await page.evaluate(pdfPageReferenceMeasurementScript(refs));await page.evaluate(()=>{const row=document.querySelector('#pdf-reference-measurement>div');row.append(row.lastElementChild.cloneNode(true));});const ambiguous=await page.pdf({preferCSSPageSize:true,printBackground:true});await assert.rejects(extractPdfPageReferences(ambiguous,refs),{code:'PDF_PAGE_REFERENCES'});await page.evaluate(pdfPageReferenceCleanupScript);assert.equal(await page.locator('#pdf-reference-measurement,#pdf-reference-measurement-style').count(),0);assert.deepEqual(await page.locator('.page-field').allTextContents(),Array(refs.length).fill('0'));
+  await page.setContent(html);await page.evaluate(pdfPageReferenceMeasurementScript(refs));await page.evaluate(()=>{const row=document.querySelector('#pdf-reference-measurement>div');row.append(row.lastElementChild.cloneNode(true));});const ambiguous=await page.pdf({preferCSSPageSize:true,printBackground:true});await assert.rejects(extractPdfPageReferences(ambiguous,refs),{code:'PDF_PAGE_REFERENCES'});await page.goto('about:blank');
   await page.setContent(html.replace('id="pdf-section-third"','id="missing-target"'));await assert.rejects(page.evaluate(pdfPageReferenceMeasurementScript(refs)),/PDF_PAGE_REFERENCES/);assert.equal(await page.locator('#pdf-reference-measurement').count(),0);
   await page.setContent(html);assert.deepEqual(await page.evaluate(pdfPageReferenceMeasurementScript([])),{references:0});assert.equal(await page.locator('#pdf-reference-measurement').count(),0);
  }finally{await browser.close();}

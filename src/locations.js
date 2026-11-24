@@ -6,7 +6,7 @@ import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycl
 import {initializeWorkspaceSettings} from './workspace-settings.js';
 import {withProjectModuleInitialization} from './project-module-initialization.js';
 import {workspaceCreationPath,requireWorkspaceName,validateWorkspaceName} from './workspace-names.js';
-import {workspaceFiles,workspaceInventory,hashWorkspaceFile as fileHash} from './workspace-inventory.js';
+import {workspaceInventory,hashWorkspaceFile as fileHash} from './workspace-inventory.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,rekeyCatalogue,verifyCatalogueArchive} from './research-catalogue.js';
 import {backupCatalogue,requireDatabase} from './postgres.js';
 import {describeContent} from './file-content.js';
@@ -126,9 +126,6 @@ export async function initializeLocation(input,book,access,suppliedVault,{dashbo
   }finally{if(!suppliedVault)await clearVault(vault);}
 }
 const within=(parent,child)=>{const relative=path.relative(parent,child);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
-export async function workspaceManifest(root){
- const files=await Array.fromAsync(workspaceFiles(root));return files.sort((a,b)=>a.path.localeCompare(b.path));
-}
 async function reviewedInventory(plan,options){
  const current=await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],...options});
  if(current.fingerprint!==plan.fingerprint||current.fileCount!==plan.fileCount||current.bytes!==plan.bytes)throw new AppError('CONFLICT');
@@ -148,9 +145,6 @@ export async function copyPlan(root,input,{onProgress,vault=null,excludeProject}
   const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{excludeProject,vault}),{detached:true,existing:true}));
   return {...plan,...inventory};
  });
-}
-export async function copyWorkspaceTo(root,input,options={}){
- return withOperationProgress(options.onProgress,async()=>copyWorkspace(await transferDestination(root,input),options));
 }
 // A native picker can return a newly created empty folder. Claim it exclusively
 // before copying, and recheck after the claim so another app cannot populate it unnoticed.

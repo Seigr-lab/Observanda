@@ -8,7 +8,6 @@ export function installDatabaseProvider(value){
 }
 export const databaseProvider=()=>provider;
 export const databaseScope=(env,operation,connection)=>scope.run({env,connection},operation);
-export const scopedDatabaseEnvironment=()=>scope.getStore()?.env;
 export const scopedDatabaseConnection=()=>scope.getStore()?.connection;
 export async function workspaceDatabaseEnvironment(root,options={}){return provider?provider.environment(root,options):process.env;}
 export async function scratchDatabaseEnvironment(){return scope.getStore()?.env??(provider?await provider.scratch():process.env);}

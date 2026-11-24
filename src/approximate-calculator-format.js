@@ -9,5 +9,4 @@ export function approximateCalculatorMetadata(relative,value){
  if(relative.startsWith('.observanda/materials/figures/value/'))return value?.type==='property'&&value.name==='computation'||value?.type==='inline'&&value.value?.computation!==undefined;
  return relative.startsWith('.observanda/materials/sequences/chunks/')&&['columns','columns-policy'].includes(value?.kind)&&Array.isArray(value.items)&&value.items.some(column=>column?.computation!==undefined);
 }
-export async function ensureApproximateCalculatorFormat(workspace){await workspace.catalogue(async store=>{const {requireApproximateCalculator}=await import('./catalogue-format.js');await requireApproximateCalculator(store.catalogueDb??store.db);});}
 export async function assertApproximateCalculatorFormat(workspace){await workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresApproximateCalculator}=await import('./catalogue-format.js');if(!catalogueRequiresApproximateCalculator(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}

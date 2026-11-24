@@ -61,7 +61,6 @@ async function context(store){
 }
 export async function recordOwnerResourcesPending(store){const value=await get(store,ACTIVE);if(value!==null&&(!exact(value,['version','pending'])||value.version!==1||!Number.isSafeInteger(value.pending)||value.pending<1))fail();return value!==null;}
 export async function recordOwnerResourcesTracking(store){return !suppression.getStore()&&(await context(store)).active;}
-export async function recordOwnerResourceReceipt(store){return (await context(store)).receipt;}
 export function recordOwnerResourcesReclaiming(){return suppression.getStore()===true;}
 export function withoutRecordOwnerResourceAdoption(operation){return suppression.run(true,operation);}
 export function assertRecordOwnerResourceMutation(store){if(mutation.getStore()!==store)throw new AppError('RECORD_TRANSFER_BUSY');}

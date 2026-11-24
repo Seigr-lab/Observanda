@@ -5,7 +5,6 @@ import {randomUUID} from 'node:crypto';
 import {databaseQuery} from './database-query.js';
 import {AppError} from './errors.js';
 
-export const CLUSTER_SCHEMA='obs_cluster';
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 export const validClusterId=uuid;
 const tableSQL='CREATE TABLE IF NOT EXISTS obs_cluster.identity(singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),format integer NOT NULL CHECK(format=1),id uuid NOT NULL)';

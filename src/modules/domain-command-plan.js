@@ -11,7 +11,6 @@ add('stock.resolve','inventory',['bom']);
 add('booking.save','equipment',['inventory']);
 add('bom.save','bom',['inventory']);
 for(const action of ['bom.reserve','bom.finish','bom.cancel'])add(action,'bom',[],['bom','inventory']);
-export const moduleDomainCommands=Object.freeze([...plans.keys()].sort());
 export function moduleCommandPlan(command){
  const plan=plans.get(command?.action);if(!plan)throw new AppError('MODULE_FORMAT');
  const write=new Set(plan.write),read=new Set(plan.read),payload=command.payload;

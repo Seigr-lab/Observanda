@@ -18,7 +18,6 @@ import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedA
 const headPrefix='record-draft-edit-head:',nodePrefix='record-draft-edit:',operationPrefix='record-draft-edit-operation:';
 const hash=value=>digest(serialize(value)),fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const owner=plan=>({workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:plan.draftId,draftRevision:plan.draftRevision,position:plan.sourcePosition??0});
-export const draftEditOwner=owner;
 export class RecordDraftEdits{
  constructor(store){this.store=store;}
  async head(plan){const identity=owner(plan),value=await this.store.object(headPrefix+hash(identity))??await recordOwnerDraftArchived(this.store,'head',hash(identity));if(value&&(!revisionId(value.revision)||hash(value.owner)!==hash(identity)))fail();if(value)return value.revision;return plan.origin?this.head({...plan.origin,sourcePosition:plan.origin.position}):null;}

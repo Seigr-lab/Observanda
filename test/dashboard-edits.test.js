@@ -11,7 +11,7 @@ import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../src/security/da
 import {clearVault} from '../src/encryption.js';
 import {openCatalogue} from '../src/postgres.js';
 import {projectDomainLock} from '../src/project-domain-lock.js';
-import {copyWorkspaceTo} from '../src/locations.js';
+import {copyWorkspaceTo} from './workspace-copy-helpers.js';
 import {Workspace} from '../src/storage.js';
 
 async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pending-settings-')),f=await encryptedFixture(directory,sampleNotebook()),queue=new DashboardEdits(path.join(directory,'pending'));t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {...f,directory,queue};}

@@ -196,7 +196,6 @@ export class ConfigurationDocuments{
   catch(error){signal?.throwIfAborted();if(error.code==='CATALOGUE_DAMAGED')throw error;throw new AppError('CATALOGUE_DAMAGED');}
  }
 }
-export async function withConfigurationDocument(store,owner,value,operation,{write=null,...options}={}){return operation(await new ConfigurationDocuments(store,{write}).open(owner,value,options));}
 export async function verifyConfigurationBlocks(store,{signal}={}){
  try{return await checkConfigurationBlocks(store,{signal});}catch(error){signal?.throwIfAborted();if(error.code==='CATALOGUE_DAMAGED')throw error;throw new AppError('CATALOGUE_DAMAGED');}
 }

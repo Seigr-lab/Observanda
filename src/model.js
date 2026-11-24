@@ -175,7 +175,6 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
 
 // Format 22 leaves the earlier website system's settings, pages, branding and
 // named sites behind; websites are made in the website editor with their own files.
-export const CURRENT_FORMAT=22;
 export function currentWorkspaceMetadata(metadata){
  if(metadata.formatVersion!==21)return metadata;
  const {website,websites,pages,branding,...current}=metadata;void website;void websites;void pages;void branding;
