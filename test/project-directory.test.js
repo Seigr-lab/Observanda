@@ -25,11 +25,12 @@ test('directory hierarchy validation visits a deep project chain once and still 
  for(let n=0;n<12000;n++)projects.push({projectId:randomUUID(),root:path.resolve('fixture',String(n)),vaultId:randomUUID(),namespaceId:randomUUID(),parentId:projects.at(-1)?.projectId??null,summary:null});
  // Validate from the deepest child first: an implementation that walks every
  // ancestor again would visit seventy million links for this directory.
- const value={version:2,workspaceId,projects:projects.toReversed()};let reads=0;
+ const value={version:7,workspaceId,projects:projects.toReversed(),deleted:[],relocated:[],aliases:null};let reads=0;
  for(const entry of value.projects){const parent=entry.parentId;Object.defineProperty(entry,'parentId',{enumerable:true,configurable:true,get(){reads++;return parent;}});}
  registry.validate(value);assert.ok(reads<=projects.length*5,String(reads));
  const broken=structuredClone(value);broken.projects.at(-1).parentId=broken.projects[0].projectId;assert.throws(()=>registry.validate(broken),{code:'FORMAT'});
- broken.projects.at(-1).parentId=randomUUID();assert.throws(()=>registry.validate(broken),{code:'FORMAT'});
+ // A missing parent is refused once the workspace's own project list is known.
+ broken.projects.at(-1).parentId=randomUUID();assert.throws(()=>registry.validate(broken,{legacyProjects:[]}),{code:'FORMAT'});
 });
 
 
@@ -45,7 +46,7 @@ test('only completed directory commands invalidate summaries after a disconnecte
 
 test('deleted identities cannot alias live projects or remain hierarchy parents',async()=>{
  const {ProjectRegistry}=await import('../src/project-registry.js'),{default:path}=await import('node:path'),workspaceId=randomUUID(),registry=new ProjectRegistry({root:path.resolve('fixture')},workspaceId),project={projectId:randomUUID(),root:path.resolve('fixture/a'),namespaceId:randomUUID(),vaultId:randomUUID(),parentId:null,summary:null},deleted={projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),operationId:randomUUID()};
- const value={version:3,workspaceId,projects:[project],deleted:[deleted]};assert.equal(registry.validate(value),value);
+ const value={version:7,workspaceId,projects:[project],deleted:[deleted],relocated:[],aliases:null};assert.equal(registry.validate(value),value);
  for(const key of ['projectId','namespaceId','vaultId']){const invalid=structuredClone(value);invalid.deleted[0][key]=project[key];assert.throws(()=>registry.validate(invalid),{code:'FORMAT'});}
  const child=structuredClone(value);child.projects[0].parentId=deleted.projectId;assert.throws(()=>registry.validate(child),{code:'FORMAT'});
  const duplicate=structuredClone(value);duplicate.deleted.push({...deleted});assert.throws(()=>registry.validate(duplicate),{code:'FORMAT'});

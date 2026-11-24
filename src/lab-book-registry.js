@@ -13,7 +13,7 @@ const nameKey=name=>process.platform==='win32'||process.platform==='darwin'?name
 export class LabBookRegistry{
  constructor(project){
   if(!researchId(project?.projectId)||project.labBookId!==undefined)throw new AppError('INVALID');
-  this.project=project;this.file=path.join(project.root,'.observanda','lab-books.observanda');this.directoryOwner=new OwnerDirectoryRegistry({storage:project,kind:'books',ownerId:project.projectId,file:this.file,decode:value=>this.validate(value),empty:()=>({version:1,projectId:project.projectId,books:[],deleted:[]}),validate:value=>this.validate(value)});
+  this.project=project;this.file=path.join(project.root,'.observanda','lab-books.observanda');this.directoryOwner=new OwnerDirectoryRegistry({storage:project,kind:'books',ownerId:project.projectId,file:this.file,empty:()=>({version:1,projectId:project.projectId,books:[],deleted:[]}),validate:value=>this.validate(value)});
  }
  validate(value){
   if(!exact(value,['version','projectId','books','deleted',...(value?.version===2?['relocated']:[])])||![1,2].includes(value.version)||value.projectId!==this.project.projectId||!Array.isArray(value.books)||!Array.isArray(value.deleted))throw new AppError('FORMAT');

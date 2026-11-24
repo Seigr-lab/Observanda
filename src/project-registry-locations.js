@@ -13,7 +13,8 @@ function segments(relative) {
   return parts;
 }
 export function encodeProjectRegistryLocations(value,root,paths=path) {
-  const saved=structuredClone(value);saved.version=value.version>=7?7:6;
+  if(value?.version!==7)throw new AppError('FORMAT');
+  const saved=structuredClone(value);
   for(const entry of saved.projects) {
     if(typeof entry.root!=='string'||!paths.isAbsolute(entry.root))throw new AppError('FORMAT');
     const relative=paths.relative(root,entry.root);
@@ -25,8 +26,7 @@ export function encodeProjectRegistryLocations(value,root,paths=path) {
   return saved;
 }
 export function decodeProjectRegistryLocations(value,root,paths=path) {
-  if(![6,7].includes(value?.version))return value;
-  if(!Array.isArray(value.projects))throw new AppError('FORMAT');
+  if(value?.version!==7||!Array.isArray(value.projects))throw new AppError('FORMAT');
   const resolved=structuredClone(value);
   for(const entry of resolved.projects) {
     if(!entry||typeof entry!=='object')throw new AppError('FORMAT');

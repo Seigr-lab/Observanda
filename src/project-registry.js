@@ -3,7 +3,7 @@ import {OwnerDirectoryRegistry} from './owner-directory-registry.js';
 import {resolveRecordOwnerReference} from './record-owner-provenance.js';
 import {LabBookDirectory} from './lab-book-directory.js';
 import {projectRenameLocation} from './project-rename-receipt.js';
-import {decodeProjectRegistryLocations,projectRegistryLocationKey} from './project-registry-locations.js';
+import {projectRegistryLocationKey} from './project-registry-locations.js';
 import {detachLegacyProjectChildren,legacyProjectChildren} from './project-retirement-children.js';
 import {projectHierarchyLock} from './project-hierarchy-authority.js';
 import {validTableRef} from './retained-table-index.js';
@@ -22,32 +22,32 @@ const fields=['projectId','root','vaultId','namespaceId','parentId'];
 const summaryOf=project=>({title:project.title,description:project.description??'',kind:project.kind??'Project',templateName:project.labBookTemplate?.name??null});
 const validSummary=value=>value===null||exact(value,['title','description','kind','templateName'])&&(value.templateName===null||typeof value.templateName==='string'&&value.templateName.length<=160)&&['title','description','kind'].every(key=>typeof value[key]==='string'&&value[key].length<=({title:160,description:1500,kind:80})[key]);
 export class ProjectRegistry{
- constructor(workspace,workspaceId){if(workspace.projectId||workspace.labBookId||!researchId(workspaceId))throw new AppError('INVALID');this.workspace=workspace;this.workspaceId=workspaceId;this.file=path.join(workspace.root,'.observanda','project-registry.observanda');this.directoryOwner=new OwnerDirectoryRegistry({storage:workspace,kind:'projects',ownerId:workspaceId,file:this.file,decode:value=>this.validate(decodeProjectRegistryLocations(value,workspace.root)),empty:()=>({version:1,workspaceId,projects:[]}),validate:value=>this.validate(value)});}
+ constructor(workspace,workspaceId){if(workspace.projectId||workspace.labBookId||!researchId(workspaceId))throw new AppError('INVALID');this.workspace=workspace;this.workspaceId=workspaceId;this.file=path.join(workspace.root,'.observanda','project-registry.observanda');this.directoryOwner=new OwnerDirectoryRegistry({storage:workspace,kind:'projects',ownerId:workspaceId,file:this.file,empty:()=>({version:1,workspaceId,projects:[]}),validate:value=>this.validate(value)});}
  validate(value,{legacyProjects=null}={}){
-  if(!exact(value,value?.version>=4?['version','workspaceId','projects','deleted','aliases',...(value.version>=7?['relocated']:[])]:value?.version===3?['version','workspaceId','projects','deleted']:['version','workspaceId','projects'])||![1,2,3,4,5,6,7].includes(value.version)||value.workspaceId!==this.workspaceId||!Array.isArray(value.projects))throw new AppError('FORMAT');
-  if(value.version>=4&&!validTableRef(value.aliases))throw new AppError('FORMAT');
+  if(!exact(value,value?.version===7?['version','workspaceId','projects','deleted','aliases','relocated']:['version','workspaceId','projects'])||![1,7].includes(value.version)||value.version===1&&value.projects?.length!==0||value.workspaceId!==this.workspaceId||!Array.isArray(value.projects))throw new AppError('FORMAT');
+  if(value.version===7&&!validTableRef(value.aliases))throw new AppError('FORMAT');
   const byId=new Map(),roots=new Set(),namespaces=new Set(),vaults=new Set();
   for(const entry of value.projects){
-   if(!exact(entry,value.version===1?fields:[...fields,'summary'])||value.version>=2&&!validSummary(entry.summary)||!researchId(entry.projectId)||!researchId(entry.vaultId)||!researchId(entry.namespaceId)||entry.parentId!==null&&!researchId(entry.parentId)||typeof entry.root!=='string'||!path.isAbsolute(entry.root)||entry.root!==path.resolve(entry.root)||byId.has(entry.projectId)||roots.has(entry.root)||entry.namespaceId===this.workspaceId||namespaces.has(entry.namespaceId)||vaults.has(entry.vaultId))throw new AppError('FORMAT');
+   if(!exact(entry,[...fields,'summary'])||!validSummary(entry.summary)||!researchId(entry.projectId)||!researchId(entry.vaultId)||!researchId(entry.namespaceId)||entry.parentId!==null&&!researchId(entry.parentId)||typeof entry.root!=='string'||!path.isAbsolute(entry.root)||entry.root!==path.resolve(entry.root)||byId.has(entry.projectId)||roots.has(entry.root)||entry.namespaceId===this.workspaceId||namespaces.has(entry.namespaceId)||vaults.has(entry.vaultId))throw new AppError('FORMAT');
    byId.set(entry.projectId,entry);roots.add(entry.root);namespaces.add(entry.namespaceId);vaults.add(entry.vaultId);
   }
-  if(value.version>=3){
+  if(value.version===7){
    if(!Array.isArray(value.deleted))throw new AppError('FORMAT');
    for(const entry of value.deleted){
     if(!exact(entry,['projectId','namespaceId','vaultId','operationId'])||!Object.values(entry).every(researchId)||byId.has(entry.projectId)||namespaces.has(entry.namespaceId)||vaults.has(entry.vaultId)||entry.namespaceId===this.workspaceId)throw new AppError('FORMAT');
     byId.set(entry.projectId,null);namespaces.add(entry.namespaceId);vaults.add(entry.vaultId);
    }
   }
-  if(value.version>=7){
+  if(value.version===7){
    if(!Array.isArray(value.relocated))throw new AppError('FORMAT');
    for(const entry of value.relocated){
     if(!exact(entry,['projectId','namespaceId','vaultId','operationId','workspaceId'])||!Object.values(entry).every(researchId)||entry.workspaceId===this.workspaceId||byId.has(entry.projectId)||namespaces.has(entry.namespaceId)||vaults.has(entry.vaultId)||entry.namespaceId===this.workspaceId)throw new AppError('FORMAT');
     byId.set(entry.projectId,null);namespaces.add(entry.namespaceId);vaults.add(entry.vaultId);
    }
   }
-  if(value.version>=5)for(const project of legacyProjects??[]){if(!byId.has(project.id))byId.set(project.id,{projectId:project.id,parentId:project.parentId??null});}
+  if(value.version===7)for(const project of legacyProjects??[]){if(!byId.has(project.id))byId.set(project.id,{projectId:project.id,parentId:project.parentId??null});}
   const resolved=new Set();
-  for(const entry of [...byId.values()].filter(Boolean)){const seen=new Set();let id=entry.projectId;while(id!==null&&!resolved.has(id)){if(value.version>=5&&legacyProjects===null&&!byId.has(id))break;if(seen.has(id)||!byId.get(id))throw new AppError('FORMAT');seen.add(id);id=byId.get(id).parentId;}for(const id of seen)resolved.add(id);}
+  for(const entry of [...byId.values()].filter(Boolean)){const seen=new Set();let id=entry.projectId;while(id!==null&&!resolved.has(id)){if(value.version===7&&legacyProjects===null&&!byId.has(id))break;if(seen.has(id)||!byId.get(id))throw new AppError('FORMAT');seen.add(id);id=byId.get(id).parentId;}for(const id of seen)resolved.add(id);}
   return value;
  }
  inspect(operation,options){return this.directoryOwner.inspect(operation,options);}

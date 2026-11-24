@@ -1,6 +1,6 @@
-// Shared bounded registry views. The old envelope is admitted only until its
-// durable upgrade marker; native views never materialize the directory merely
-// to locate one owner or select one window.
+// Shared bounded registry views. Before its first write a directory is empty;
+// native views never materialize the directory merely to locate one owner or
+// select one window.
 import {AppError} from './errors.js';
 import {serialize} from './storage-format.js';
 import {OwnerDirectoryAccess} from './owner-directory-access.js';

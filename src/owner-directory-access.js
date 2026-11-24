@@ -1,6 +1,7 @@
-// Recoverable handoff from the earlier encrypted registry envelope. The file
-// remains authoritative until its atomic unsupported-version marker names a
-// fully durable candidate. A changed old envelope always rebuilds that candidate.
+// The registry file holds only a marker naming the indexed owner directory.
+// Until the first directory write the file is absent and the directory is
+// empty; that write creates the index and then the marker. Whole registry
+// envelopes were written only before the first release and are refused.
 import path from 'node:path';
 import {AppError} from './errors.js';
 import {catalogueConnection} from './catalogue-connections.js';
@@ -14,7 +15,7 @@ import {ownerDirectoryMarker,ownerDirectoryMarkerVersion,validOwnerDirectoryMark
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const receipt=head=>digest(serialize(head.receipt));
 export class OwnerDirectoryAccess{
- constructor({storage,kind,ownerId,file,decode,empty}){Object.assign(this,{storage,kind,ownerId,file,decode,empty});this.lease=path.join(path.dirname(file),kind==='projects'?'project-registry.lock':'lab-books.lock');}
+ constructor({storage,kind,ownerId,file,empty}){Object.assign(this,{storage,kind,ownerId,file,empty});this.lease=path.join(path.dirname(file),kind==='projects'?'project-registry.lock':'lab-books.lock');}
  async envelope(){
   await this.storage.requireStorageKey();await assertRegular(path.dirname(this.file),{directory:true});const stat=await assertRegular(this.file,{missing:true});
   if(!stat)return {raw:null,value:this.empty(),revision:'new',marker:null};
@@ -22,7 +23,7 @@ export class OwnerDirectoryAccess{
   if(value?.version===ownerDirectoryMarkerVersion(this.kind)){
    if(!validOwnerDirectoryMarker(value,this.kind,this.ownerId)||Buffer.byteLength(raw)>4096)throw new AppError('FORMAT');return {marker:value,raw};
   }
-  return {raw,value:this.decode(value),revision:digest(raw),marker:null};
+  throw new AppError('ACCESS_UPGRADE');
  }
  async current(store,marker){
   const directory=new NativeOwnerDirectory(store,{kind:this.kind,ownerId:this.ownerId}),current=await directory.head({required:true});
@@ -57,10 +58,9 @@ export class OwnerDirectoryAccess{
     if(envelope.revision!==expected)throw new AppError('CONFLICT');
     const candidate=await this.transaction(async store=>{
      const directory=new NativeOwnerDirectory(store,{kind:this.kind,ownerId:this.ownerId}),prior=await directory.head();
-     if(prior&&prior.value.receipt.legacyDigest===envelope.revision)return prior;
+     if(prior&&prior.value.receipt.legacyDigest==='new')return prior;
      const metadata=(await store.snapshot()).metadata,legacy=metadata.projects.map(value=>({projectId:value.id,parentId:value.parentId??null}));
-     const entries=function*(){for(const entry of envelope.value[this.kind==='projects'?'projects':'books'])yield {state:'active',entry:{...entry,...(this.kind==='projects'?{summary:entry.summary??null}:{})}};for(const state of ['deleted','relocated'])for(const entry of envelope.value[state]??[])yield {state,entry};}.bind(this);
-     return directory.initialize({raw:envelope.raw,entries:entries(),aliases:envelope.value.aliases??null,legacy});
+     return directory.initialize({entries:[],legacy});
     });
     await checkpoint('candidate');const marker=ownerDirectoryMarker(this.kind,this.ownerId,receipt(candidate.value));
     await this.storage.writeFile(this.file,serialize(marker));await checkpoint('marker');envelope={marker};base=candidate;

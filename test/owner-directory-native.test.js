@@ -17,7 +17,7 @@ import {verifyOwnerDirectories} from '../src/owner-directory.js';
 import {projectDirectoryChoices,projectDirectoryPage} from '../src/project-directory-query.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
-import {digest,serialize} from '../src/storage-format.js';
+import {serialize} from '../src/storage-format.js';
 import {catalogueFormat,catalogueRequiresOwnerDirectories} from '../src/catalogue-format.js';
 import {transferCatalogue,backupCatalogue} from '../src/postgres.js';
 import {rekeyCatalogue} from '../src/research-catalogue.js';
@@ -28,15 +28,20 @@ test('native owner directory grows beyond the former envelope with bounded point
  t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-native-owner-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'source'),empty());vaults.push(f.vault);const workspaceId=(await f.workspace.outline()).metadata.id,registry=new ProjectRegistry(f.workspace,workspaceId),before=await f.workspace.outline();
  const entry=n=>({projectId:uuid('1',n),namespaceId:uuid('2',n),vaultId:uuid('3',n),parentId:null,root:path.join(f.workspace.root,'Project '+String(n).padStart(5,'0')),summary:{title:'Project '+n,description:'Measured directory description. '.padEnd(1500,'x'),kind:'Project',templateName:n%10===0?'Template '+n:null}});
- let legacy={version:7,workspaceId,projects:[entry(0)],deleted:[],relocated:[],aliases:null};const original=serialize(legacy);await f.workspace.writeFile(registry.file,original);
- const failed=new Error('Simulated interruption');await assert.rejects(registry.apply(digest(original),[],{checkpoint:async stage=>{if(stage==='candidate')throw failed;}}),error=>error===failed);
- assert.equal(await f.workspace.readFile(registry.file,'utf8'),original);assert.equal((await registry.state(uuid('1',0))).state,'active');
+ // Whole registry files from before the first release are refused rather than converted.
+ await f.workspace.writeFile(registry.file,serialize({version:7,workspaceId,projects:[entry(0)],deleted:[],relocated:[],aliases:null}));
+ await assert.rejects(registry.version(),{code:'ACCESS_UPGRADE'});await assert.rejects(registry.apply('new',[]),{code:'ACCESS_UPGRADE'});await rm(registry.file);
+ // The first directory write creates the index, then the marker. Either step can be interrupted and repeated.
+ const first=[entry(0),entry(1)].map(item=>({state:'active',entry:item})),failed=new Error('Simulated interruption');
+ assert.equal(await registry.version(),'new');
+ await assert.rejects(registry.apply('new',first,{checkpoint:async stage=>{if(stage==='candidate')throw failed;}}),error=>error===failed);
+ await assert.rejects(f.workspace.readFile(registry.file,'utf8'),{code:'ENOENT'});assert.equal((await registry.state(uuid('1',0))).state,null);
  await f.workspace.catalogue(async store=>{assert.equal(catalogueRequiresOwnerDirectories(await catalogueFormat(store.db)),true);await verifyOwnerDirectories(store);});
- legacy.projects.push(entry(1));const amended=serialize(legacy);await f.workspace.writeFile(registry.file,amended);
- await assert.rejects(registry.apply(digest(amended),[],{checkpoint:async stage=>{if(stage==='marker')throw failed;}}),error=>error===failed);
- const marker=await f.workspace.readFile(registry.file,'utf8');assert.equal(JSON.parse(marker).version,8);assert.ok(Buffer.byteLength(marker)<4096);assert.equal((await registry.state(uuid('1',1))).state,'active');
- let revision=await registry.version();await assert.rejects(registry.apply(digest(amended),[]),{code:'CONFLICT'});assert.equal((await registry.apply(revision,[])).revision,revision);
- let bytes=legacy.projects.reduce((sum,item)=>sum+Buffer.byteLength(serialize(item)),0);const metrics=[];
+ await assert.rejects(registry.apply('new',first,{checkpoint:async stage=>{if(stage==='marker')throw failed;}}),error=>error===failed);
+ const marker=await f.workspace.readFile(registry.file,'utf8');assert.equal(JSON.parse(marker).version,8);assert.ok(Buffer.byteLength(marker)<4096);assert.equal((await registry.state(uuid('1',1))).state,null);
+ let revision=await registry.version();await assert.rejects(registry.apply('new',first),{code:'CONFLICT'});revision=(await registry.apply(revision,first)).revision;
+ assert.equal((await registry.state(uuid('1',1))).state,'active');assert.equal((await registry.apply(revision,[])).revision,revision);
+ let bytes=[entry(0),entry(1)].reduce((sum,item)=>sum+Buffer.byteLength(serialize(item)),0);const metrics=[];
  const measure=async count=>{
   let reads=0,puts=0;const read=OwnerDirectoryBlocks.prototype.read,put=OwnerDirectoryBlocks.prototype.put;OwnerDirectoryBlocks.prototype.read=async function(...args){reads++;return read.apply(this,args);};OwnerDirectoryBlocks.prototype.put=async function(...args){puts++;return put.apply(this,args);};
   try{

@@ -63,16 +63,17 @@ test('competing creation requests for one project identity create only one root'
 });
 
 
-test('version one directories upgrade summaries without opening unrelated project databases',async t=>{
+test('directory summaries refresh without opening unrelated project databases, and whole registry files are refused',async t=>{
  const f=await fixture(t),command=f.command('cached'),created=await f.creation.create(command),entry=created.project;
  assert.equal(entry.summary.title,'cached');
- const old=structuredClone((await f.registry.read()).value);old.version=1;delete old.deleted;delete old.aliases;delete old.relocated;for(const project of old.projects)delete project.summary;
- await f.workspace.writeFile(f.registry.file,JSON.stringify(old));assert.equal((await f.registry.read()).value.version,1);
  const storage=await f.open(entry),metadata=(await storage.outline()).metadata;
  await f.registry.refreshSummary(entry.projectId,metadata);
- const upgraded=await f.registry.read();assert.equal(upgraded.value.version,7);assert.deepEqual(upgraded.value.relocated,[]);assert.equal(upgraded.value.aliases,null);assert.deepEqual(upgraded.value.deleted,[]);assert.equal(upgraded.value.projects[0].summary.title,'cached');
- await f.registry.refreshSummary(entry.projectId,metadata);assert.equal((await f.registry.read()).revision,upgraded.revision);
- assert.throws(()=>f.registry.validate({...upgraded.value,projects:[{...upgraded.value.projects[0],summary:{title:'x'.repeat(161),description:'',kind:'Project'}}]}),{code:'FORMAT'});
+ const current=await f.registry.read();assert.equal(current.value.version,7);assert.deepEqual(current.value.relocated,[]);assert.equal(current.value.aliases,null);assert.deepEqual(current.value.deleted,[]);assert.equal(current.value.projects[0].summary.title,'cached');
+ await f.registry.refreshSummary(entry.projectId,metadata);assert.equal((await f.registry.read()).revision,current.revision);
+ assert.throws(()=>f.registry.validate({...current.value,projects:[{...current.value.projects[0],summary:{title:'x'.repeat(161),description:'',kind:'Project'}}]}),{code:'FORMAT'});
+ // Whole registry files were written only before the first release.
+ const old=structuredClone(current.value);old.version=1;delete old.deleted;delete old.aliases;delete old.relocated;for(const project of old.projects)delete project.summary;
+ await f.workspace.writeFile(f.registry.file,JSON.stringify(old));await assert.rejects(f.registry.read(),{code:'ACCESS_UPGRADE'});
 });
 
 

@@ -127,15 +127,11 @@ export class NativeOwnerDirectory{
   }
   this.index.pruneRoots([...Object.values(next.roots),next.receipt.original]);return next;
  }
- async retainOriginal(raw,{signal}={}){
-  if(raw===null)return null;const bytes=Buffer.from(raw,'utf8');let root=null;
-  for(let offset=0;offset<bytes.length;offset+=32768){signal?.throwIfAborted();const revision=await this.blocks.put('original',{base64:bytes.subarray(offset,offset+32768).toString('base64')});root=await this.index.change(root,ordinal(offset/32768),revision);if(offset%(32768*32)===0)await this.index.flush(root);}
-  await this.index.flush(root);return root;
- }
- async initialize({raw,entries,aliases=null,legacy=[],signal}){
-  if(raw!==null&&typeof raw!=='string'||!entries?.[Symbol.asyncIterator]&&!entries?.[Symbol.iterator])throw new AppError('INVALID');
+ // New directories record that no earlier registry file was converted.
+ async initialize({entries,aliases=null,legacy=[],signal}){
+  if(!entries?.[Symbol.asyncIterator]&&!entries?.[Symbol.iterator])throw new AppError('INVALID');
   await requireOwnerDirectories(this.store.db);
-  let head={version:1,kind:this.kind,ownerId:this.ownerId,namePolicy:process.platform==='win32'||process.platform==='darwin'?'folded':'exact',receipt:{legacyDigest:raw===null?'new':digest(raw),original:await this.retainOriginal(raw,{signal})},aliases,roots:Object.fromEntries(OWNER_DIRECTORY_INDEXES.map(name=>[name,null]))};
+  let head={version:1,kind:this.kind,ownerId:this.ownerId,namePolicy:process.platform==='win32'||process.platform==='darwin'?'folded':'exact',receipt:{legacyDigest:'new',original:null},aliases,roots:Object.fromEntries(OWNER_DIRECTORY_INDEXES.map(name=>[name,null]))};
   // Build membership before checking ancestry; imported rows may be in any order.
   for await(const item of entries){
    signal?.throwIfAborted();const row=ownerDirectoryRow(this.kind,item.state,item.entry,this.root),revision=await this.blocks.put('row',row);
