@@ -21,7 +21,7 @@ import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
 export {pdfDocumentRequest} from './pdf-route-policy.js';
-export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,publicationFiles,exportService}={}){
+export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,publicationFiles,publicationConversion,exportService}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
  const {workspaceId,...input}=data??{},documents=new PdfDocuments(storage,workspaceId,{publicationFiles});
  if(request.pdf==='capabilities'){await documents.available();return pdfRendererCapabilities();}
@@ -75,6 +75,14 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
   }
   if(request.pdf==='selection'){if(Object.keys(input).sort().join()!=='id,revision'||!researchId(input.id)||!revisionId(input.revision)||!await documents.available())throw new AppError('INVALID');return documents.domains.run(['pdf'],async get=>{const owner=new PdfDocumentStore(get('pdf')),selected=await owner.open(input.id,{revision:input.revision});return pdfAudienceSummary(selected.header,pdfFileSections(get('pdf'),publicationFiles,input.id,owner.content(input.id,input.revision,{signal}),{signal}),{signal});},{signal,check});}
   if(request.pdf==='source-images'||request.pdf==='source-image-retain'){if(!publicationFiles)throw new AppError('PDF_SOURCE_CONTENT');return request.pdf==='source-images'?readPdfResearchImages(publicationFiles,input,{signal}):retainPdfResearchImage(documents,publicationFiles,input,{signal,check});}
+  // Reviewing a source update first recaptures that record's current PDF copy, as the author asked.
+  if(request.pdf==='source-refresh'){
+   if(!publicationFiles||!publicationConversion)throw new AppError('PDF_SOURCE_CONTENT');
+   if(Object.keys(input).sort().join()!=='recordId,sourceId'||!researchId(input.sourceId)||!researchId(input.recordId))throw new AppError('INVALID');
+   const state=await publicationFiles.sourceForRecord({workspaceId:input.sourceId,recordId:input.recordId,target:'pdf'});if(!state?.visible)throw new AppError('PDF_SOURCE_CONTENT');
+   await check();await publicationConversion.refreshRecord(storage,{workspaceId:state.provenance.workspaceId,notebookId:state.provenance.notebookId,recordId:state.provenance.recordId},{target:'pdf'});
+   return {refreshed:true};
+  }
   if(request.pdf==='source'||request.pdf==='source-retain'){if(!publicationFiles)throw new AppError('PDF_SOURCE_CONTENT');return request.pdf==='source'?readPdfResearch(publicationFiles,input,{signal}):retainPdfResearch(documents,publicationFiles,input,{signal,check});}
   if(request.pdf==='export'||request.pdf==='preflight'||request.pdf==='composition-proof'){
    const proof=request.pdf==='composition-proof';

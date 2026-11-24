@@ -39,7 +39,7 @@ function selection(data,request){
  if(content===null||content===undefined)return null;
  if(blockId){content=selectPdfResearchTable(content,blockId);if(!content)return null;title=content.content[0].attrs.title.slice(0,240);}
  for(const id of pdfReferencedFigures(content)){const figure=parts.figures.find(item=>item.id===id);if(!figure)denied();figures.push(figure);}
- const value={version:1,workspaceId:provenance.workspaceId,snapshotId:data.revision,recordId:provenance.recordId,recordRevision:provenance.recordRevision??provenance.revision,collection,itemId,...(blockId?{blockId}:{}),title,content,figures};if(!validPdfResearch(value))denied();if(Buffer.byteLength(serialize(value))>384*1024)throw new AppError('PDF_CAPACITY');return value;
+ const value={version:1,workspaceId:provenance.workspaceId,snapshotId:data.revision,recordId:provenance.recordId,recordRevision:provenance.recordRevision??provenance.revision,collection,itemId,...(blockId?{blockId}:{}),title,content,figures,...(/^[a-f0-9]{64}$/.test(provenance.permissionSignature??'')?{permissionSignature:provenance.permissionSignature}:{})};if(!validPdfResearch(value))denied();if(Buffer.byteLength(serialize(value))>384*1024)throw new AppError('PDF_CAPACITY');return value;
 }
 export async function pdfFileResearch(files,input,{signal}={}){
  signal?.throwIfAborted();if(!files)denied();const {operation}=input??{};
@@ -107,6 +107,10 @@ export async function projectPdfSection(store,files,documentId,original,{signal,
  if(prior){
   const data=await source(files,prior.workspaceId,prior.recordId,{signal,proof,missing:true}),approved=data&&selection(data,prior);
   if(!approved){withdrawn=true;const blank={...prior,title:'',content:'',figures:[]};delete blank.blockId;section={...section,title:'',content:'',figures:[],research:blank};}
+  // Retained research keeps its own content while the record's PDF permissions
+  // are unchanged; a newer copy reaches it only when the author accepts a
+  // reviewed update. A permission change applies at once.
+  else if(prior.permissionSignature&&prior.permissionSignature===approved.permissionSignature)section=original;
   else section={...section,title:prior.title===approved.title?section.title:approved.title,content:currentWriting(section.content,prior.content,approved.content),figures:same(prior.figures,approved.figures)?section.figures??[]:approved.figures,research:approved};
  }
  if(section.images?.length){const images=[];for(const image of section.images)if(await allowPdfImage(store,files,documentId,{asset:image.asset,imageId:image.id},{signal,proof}))images.push(image);section={...section,images};}

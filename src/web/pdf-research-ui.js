@@ -54,7 +54,7 @@ export function pdfResearchUI({state,api,post,esc,getDocument,getSection,retaine
   else if(name==='table'||name==='whole'){const selected=source(capture);delete selected.blockId;capture=await query({operation:'selection',...selected,...(name==='table'?{blockId:node.dataset.id}:{})});commandId=crypto.randomUUID();pendingRetain=null;tableOffset=0;}
   else if(name==='choose-image'){imageCapture=parts.items.find(item=>item.source.itemId===node.dataset.id);if(!imageCapture)return true;imageId=crypto.randomUUID();commandId=crypto.randomUUID();pendingRetain=null;imageAlt=imageCaption='';replace=false;}
   else if(name==='reject'){capture=null;visible=false;clearImage();}
-  else if(name==='review'){const previous=getSection().research;capture=await query({operation:'selection',...source(previous),snapshotId:null});replace=true;visible=true;commandId=crypto.randomUUID();clearImage();}
+  else if(name==='review'){const previous=getSection().research,selected=source(previous);await post('source-refresh',{sourceId:selected.sourceId,recordId:selected.recordId});capture=await query({operation:'selection',...source(previous),snapshotId:null});replace=true;visible=true;commandId=crypto.randomUUID();clearImage();}
   else if(name==='retain-image'){
    if(!imageCapture||!getSection())return true;if(!imageAlt.trim())throw Error(tr('imageMissingAlt'));const document=getDocument();pendingRetain??={id:document.header.id,commandId,expectedRevision:document.revision,sectionId:getSection().id,imageId,source:imageCapture.source,alt:imageAlt,caption:imageCaption};const result=await post('source-image-retain',pendingRetain),sectionId=pendingRetain.sectionId;visible=false;clearImage();await retained(result,sectionId);
   }else if(name==='retain'){

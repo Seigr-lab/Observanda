@@ -343,7 +343,7 @@ export class ProjectApplication{
       return copyOwner(selected.operation==='storage/export'?archives:copies,{id:data.id,path:destination,onProgress});
      }
      if(selected.maintenance){const jobs=await this.jobs.owner(session,storage,owner.etag,assertCurrent);return executeInventoryMaintenance(jobs.storage,jobs,selected.maintenance,data);}
-     if(selected.pdf){const service=['export-start','export-resume'].includes(selected.pdf)?(await this.jobs.owner(session,storage,owner.etag,assertCurrent)).pdfs:null;return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,exportService:service,publicationFiles:this.publicationConversion?.files,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});}
+     if(selected.pdf){const service=['export-start','export-resume'].includes(selected.pdf)?(await this.jobs.owner(session,storage,owner.etag,assertCurrent)).pdfs:null;return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,exportService:service,publicationFiles:this.publicationConversion?.files,publicationConversion:this.publicationConversion,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});}
      if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{signal,check:assertCurrent,query,binary});
      if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data,{signal,download,stream,check:assertCurrent});
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});

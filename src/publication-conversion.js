@@ -198,7 +198,7 @@ export class PublicationConversion{
    return {metadata:snapshot.metadata,record,linked:await linkedRecords(store,snapshot,record,target)};
   });
   const output=await convertPublicationRecord(storage,metadata,record,{target,linked});if(!output.visible)throw new AppError('RECORD_CHANGED');
-  return {sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null,...(target==='website'?{feedCompositionVersion:1}:{})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output};
+  return {sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null,...(target==='website'?{feedCompositionVersion:1}:{permissionSignature:state.signature})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output};
  }
  async capture(storage,state,token){
   const {sourceId,provenance}=state,target=provenance.target;
@@ -442,12 +442,13 @@ export class PublicationConversion{
   if(![workspaceId,notebookId,recordId].every(researchId))throw new AppError('INVALID');
   return this.withProducer(storage,()=>this.change(storage,{records:new Map([[recordId,notebookId]]),books:new Set()},workspaceId,operation));
  }
- // A record saved after it was placed keeps its website copy until the author
- // asks to update it. This recaptures the record's current permitted content,
- // and the websites that place it take the new copy with their own edits kept.
- async refreshRecord(storage,{workspaceId,notebookId,recordId}){
-  if(![workspaceId,notebookId,recordId].every(researchId))throw new AppError('INVALID');
-  return this.withProducer(storage,()=>this.change(storage,{records:new Map([[recordId,notebookId]]),books:new Set(),refresh:true},workspaceId,async()=>undefined));
+ // A record saved after it was placed keeps its website or PDF copy until the
+ // author asks to update it. This recaptures the record's current permitted
+ // content for that one channel; websites keep their own edits, and a PDF
+ // document still reviews the new copy before retaining it.
+ async refreshRecord(storage,{workspaceId,notebookId,recordId},{target='website'}={}){
+  if(![workspaceId,notebookId,recordId].every(researchId)||!channels.includes(target))throw new AppError('INVALID');
+  return this.withProducer(storage,()=>this.change(storage,{records:new Map([[recordId,notebookId]]),books:new Set(),refresh:target},workspaceId,async()=>undefined));
  }
  async change(storage,targets,workspaceId,operation,basis,{committed}={}){
   targets={...targets,trackLive:!targets.tagsOnly};
@@ -502,7 +503,7 @@ export class PublicationConversion{
    const removed=!after.has(id)&&(targets.removed?.has(state.provenance.recordId)||targets.removedBooks?.has(state.provenance.notebookId));
    if(removed&&prior.source?.visible&&state.provenance.target==='website')await this.commitLive(id,null,token);
    else if(removed&&state.provenance.target==='pdf'&&!prior.pending)await this.files.cancelSourceUpdate({sourceId:id,token});
-   else if(targets.refresh&&!error&&!prior.pending&&prior.source?.visible&&next.visible&&next.provenance.target==='website')await this.capture(storage,next,token);
+   else if(targets.refresh&&!error&&!prior.pending&&prior.source?.visible&&next.visible&&next.provenance.target===targets.refresh)await this.capture(storage,next,token);
    else if(!prior.pending&&samePermissions&&!tagsChanged&&!liveChanged&&(error||prior.source||!next.visible))await this.files.cancelSourceUpdate({sourceId:id,token});
    else if(prior.source?.visible&&next.visible&&samePermissions&&(!prior.pending||recover||targets.tagsOnly&&prior.pending.tagsOnly)){
     const retryTags=prior.pending?.tagsOnly||prior.pending?.policySignature===next.signature&&prior.pending.tagsRevision!==next.tagsRevision;
