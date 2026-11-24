@@ -298,6 +298,11 @@ export class ProjectApplication{
    }
    await check();return result;
   },selected.operation==='create'?data?.project?.id:undefined);
+  // A project kept only in its workspace's own settings has no lab book directory: list it as empty.
+  if(selected.bookOperation==='list'&&!selected.labBookId&&(await (await this.registry()).state(selected.projectId)).state!=='active'&&(await this.workspace.outline()).metadata.projects.some(project=>project.id===selected.projectId)){
+   if(!data||Object.keys(data).some(key=>!['after','limit','revision'].includes(key)))throw new AppError('INVALID');
+   return {revision:'new',items:[],next:null,total:0};
+  }
   // Projects move to a workspace's top level only; they are never placed inside another project.
   if(['directory/reparent','storage/move'].includes(selected.operation)&&data?.parentId!=null)throw new AppError('PROJECT_NESTING');
   if(selected.operation==='storage/move'&&Object.hasOwn(data??{},'target'))return this.tracked(()=>this.workspaceMoves.run(client,selected.projectId,data,{check}),selected.projectId);
