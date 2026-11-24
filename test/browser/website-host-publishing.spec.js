@@ -1,10 +1,12 @@
 import {test,expect} from '@playwright/test';
 import {EventEmitter} from 'node:events';
-import {randomUUID,randomBytes} from 'node:crypto';
-import {mkdtemp,mkdir,readdir,rm} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp,readdir,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {createNotebook} from '../../src/model.js';
+import {clearVault} from '../../src/encryption.js';
 import {websiteFilesHttp} from '../../src/website-files-http.js';
 import {HostCredentials} from '../../src/host-credentials.js';
 import {serverLoginRequest} from '../../src/server-login-requests.js';
@@ -17,11 +19,10 @@ import {mountFilesEditor} from './mount-files-editor.js';
 // login and its own folder, so two websites publish to one server side by side.
 test('websites publish to one FTPS server login, each into its own folder, with the password kept off the workspace',async({page})=>{
  test.setTimeout(90000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-host-publishing-')),id=randomUUID();
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-host-publishing-')),id=randomUUID();let vault;
  try{
-  await mkdir(path.join(directory,'.observanda'));
-  const workspace=new Workspace(directory,{id,key:randomBytes(32)}),host=memoryHost(),passwords=[];
-  workspace.catalogue=()=>{throw Error('The editor opened a research database');};
+  // Server logins are workspace metadata, kept in the workspace database.
+  const created=await encryptedFixture(directory,createNotebook('Website workspace')),workspace=created.workspace,host=memoryHost(),passwords=[];vault=created.vault;
   const ftp={open:async(c,options)=>{passwords.push([c.host,c.security,options.password]);return host.transport.open(c,options);}};
   const hostCredentials=new HostCredentials({file:path.join(directory,'computer-preferences.json.host-credentials.json'),deviceStore:{available:()=>false}});
   const request=async(route,data={})=>{
@@ -61,9 +62,9 @@ test('websites publish to one FTPS server login, each into its own folder, with 
   const secondSaved=await request('/api/website-files/destination/save',{siteId:second.id,config,etag:'new'});
   expect(secondSaved.server.name).toBe('Shared hosting');expect(secondSaved.config.ftp.login).toBe(login.id);
   expect((await request('/api/website-files/destination',{siteId:site.id})).config.ftp.directory).toBe('/public_html/atlas');
-  expect(await readdir(path.join(directory,'.observanda','website-files','sites',site.id,'publication','publishing-remote-files'))).toHaveLength(1);
-  await expect(readdir(path.join(directory,'.observanda','website-files','sites',second.id,'publication','publishing-remote-files'))).rejects.toThrow();
+  expect(await readdir(path.join(workspace.root,'.observanda','website-files','sites',site.id,'publication','publishing-remote-files'))).toHaveLength(1);
+  await expect(readdir(path.join(workspace.root,'.observanda','website-files','sites',second.id,'publication','publishing-remote-files'))).rejects.toThrow();
  }finally{
-  await page.close();await closeIdleMutationFiles();await rm(directory,{recursive:true,force:true,maxRetries:8,retryDelay:150});
+  await page.close();await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:8,retryDelay:150});
  }
 });
