@@ -166,7 +166,7 @@
   "DEVICE_UNAVAILABLE": "L'emmagatzematge segur del dispositiu no està disponible. Utilitza una contrasenya de l'espai de treball o una clau de recuperació per desbloquejar, o tria xifratge amb contrasenya per a un espai de treball nou.",
   "DEVICE_UNKNOWN": "No s'ha concedit accés a aquest dispositiu. Utilitza una contrasenya de l'espai de treball o una clau de recuperació, o demana a un membre que autoritzi aquest dispositiu.",
   "DEVICE_INVALID": "La clau del dispositiu o la petició d'accés no és vàlida. Les claus emmagatzemades no s'han substituït.",
-  "ACCESS_UPGRADE": "Crea una còpia xifrada nova per activar la compartició entre dispositius i la recuperació en aquest espai de treball antic.",
+  "ACCESS_UPGRADE": "Aquest element està desat en un format d'emmagatzematge anterior d'Observanda que aquesta versió ja no llegeix. Els fitxers no s'han modificat. Converteix-lo al format d'emmagatzematge actual abans d'obrir-lo.",
   "ACCESS_CONFIRM": "Verifica l'empremta del destinatari i confirma l'accés a tot aquest espai de treball.",
   "MODULE_INVALID": "Comprova els camps ressaltats del mòdul. Els canvis no s'han guardat.",
   "MODULE_FORMAT": "Les dades del mòdul utilitzen un format no admès o malmès. El fitxer emmagatzemat no s'ha modificat.",

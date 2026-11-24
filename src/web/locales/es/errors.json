@@ -166,7 +166,7 @@
   "DEVICE_UNAVAILABLE": "El almacenamiento seguro del dispositivo no está disponible. Utiliza una contraseña o clave de recuperación del espacio de trabajo para desbloquear o elige cifrado con contraseña para un espacio de trabajo nuevo.",
   "DEVICE_UNKNOWN": "No se ha concedido acceso a este dispositivo. Utiliza una contraseña o clave de recuperación del espacio de trabajo o pide a un miembro que autorice este dispositivo.",
   "DEVICE_INVALID": "La clave del dispositivo o la solicitud de acceso no son válidas. Las claves almacenadas no se han sustituido.",
-  "ACCESS_UPGRADE": "Crea una copia cifrada nueva para activar el uso compartido por dispositivos y la recuperación de este espacio de trabajo antiguo.",
+  "ACCESS_UPGRADE": "Este elemento está guardado en un formato de almacenamiento anterior de Observanda que esta versión ya no lee. Sus archivos no se han modificado. Conviértelo al formato de almacenamiento actual antes de abrirlo.",
   "ACCESS_CONFIRM": "Verifica la huella digital del destinatario y confirma el acceso a todo este espacio de trabajo.",
   "MODULE_INVALID": "Comprueba los campos del módulo resaltados. Tus cambios no se han guardado.",
   "MODULE_FORMAT": "Los datos del módulo utilizan un formato no compatible o dañado. El archivo almacenado no se ha modificado.",

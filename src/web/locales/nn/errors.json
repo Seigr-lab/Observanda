@@ -166,7 +166,7 @@
   "DEVICE_UNAVAILABLE": "Trygg einingslagring er ikkje tilgjengeleg. Bruk eit arbeidsområdepassord eller ein gjenopprettingsnøkkel for å låse opp, eller vel passordkryptering for eit nytt arbeidsområde.",
   "DEVICE_UNKNOWN": "Denne eininga har ikkje fått tilgang. Bruk eit arbeidsområdepassord eller ein gjenopprettingsnøkkel, eller be eit medlem godkjenne denne eininga.",
   "DEVICE_INVALID": "Einingsnøkkelen eller tilgangsførespurnaden er ugyldig. Dei lagra nøklane er ikkje erstatta.",
-  "ACCESS_UPGRADE": "Opprett ein ny kryptert kopi for å aktivere einingsdeling og gjenoppretting for dette eldre arbeidsområdet.",
+  "ACCESS_UPGRADE": "Dette elementet er lagra i eit tidlegare lagringsformat i Observanda som denne versjonen ikkje lenger les. Filene er uendra. Konverter det til gjeldande lagringsformat før du opnar det.",
   "ACCESS_CONFIRM": "Stadfest fingeravtrykket til mottakaren og stadfest tilgang til heile dette arbeidsområdet.",
   "MODULE_INVALID": "Kontroller dei markerte modulfelta. Endringane dine er ikkje lagra.",
   "MODULE_FORMAT": "Moduldata bruker eit ustøtta eller skadd format. Den lagra fila er ikkje endra.",

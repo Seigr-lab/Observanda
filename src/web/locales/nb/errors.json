@@ -166,7 +166,7 @@
   "DEVICE_UNAVAILABLE": "Sikker enhetslagring er utilgjengelig. Bruk et arbeidsområdepassord eller en gjenopprettingsnøkkel for å låse opp, eller velg passordkryptering for et nytt arbeidsområde.",
   "DEVICE_UNKNOWN": "Denne enheten er ikke gitt tilgang. Bruk et arbeidsområdepassord eller en gjenopprettingsnøkkel, eller be et medlem autorisere enheten.",
   "DEVICE_INVALID": "Enhetsnøkkelen eller tilgangsforespørselen er ugyldig. De lagrede nøklene er ikke erstattet.",
-  "ACCESS_UPGRADE": "Opprett en ny kryptert kopi for å aktivere enhetsdeling og gjenoppretting for dette eldre arbeidsområdet.",
+  "ACCESS_UPGRADE": "Dette elementet er lagret i et tidligere lagringsformat i Observanda som denne versjonen ikke lenger leser. Filene er uendret. Konverter det til gjeldende lagringsformat før du åpner det.",
   "ACCESS_CONFIRM": "Verifiser mottakerens fingeravtrykk og bekreft tilgang til hele dette arbeidsområdet.",
   "MODULE_INVALID": "Kontroller de fremhevede modulfeltene. Endringene dine er ikke lagret.",
   "MODULE_FORMAT": "Moduldataene bruker et format som ikke støttes eller er skadet. Den lagrede filen er ikke endret.",

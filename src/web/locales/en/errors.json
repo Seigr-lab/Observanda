@@ -166,7 +166,7 @@
   "DEVICE_UNAVAILABLE": "Secure device storage is unavailable. Use a workspace password or recovery key to unlock, or choose password encryption for a new workspace.",
   "DEVICE_UNKNOWN": "This device has not been granted access. Use a workspace password or recovery key, or ask a member to authorize this device.",
   "DEVICE_INVALID": "The device key or access request is invalid. The stored keys have not been replaced.",
-  "ACCESS_UPGRADE": "Create a new encrypted copy to enable device sharing and recovery for this older workspace.",
+  "ACCESS_UPGRADE": "This item is stored in an earlier Observanda storage format that this version no longer reads. Its files are unchanged. Convert it to the current storage format before opening it.",
   "ACCESS_CONFIRM": "Verify the recipient fingerprint and confirm access to this entire workspace.",
   "MODULE_INVALID": "Check the highlighted module fields. Your changes have not been saved.",
   "MODULE_FORMAT": "Module data uses an unsupported or damaged format. The stored file has not been changed.",
