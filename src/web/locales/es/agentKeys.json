@@ -37,5 +37,7 @@
   "activityUpdate": "{key} cambió «{title}»",
   "activityLink": "{key} añadió un enlace a «{title}»",
   "activityUnlink": "{key} quitó un enlace de «{title}»",
-  "activityAttach": "{key} adjuntó archivos a «{title}»"
+  "activityAttach": "{key} adjuntó archivos a «{title}»",
+  "endpointFile": "Archivo de dirección",
+  "endpointFileHelp": "La dirección de Observanda cambia cada vez que se inicia. Los programas de este equipo leen la dirección y la descripción actuales de este archivo."
 }

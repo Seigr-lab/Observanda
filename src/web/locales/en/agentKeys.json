@@ -37,5 +37,7 @@
   "activityUpdate": "{key} changed “{title}”",
   "activityLink": "{key} added a link to “{title}”",
   "activityUnlink": "{key} removed a link from “{title}”",
-  "activityAttach": "{key} attached files to “{title}”"
+  "activityAttach": "{key} attached files to “{title}”",
+  "endpointFile": "Address file",
+  "endpointFileHelp": "Observanda's address changes each time it starts. Programs on this computer read the current address and description from this file."
 }

@@ -37,5 +37,7 @@
   "activityUpdate": "{key} ha canviat «{title}»",
   "activityLink": "{key} ha afegit un enllaç a «{title}»",
   "activityUnlink": "{key} ha tret un enllaç de «{title}»",
-  "activityAttach": "{key} ha adjuntat fitxers a «{title}»"
+  "activityAttach": "{key} ha adjuntat fitxers a «{title}»",
+  "endpointFile": "Fitxer d'adreça",
+  "endpointFileHelp": "L'adreça d'Observanda canvia cada vegada que s'inicia. Els programes d'aquest ordinador llegeixen l'adreça i la descripció actuals d'aquest fitxer."
 }

@@ -779,7 +779,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        if(context!==selectedContext||contextRequired&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workspaceId=(await workspace.outline()).metadata.id;
-       if(operation==='list'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return json({workspaceId,agentKeys:await agentKeys.list(workspaceId)});}
+       if(operation==='list'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return json({workspaceId,agentKeys:await agentKeys.list(workspaceId),endpointFile:agentKeys.endpointFile()});}
        if(operation==='activity'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return json({activity:await agentKeys.activity(workspaceId)});}
        if(operation==='revoke'){if(!data||Object.keys(data).join()!=='id')throw new AppError('INVALID');activeWrites++;countedWrite=true;return json(await agentKeys.revoke(workspaceId,data.id));}
        if(operation==='create'){

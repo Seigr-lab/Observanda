@@ -37,5 +37,7 @@
   "activityUpdate": "{key} endra «{title}»",
   "activityLink": "{key} la til ei lenkje i «{title}»",
   "activityUnlink": "{key} fjerna ei lenkje frå «{title}»",
-  "activityAttach": "{key} la ved filer i «{title}»"
+  "activityAttach": "{key} la ved filer i «{title}»",
+  "endpointFile": "Adressefil",
+  "endpointFileHelp": "Adressa til Observanda endrar seg kvar gong han startar. Program på denne datamaskina les gjeldande adresse og skildring frå denne fila."
 }

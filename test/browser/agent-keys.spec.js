@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {encryptedFixture} from './encrypted-fixture.js';
@@ -23,6 +23,9 @@ test('the owner creates an agent key shown once, the key works, and revoking it 
   await expect(dialog.getByRole('heading',{name:'Copy the new agent key'})).toBeVisible();
   const key=await dialog.getByLabel('Agent key').inputValue();expect(key).toMatch(/^obsk_[a-f0-9]{32}_[A-Za-z0-9_-]{43}$/);
   await expect(dialog.getByLabel('Agent API description')).toHaveValue(app.origin+'/api/v1/openapi.json');
+  // The address changes each time the app starts; programs read it from this file.
+  const endpointFile=path.join(directory,'device.key.agents','endpoint.json');await expect(dialog.getByLabel('Address file')).toHaveValue(endpointFile);
+  expect(JSON.parse(await readFile(endpointFile,'utf8')).description).toBe(app.origin+'/api/v1/openapi.json');
   // The key works from a program on this computer, with no browser session.
   const me=await fetch(app.origin+'/api/v1/agent/me',{headers:{Authorization:'Bearer '+key}});expect(me.status).toBe(200);
   const described=await me.json();expect(described.name).toBe('Documentation agent');expect(described.access).toBe('read');

@@ -4,7 +4,7 @@ import './i18n/catalogues/agentKeys.js';
 import {t} from './i18n/index.js';
 export function agentKeysUI({api,esc,field,present,notify}){
  const text=(key,args)=>esc(t('agentKeys',key,args));
- let keys=[],activity=[],projects=[],books=new Map(),created=null;
+ let keys=[],activity=[],projects=[],books=new Map(),created=null,endpointFile='';
  document.querySelector('#dialog')?.addEventListener('close',()=>{created=null;const secret=document.querySelector('[data-agent-key-secret]');if(secret){secret.value='';secret.textContent='';}});
  const day=value=>new Date(value).toLocaleDateString();
  async function loadProjects(parentId=null,depth=0){
@@ -40,7 +40,7 @@ export function agentKeysUI({api,esc,field,present,notify}){
    field(text('expiry'),'<input name="expiry" type="date">')+
    '<button class="button primary" type="submit">'+text('createButton')+'</button></form></details>');
  }
- async function open(){keys=[];activity=[];projects=[];books=new Map();keys=(await api('/api/security/agent-keys/list',{})).agentKeys;activity=(await api('/api/security/agent-keys/activity',{})).activity;await loadProjects();for(const key of keys)if(key.scope.kind==='lab-book')await loadBooks(key.scope.projectId);view();}
+ async function open(){keys=[];activity=[];projects=[];books=new Map();const listing=await api('/api/security/agent-keys/list',{});keys=listing.agentKeys;endpointFile=listing.endpointFile;activity=(await api('/api/security/agent-keys/activity',{})).activity;await loadProjects();for(const key of keys)if(key.scope.kind==='lab-book')await loadBooks(key.scope.projectId);view();}
  async function input(el){
   if(!el.matches('[data-agent-key-scope]'))return false;
   const form=el.closest('form'),holder=form.querySelector('[data-agent-key-book]'),select=form.elements.labBook,value=el.value;
@@ -63,7 +63,8 @@ export function agentKeysUI({api,esc,field,present,notify}){
   const result=await api('/api/security/agent-keys/create',{name:String(data.get('name')).trim(),scope,access:String(data.get('access')),expiresAt:expiry?new Date(expiry+'T23:59:59.999Z').toISOString():null});
   created=result.key;
   present(t('agentKeys','createdTitle'),'<p>'+text('shownOnce')+'</p>'+field(text('key'),'<textarea data-agent-key-secret readonly rows="2" spellcheck="false" class="security-fingerprint">'+esc(created)+'</textarea>')+
-   field(text('description'),'<input readonly data-agent-key-description value="'+esc(location.origin+'/api/v1/openapi.json')+'">')+'<p class="muted">'+text('descriptionHelp')+'</p>',
+   field(text('description'),'<input readonly data-agent-key-description value="'+esc(location.origin+'/api/v1/openapi.json')+'">')+'<p class="muted">'+text('descriptionHelp')+'</p>'+
+   field(text('endpointFile'),'<input readonly data-agent-endpoint-file value="'+esc(endpointFile)+'">')+'<p class="muted">'+text('endpointFileHelp')+'</p>',
    '<button type="button" class="button primary" data-action="security-agent-key-done">'+text('done')+'</button>');
   return true;
  }
