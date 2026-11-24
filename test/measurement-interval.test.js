@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {blankIntervalUncertainty,enclosureUncertainty,validIntervalUncertainty,validIntervalCoverage,intervalReferences,intervalDomain,validIntervalDomain} from '../src/web/measurement-interval-model.js';
+import {blankIntervalUncertainty,enclosureUncertainty,validIntervalUncertainty,validIntervalCoverage,intervalDomain,validIntervalDomain} from '../src/web/measurement-interval-model.js';
 import {parseIntervalBounds,calculateIntervalBounds,convertIntervalBounds,intervalComponents} from '../src/measurement-interval.js';
 import {ArithmeticBudget} from '../src/tools/exact-arithmetic.js';
 import {exactUnitScalar} from '../src/web/measurement-unit-model.js';
@@ -11,14 +11,14 @@ const unit=(kind,axis,scale='1',offset='0')=>({version:1,kind,dimensions:axis?[{
 
 test('interval declarations preserve exact authored coverage and pinned methods without inventing statistical claims',()=>{
  const authored=method();authored.coverage={kind:'confidence',level:exactUnitScalar('0.2','radix-fraction',6)};
- assert.equal(validIntervalUncertainty(authored),true);assert.deepEqual(intervalReferences(authored),[authored.method.reference]);assert.equal(authored.coverage.level.spelling,'0.2');
+ assert.equal(validIntervalUncertainty(authored),true);assert.equal(authored.coverage.level.spelling,'0.2');
  assert.equal(validIntervalUncertainty(blankIntervalUncertainty()),false);assert.equal(validIntervalUncertainty({...authored,coverage:null}),true);
  for(const level of ['0','1','1/3'])assert.equal(validIntervalCoverage({kind:'probability',level:exactUnitScalar(level,level.includes('/')?'rational':'integer')}),true);
  for(const level of ['-0.1','1.01'])assert.equal(validIntervalCoverage({kind:'confidence',level:exactUnitScalar(level,'decimal')}),false);
  assert.equal(validIntervalCoverage({kind:'confidence',level:0.95}),false);assert.equal(validIntervalCoverage({kind:'confidence',level:exactUnitScalar('0.2','decimal',6)}),false);
  assert.equal(validIntervalUncertainty({...authored,covariance:0}),false);assert.equal(validIntervalUncertainty({...authored,distribution:'normal'}),false);
  assert.equal(validIntervalUncertainty({...authored,method:{...authored.method,reference:{...authored.method.reference,revision:'latest'}}}),false);
- const derived=enclosureUncertainty();assert.equal(validIntervalUncertainty(derived),true);assert.equal(derived.coverage,null);assert.deepEqual(intervalReferences(derived),[]);
+ const derived=enclosureUncertainty();assert.equal(validIntervalUncertainty(derived),true);assert.equal(derived.coverage,null);
  assert.equal(validIntervalUncertainty({...derived,coverage:authored.coverage}),false);assert.equal(validIntervalUncertainty({...derived,method:{...derived.method,version:'2'}}),false);
  assert.equal(validIntervalUncertainty(authored),true,'Producing an enclosure must not rewrite the retained input claim');
 });

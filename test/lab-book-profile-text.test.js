@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {prepareLanguage,activateLanguage,t,loadedMessages} from '../src/web/i18n/index.js';
 import {laboratoryProfiles,enableProfile} from '../src/web/laboratory/catalog.js';
-import {profileText,trackingText,isProfileText,prepareProfileText} from '../src/web/laboratory/profile-text.js';
+import {profileText,trackingText,prepareProfileText} from '../src/web/laboratory/profile-text.js';
 import {customFieldLabel,customFieldValueText} from '../src/web/custom-field-presentation.js';
 import {validConfiguration} from '../src/web/notebook-schema.js';
 
@@ -20,7 +20,7 @@ function profileKeys(profile,english){
    keys.push(`${profile.id}.${s.key}.fields.${f.key}`);
    const prefix=`${profile.id}.${s.key}.choices.${f.key}.`;
    for(const choice of f.choices)keys.push(Object.keys(english).find(key=>key.startsWith(prefix)&&english[key]===choice));
-   if(f.unit&&isProfileText(f.unit))keys.push(Object.keys(english).find(key=>key.startsWith('units.')&&english[key]===f.unit));
+   if(f.unit&&Object.values(english).includes(f.unit))keys.push(Object.keys(english).find(key=>key.startsWith('units.')&&english[key]===f.unit));
   }
  }
  if(profile.tracking)keys.push(`${profile.id}.tracking.subject`,`${profile.id}.tracking.primary`,...profile.tracking.subjects.map(key=>`${profile.id}.tracking.history.${key}`));
@@ -34,7 +34,7 @@ test('profile text waits for its deferred catalogue while English shows the stor
  assert.equal(beekeeping.tracking.primary,'inspection');assert.equal(beekeeping.label,t('labBookTypes','beekeeping.label'));
  assert.equal(profileText(english['beekeeping.inspection.label']),english['beekeeping.inspection.label']);
  assert.throws(()=>beekeeping.sections,/has not been loaded: labBookProfiles/);assert.throws(()=>beekeeping.tracking.subjectLabel,/has not been loaded/);
- assert.throws(()=>isProfileText('Hive'),/has not been loaded/);assert.throws(()=>trackingText('beekeeping','primary'),/has not been loaded/);
+ assert.throws(()=>trackingText('beekeeping','primary'),/has not been loaded/);
  await prepareProfileText();
  assert.equal(beekeeping.sections.find(s=>s.key==='inspection').label,english['beekeeping.inspection.label']);
  assert.equal(beekeeping.tracking.subjectLabel,english['beekeeping.tracking.subject']);assert.equal(trackingText('beekeeping','primary'),english['beekeeping.tracking.primary']);

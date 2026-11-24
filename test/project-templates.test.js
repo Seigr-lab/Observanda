@@ -7,7 +7,7 @@ import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
 import {validateNotebook} from '../src/model.js';
 import {saveStructure} from '../src/structure.js';
-import {starterTemplate,copyConfiguration,projectTypeChoices,projectTypeChoice,recommendedProfile,templateChoices,newLabBookConfiguration,retainedTemplateAvailable} from '../src/web/project-templates.js';
+import {starterTemplate,copyConfiguration,projectTypeChoices,projectTypeChoice,recommendedProfile,templateAvailable,retainedTemplateAvailable} from '../src/web/project-templates.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -69,10 +69,9 @@ test('template choices and project defaults follow the enabled modules without m
  for(const kind of ['Wing','Team','Collection','Department','Sound ecology'])assert.equal(projectTypeChoice(kind,enabled),'custom');
  assert.equal(projectTypeChoice('Computer / IT',enabled),'profile:computer-it');assert.equal(projectTypeChoice('Computer / IT',disabled),'custom');
  assert.equal(recommendedProfile('profile:computer-it',disabled),null);assert.equal(recommendedProfile('profile:computer-it',enabled).id,'computer-it');
- assert.equal(templateChoices(book,disabled).length,0);assert.equal(templateChoices(book,enabled).length,1);
- assert.deepEqual(newLabBookConfiguration(before,disabled),{profiles:[],sections:[]});assert.notDeepEqual(newLabBookConfiguration(before,enabled).sections,[]);
+ assert.equal(templateAvailable(book.projects[0].labBookTemplate,disabled),false);assert.equal(templateAvailable(book.projects[0].labBookTemplate,enabled),true);
  assert.deepEqual(book.projects[0].labBookTemplate,before);
- book.projects[0].labBookTemplate={name:'Custom',configuration:{profiles:[],sections:[]}};assert.equal(templateChoices(book,disabled).length,1);
+ book.projects[0].labBookTemplate={name:'Custom',configuration:{profiles:[],sections:[]}};assert.equal(templateAvailable(book.projects[0].labBookTemplate,disabled),true);
 });
 
 import {readAccess} from '../src/access.js';

@@ -19,7 +19,6 @@ function profileKeys(){
  return keys;
 }
 const loadedKeys=()=>{const found=profileKeys();if(!found)throw new TypeError('Message namespace has not been loaded: labBookProfiles');return found;};
-export const isProfileText=value=>typeof value==='string'&&loadedKeys().has(value);
 export const profileText=value=>{
  if(typeof value!=='string')return value;
  if(!profileKeys()&&language()==='en')return value;

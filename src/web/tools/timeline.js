@@ -1,10 +1,6 @@
-import {timelineScope,timelineMatch,timelineOrder} from './timeline-model.js';
 import {STATUSES} from '../record-types.js';
 import {t} from '../i18n/index.js';
 import {recordDateLabel} from '../record-date.js';
-export function timelineRecords(book,d){
- const ids=timelineScope(book,d),matches=timelineMatch(d);return book.entries.filter(r=>ids.has(r.notebookId)&&matches(r)).sort(timelineOrder(d));
-}
 export function timelinePageHTML(result,d,esc){
  const tr=(key,values)=>t('timeline',key,values),page=result.records,books=new Map((result.books??[]).map(b=>[b.id,b])),projects=new Map((result.projects??[]).map(p=>[p.id,p])),groups=new Map();
  for(const e of page){const b=books.get(e.notebookId),id=e.owner?(d.groupBy==='book'?e.owner.workspaceId+'/'+e.notebookId:e.owner.projectId??e.owner.workspaceId):(d.groupBy==='book'?b?.id:b?.projectId),label=e.owner?(d.groupBy==='book'?e.owner.notebookTitle:e.owner.projectTitle):(d.groupBy==='book'?b?.title:projects.get(id)?.title);if(!groups.has(id))groups.set(id,{label:label??tr('unassigned'),entries:[]});groups.get(id).entries.push(e);}

@@ -66,9 +66,3 @@ export function recoveryValuePager(value,book,{message=recordRecoveryMessage,fie
  return {page,next(){page();if(current.next){previous.push(cursor);cursor=current.next;current=null;}return page();},previous(){if(previous.length){cursor=previous.pop();current=null;}return page();}};
 }
 
-// Compatibility descriptions are explicitly complete. The conflict review UI
-// uses recoveryValuePager so only its current text window is materialized.
-export function describeRecoveryValue(value,book,options={}){
- const pager=recoveryValuePager(value,book,options),parts=[];let page=pager.page();
- for(;;){parts.push(page.text);if(!page.next)return parts.join('');page=pager.next();}
-}

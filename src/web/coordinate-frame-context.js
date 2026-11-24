@@ -8,7 +8,6 @@ function axisPage(context){const page=context.axes;return keys(page,['offset','i
 // Callers supply an authorized public projection, never the private frame descriptor.
 // An axis page is labelled as a page and is never presented as the complete axis set.
 export function coordinateFrameAxisPageParts(context,{text=message}={}){if(!admitted(context)||!axisPage(context))return [];const page=context.axes;return [text('publicAxisPage',{first:page.items.length?page.offset+1:0,last:page.offset+page.items.length,total:page.total}),...page.items.map((item,index)=>text('publicAxis',{position:page.offset+index+1,name:item.name}))];}
-export function coordinateFrameAxisPageText(context,options){return coordinateFrameAxisPageParts(context,options).join('\n');}
 export function coordinateFrameContextParts(context,{text=message}={}){if(!admitted(context)||context.axes!==undefined&&!axisPage(context))return [];const unit=context.unit?text('publicUnit',{unit:context.unit}):text('publicNoUnit'),parts=[text(context.method?(context.sourceNamespace?'publicTransformContext':'publicTargetTransformContext'):'publicContext',{namespace:context.namespace,dimension:context.dimension,unit,...(context.sourceNamespace?{sourceNamespace:context.sourceNamespace}:{})})];if(context.axes)parts.push(...coordinateFrameAxisPageParts(context,{text}));return parts;}
 export function coordinateFrameContextText(context,options){return coordinateFrameContextParts(context,options).join('\n');}
 

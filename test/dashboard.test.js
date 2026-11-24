@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {queryPanel,matchesTool} from '../src/web/dashboard-queries.js';
+import {queryPanel} from '../src/web/dashboard-queries.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
@@ -98,7 +98,6 @@ test('invalid panel filters are rejected and catalogue search uses names, purpos
  for(const config of [{recordType:'unknown'},{status:'approved'},{projectId:randomUUID()},{workspaceId:randomUUID(),notebookId:randomUUID()},{title:'x'.repeat(97)},{tag:'x'.repeat(41)},{workspaceId:'../private'}]){
   const v=defaultDashboard();Object.assign(v.views[0].panels[0].config,config);assert.equal(validDashboard(v),false);
  }
- assert.equal(matchesTool({name:'Media collection',description:'Images, audio and video',category:'Evidence'},' AUDIO evidence '),true);assert.equal(matchesTool({name:'Records',description:'Notes',category:'Work'},'audio'),false);
 });
 
 test('largest supported layout can be saved and reopened within the preferences file budget',async()=>{

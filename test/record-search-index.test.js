@@ -20,7 +20,8 @@ import {ObjectIndex} from '../src/object-index.js';
 import {digest} from '../src/storage-format.js';
 import {verifySearchChange} from '../src/record-search-verification.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
-import {queryRecords,recordBrowse} from '../src/web/record-query.js';
+import {recordBrowse} from '../src/web/record-query.js';
+import {queryRecords} from './record-query-helpers.js';
 const query=(search='',extra={})=>({projectId:null,notebookId:null,filter:'all',search,browse:recordBrowse(),...extra});
 async function fixture(t,count=12,body='Ordinary field notes'){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-search-index-')),book=upgradeNotebook(sampleNotebook());

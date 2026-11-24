@@ -4,7 +4,16 @@ import {randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {createNotebook,validateNotebook} from '../src/model.js';
-import {startingAppearance,contrastChecks,contrastRatio} from '../src/web/themes.js';
+import {startingAppearance,contrastRatio} from '../src/web/themes.js';
+// The readable contrast each starting palette must keep (WCAG AA ratios).
+function contrastChecks(a) {
+  return [
+    ['Body text', Math.min(contrastRatio(a.text, a.background), contrastRatio(a.text, a.surface)), 4.5],
+    ['Secondary text', Math.min(contrastRatio(a.muted, a.background), contrastRatio(a.muted, a.surface)), 4.5],
+    ['Links', Math.min(contrastRatio(a.accent, a.background), contrastRatio(a.accent, a.surface)), 4.5],
+    ['Figure marks on white', contrastRatio(a.accent, '#ffffff'), 3]
+  ];
+}
 
 test('starting palettes meet the configured color contrast thresholds and remain independently editable', () => {
   assert.equal(contrastRatio('#000000', '#ffffff'), 21);

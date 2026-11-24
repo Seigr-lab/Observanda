@@ -10,7 +10,7 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {ownerOf,scopedItems} from '../src/web/modules/scope.js';
-import {localCalendar,visibleCalendar} from '../src/web/modules/calendar-model.js';
+import {localCalendar,visibleCalendar} from './module-projections.js';
 import {parseCalendar} from '../src/calendar/ical.js';
 import {parseFeed} from '../src/calendar/parse.js';
 import {publicAddress,fetchCalendar} from '../src/calendar/fetch.js';

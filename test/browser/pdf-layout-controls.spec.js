@@ -15,7 +15,7 @@ import {pdfFootnoteFlowScript} from '../../src/pdf-footnote-flow.js';
 import {pdfPageReferenceMeasurementScript,pdfPageReferenceApplyScript,extractPdfPageReferences} from '../../src/pdf-page-references.js';
 import {pdfLayoutPreset} from '../../src/web/pdf-layout-model.js';
 import {pdfStructureDefaults,pdfCaptionDefaults} from '../../src/web/pdf-structure-model.js';
-import {appendPdfCrossReference} from '../../src/web/pdf-cross-reference-model.js';
+import {appendPdfCrossReference} from '../pdf-reference-content.js';
 import {researchReference} from '../../src/web/research-reference.js';
 import {createFigure} from '../../src/web/figure-model.js';
 import {navigate} from './preferences-helper.js';

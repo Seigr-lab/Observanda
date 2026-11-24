@@ -11,7 +11,8 @@ import {assertPublicFiles} from '../src/privacy.js';
 import {PUBLIC_BOOK_SCRIPT} from '../src/publication-browse.js';
 import {importContent} from '../src/migration/content.js';
 import {recordRevision} from '../src/research.js';
-import {queryRecords,recordBrowse} from '../src/web/record-query.js';
+import {recordBrowse} from '../src/web/record-query.js';
+import {queryRecords} from './record-query-helpers.js';
 import {recordCounts} from '../src/web/record-workflow.js';
 import {validViewQuery} from '../src/web/record-view-model.js';
 test('book blocks keep exact text, inert MathML, tables, citations and strict versioned contracts',()=>{

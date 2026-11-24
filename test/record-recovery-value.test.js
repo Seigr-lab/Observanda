@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {recoveryValuePager,describeRecoveryValue} from '../src/web/record-recovery-value.js';
+import {recoveryValuePager} from '../src/web/record-recovery-value.js';
+import {describeRecoveryValue} from './record-recovery-helpers.js';
 import {recordRecoveryMessage as message} from '../src/web/record-recovery-messages.js';
 import {proseText} from '../src/web/prose-model.js';
 const book={projects:[],notebooks:[]};

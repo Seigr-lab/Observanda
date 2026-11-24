@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {prepareLanguage,activateLanguage,t} from '../src/web/i18n/index.js';
 import {validateCatalogue} from '../src/web/i18n/runtime.js';
-import {localCalendar} from '../src/web/modules/calendar-model.js';
+import {localCalendar} from './module-projections.js';
 import {ownerDescriptor,ownerLabel} from '../src/web/modules/scope.js';
 import {calendarSourceName,calendarSourceOwner,calendarEventOrigin,calendarSourceError} from '../src/web/modules/calendar-presentation.js';
 import {calendarUI} from '../src/web/modules/calendar-ui.js';

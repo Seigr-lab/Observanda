@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {pdfLayoutPreset} from '../../src/web/pdf-layout-model.js';
 import {pdfPageMasterDefaults} from '../../src/web/pdf-page-master-model.js';
 import {pdfStructureDefaults,pdfCaptionDefaults} from '../../src/web/pdf-structure-model.js';
-import {appendPdfCrossReference} from '../../src/web/pdf-cross-reference-model.js';
+import {appendPdfCrossReference} from '../pdf-reference-content.js';
 import {pdfNoteCall} from '../../src/web/pdf-notes-model.js';
 import {bleedPicture} from './pdf-bleed-image.js';
 import {makePdfPrinterProfile} from './pdf-icc.js';

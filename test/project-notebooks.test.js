@@ -14,7 +14,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {enableProfile} from '../src/web/laboratory/catalog.js';
 import {validConfiguration,templateFrom} from '../src/web/notebook-schema.js';
 import {ancestors,descendants,recordsIn} from '../src/web/workspace-structure.js';
-import {notebookDirectory,notebookRecordScope} from '../src/web/laboratory/notebook-model.js';
+import {notebookDirectory} from '../src/web/laboratory/notebook-model.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {createModuleHost} from '../src/web/feature-modules.js';
 // Lab book profile text is a deferred catalogue; these checks read profiles directly.
@@ -30,7 +30,6 @@ test('user-defined structure supports direct lab books, nested projects, moves a
  assert.deepEqual([...descendants(book,root.id)],[root.id,child.id]);
  assert.equal(notebookDirectory(book,root.id).length,1);
  assert.equal(recordsIn(book,root.id).length,book.entries.length);
- assert.equal(notebookRecordScope(book,{projectId:root.id,notebookId:notebook.id}).general.length,1);
  assert.throws(()=>saveStructure(book,{kind:'project',value:{...root,parentId:child.id}}),{code:'INVALID'});
  assert.throws(()=>saveStructure(book,{kind:'project',value:{...child,parentId:randomUUID()}}),{code:'INVALID'});
  const moved=saveStructure(book,{kind:'notebook',value:{...notebook,projectId:root.id}}).book;

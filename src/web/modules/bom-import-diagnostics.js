@@ -4,7 +4,6 @@ import tableMessages from '../locales/en/figureDiagnostics.json' with {type:'jso
 
 const fields={value:'fieldValue',footprint:'fieldFootprint',partNumber:'fieldPartNumber',unit:'fieldUnit',notes:'fieldNotes',references:'fieldReferences'};
 const catalogues={bomImport:messages,figureDiagnostics:tableMessages};
-export const bomImportText=translate=>modelMessages('bomImport',messages,translate);
 // Stable diagnostic identifiers accompany the existing English error field.
 // Only these known catalogues are accepted for client-side presentation.
 export function bomDiagnosticText(diagnostic,translate){

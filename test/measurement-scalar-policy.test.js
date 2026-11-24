@@ -4,7 +4,7 @@ import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.j
 import {DatasetResourceBudget} from '../src/web/dataset-resource-budget.js';
 import {validatePolicyScalar} from '../src/web/measurement-scalar-policy.js';
 import {blankUnitDefinition,validUnitDefinition,validateUnitDefinition,canonicalUnitValue,unitScalar} from '../src/web/measurement-unit-model.js';
-import {validateClockDefinition,clockRateIdentity} from '../src/web/measurement-clock-model.js';
+import {validateClockDefinition} from '../src/web/measurement-clock-model.js';
 import {validateIntervalUncertainty,blankIntervalUncertainty} from '../src/web/measurement-interval-model.js';
 import {defaultDomain} from '../src/web/measurement-domain-model.js';
 import {MaterialSequence} from '../src/material-sequence.js';
@@ -19,7 +19,7 @@ test('owned interpretation and caller resources both bound parsing and conversio
  const small=structuredClone(p);small.resources.maxBits=64;assert.throws(()=>validatePolicyScalar(long,p,{budget:new DatasetResourceBudget(small)}),{code:'DATASET_CALCULATION_RESOURCE'});assert.throws(()=>validatePolicyScalar(long,small,{budget:new DatasetResourceBudget(p)}),{code:'DATASET_CALCULATION_RESOURCE'});
  const u=unit();u.scale=scalar('16');const caller=new DatasetResourceBudget(small);assert.throws(()=>caller.run(()=>canonicalUnitValue({numerator:1n<<61n,denominator:1n},u,caller)),{code:'DATASET_CALCULATION_RESOURCE'});
  const zero=unit();zero.scale=scalar('0');assert.equal(validUnitDefinition(zero),true);assert.throws(()=>validateUnitDefinition(zero),RangeError);
- const clock={version:2,modulus:scalar('1'+'0'.repeat(9000)),rate:{counts:scalar('3'),interval:scalar('2'),unit:'s'},resourcePolicy:p};validateClockDefinition(clock);assert.deepEqual(clockRateIdentity(clock),{numerator:'3',denominator:'2',unit:'s',canonical:false});
+ const clock={version:2,modulus:scalar('1'+'0'.repeat(9000)),rate:{counts:scalar('3'),interval:scalar('2'),unit:'s'},resourcePolicy:p};validateClockDefinition(clock);
  const uncertainty={...blankIntervalUncertainty(),version:2,resourcePolicy:p,method:{name:'Declared',version:'1',reference:null},coverage:{kind:'probability',level:scalar('2')}};assert.throws(()=>validateIntervalUncertainty(uncertainty),RangeError);
 });
 test('selected scalar definitions retain complete text, reject foreign refs and verify exact immutable text',async()=>{

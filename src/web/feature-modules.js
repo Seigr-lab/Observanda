@@ -51,15 +51,6 @@ export function createModuleHost(registry,modules=FEATURE_MODULES){
 }
 
 export const moduleForPage=page=>FEATURE_MODULES.find(m=>(m.pages??[]).includes(page));
-// Additional feature manifests participate in settings, menus and generic routes.
-export function registerFeatureModule(module){
- if(!module||!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(module.id)||typeof module.label!=='string'||typeof module.load!=='function')throw new TypeError('A feature module needs id, label and load.');
- if(module.parentId&&!FEATURE_MODULES.some(m=>m.id===module.parentId))throw new Error('Unknown parent module: '+module.parentId);
- if(FEATURE_MODULES.some(m=>m.id===module.id))throw new Error('Duplicate module: '+module.id);
- const value=Object.freeze({description:'',pages:[],navigation:[{action:'module-open',moduleId:module.id,label:module.label,icon:'folder'}],...module});
- FEATURE_MODULES.push(value);return value;
-}
-
 // Specialized owners take precedence over a parent fallback for shared entities.
 export function moduleForEntity(entity,entities){
  const candidates=FEATURE_MODULES.filter(m=>m.entityTypes?.includes(entity.type));

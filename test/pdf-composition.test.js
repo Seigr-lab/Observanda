@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
 import {pdfPageMasterDefaults} from '../src/web/pdf-page-master-model.js';
-import {pdfCompositionArea,pdfCompositionItems,pdfCompositionDefaults,pdfAdjustComposition,pdfMoveCompositionBox,pdfCompositionStatus,validPdfComposition} from '../src/web/pdf-composition-model.js';
+import {pdfCompositionArea,pdfCompositionItems,pdfCompositionDefaults,pdfAdjustComposition,pdfCompositionGeometry,pdfCompositionStatus,validPdfComposition} from '../src/web/pdf-composition-model.js';
 import {pdfCompositionUI} from '../src/web/pdf-composition-ui.js';
 import {arrangeComposition,compositionMovement} from '../src/web/pdf-composition-arrange.js';
 import {renderPdfComposition} from '../src/pdf-composition.js';
@@ -67,7 +67,7 @@ test('composition authoring has physical controls and explicit mode/adjust actio
  assert.match(ui.view(),/data-pdf-composition-mode/);assert.equal(changes,0);ui.input(element(['data-pdf-composition-mode'],{},'page'));assert.equal(value.layout.columns,1);assert.deepEqual(document,original);assert.equal(changes,1);assert.match(ui.view(),/data-pdf-composition-handle="block:0"/);
  const bad=element([],{pdfCompositionField:'xMm',pdfCompositionKey:'block:0'},'1000');ui.input(bad);assert.equal(bad.invalid,true);assert.equal(changes,1);
  ui.input(element([],{pdfCompositionField:'widthMm',pdfCompositionKey:'block:0'},'40'));ui.input(element([],{pdfCompositionField:'xMm',pdfCompositionKey:'block:0'},'12.5'));assert.equal(value.composition.boxes.find(box=>box.target.index===0).xMm,12.5);
- const moved=pdfMoveCompositionBox(value,value.layout,'block:0',{xMm:13,yMm:9999});assert.equal(moved.boxes.find(box=>box.target.index===0).xMm,15);assert.ok(moved.boxes.find(box=>box.target.index===0).yMm+moved.boxes.find(box=>box.target.index===0).heightMm<=pdfCompositionArea(value.layout).heightMm+1e-7);
+ const moved=pdfCompositionGeometry(value.composition.boxes.find(box=>box.target.index===0),pdfCompositionArea(value.layout),{xMm:13,yMm:9999},value.composition.snap?value.composition.gridMm:0);assert.equal(moved.xMm,15);assert.ok(moved.yMm+moved.heightMm<=pdfCompositionArea(value.layout).heightMm+1e-7);
  value.content.content.push(paragraph('Unplaced'));assert.equal(pdfCompositionStatus(value,value.layout).ready,false);ui.action('composition-adjust');assert.equal(pdfCompositionStatus(value,value.layout).ready,true);ui.input(element(['data-pdf-composition-mode'],{},'flow'));assert.equal(value.composition,undefined);assert.equal(ui.action('other'),false);assert.ok(draws>=3);ui.dispose();
 });
 

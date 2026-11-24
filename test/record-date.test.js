@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import {validRecordDate,recordDateLabel,dateBounds,dateInRange} from '../src/web/record-date.js';
-import {queryRecords} from '../src/web/record-query.js';
+import {queryRecords} from './record-query-helpers.js';
 import {sampleNotebook} from '../src/sample.js';
 import {validateNotebook} from '../src/model.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';

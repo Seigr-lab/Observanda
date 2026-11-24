@@ -17,7 +17,6 @@ import history from './profiles/historical-research.js';
 export const laboratoryProfiles=Object.freeze([p0,p1,p2,p3,p4,p5,p6,p7,arts,physical,audio,beekeeping,software,music,history].sort((a,b)=>a.label.localeCompare(b.label,'en',{sensitivity:'base'})));
 export const profileById=id=>laboratoryProfiles.find(p=>p.id===id);
 export const sectionAvailable=(lab,section)=>section.enabled&&(!section.profileId||lab.profiles.some(p=>p.id===section.profileId&&p.enabled));
-export const availableSections=lab=>lab.sections.filter(s=>sectionAvailable(lab,s));
 export function enableProfile(lab,id,enabled){
  const profile=profileById(id);if(!profile)return;
  let chosen=lab.profiles.find(p=>p.id===id);

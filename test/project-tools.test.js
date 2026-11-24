@@ -6,8 +6,7 @@ import {validateNotebook} from '../src/model.js';
 import {saveStructure} from '../src/structure.js';
 import {projectUsesTool,projectToolScope} from '../src/web/project-tools.js';
 import {locationTools} from '../src/web/modules/location-tools.js';
-import {toolItems} from '../src/web/modules/scope.js';
-import {localCalendar,visibleCalendar} from '../src/web/modules/calendar-model.js';
+import {localCalendar,visibleCalendar,toolItems} from './module-projections.js';
 import {registerResources} from '../src/web/modules/operations-data.js';
 
 function setup(){

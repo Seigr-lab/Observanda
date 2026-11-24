@@ -1,11 +1,8 @@
-import {inventoryLocation} from './editor-presentation.js';
 import '../i18n/catalogues/dashboardEditors.js';
 import {t} from '../i18n/index.js';
 import {dashboardCollection} from '../dashboard-collection-client.js';
 import {dashboardScopeSettings,dashboardBookSettings} from '../dashboard-scope.js';
 import {renderFigure} from '../figure-presentation.js';
-import {balance} from './quantities.js';
-import {stockTracked,assetPlacement,inventoryBOMUsage} from './inventory-model.js';
 import {inventoryPageProvider,inventoryItemChoices} from './inventory-data.js';
 const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
 
@@ -13,13 +10,6 @@ const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
 const metrics=()=>[{value:'physical',label:dt("onHand"),color:'#405cb2'},{value:'reserved',label:dt("reserved"),color:'#b77836'},{value:'available',label:dt("available"),color:'#368173'},{value:'used',label:dt("usedBoms"),color:'#7960a2'},{value:'scrapped',label:dt("scrappedBoms"),color:'#b94a50'}];
 const selectedMetrics=options=>metrics().filter(m=>(options.comparisonMetrics??['available']).includes(m.value));
 const color=(value,fallback)=>/^#[a-f0-9]{6}$/i.test(value??'')?value:fallback;
-export function inventoryComparisonRows(book,entities,resource,scope){
- const tracked=stockTracked(resource.data),placement=assetPlacement(resource);
- const rows=[...scope].map(projectId=>({projectId,label:inventoryLocation(book,projectId),
-  ...inventoryBOMUsage(entities,resource.id,new Set([projectId])),...(tracked?balance(entities,resource.id,new Set([projectId])):{physical:placement===projectId?'1':'0',reserved:'0',available:placement===projectId&&resource.data.status==='available'?'1':'0'})}));
- const counts=new Map();for(const row of rows)counts.set(row.label,(counts.get(row.label)??0)+1);
- return rows.map(row=>({...row,label:counts.get(row.label)>1?row.label+' ['+(row.projectId??'workspace')+']':row.label}));
-}
 export function inventoryComparisonFigure(item,options={}){
  const selected=selectedMetrics(options),rows=item.holdings;
  return {id:item.key,title:item.title,kind:options.comparisonType==='bar'?'bar':'bar-horizontal',

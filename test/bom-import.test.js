@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readBOMTable,suggestedBOMMapping,mapBOMTable,BOM_IMPORT_BYTES} from '../src/web/modules/bom-import-model.js';
 import {inventoryBOMUsage} from '../src/web/modules/inventory-model.js';
-import {inventoryComparisonRows,inventoryComparisonFigure} from '../src/web/modules/inventory-dashboard.js';
+import {inventoryComparisonFigure} from '../src/web/modules/inventory-dashboard.js';
 
 test('KiCad-style BOMs preserve values and exact quantities, expand references, and distinguish DNP from exclusions',()=>{
  const table=readBOMTable('\uFEFFReference,Value,Footprint,Qty,DNP,Exclude from BOM,MPN,Datasheet\r\n"R1-R3","4k7","R_0603",3,,,ABC,private.pdf\r\nU1,TL072,DIP8,9007199254740993,,,0012,chip.pdf\r\nC1,100 nF,C_0805,1,DNP,,,\r\nX1,Ignored,,1,,yes,,\r\n');
@@ -47,7 +47,7 @@ test('BOM use is exact and follows the consumed stock source; cancelled plans an
  assert.deepEqual(inventoryBOMUsage(entities,'item'),{used:'9007199254740996',scrapped:'3',builds:2});
  assert.deepEqual(inventoryBOMUsage(entities,'item',new Set([null])),{used:'9007199254740993',scrapped:'2',builds:1});
  assert.deepEqual(inventoryBOMUsage(entities,'item',new Set(['run-project'])),{used:'0',scrapped:'0',builds:0});
- const book={title:'Organization',projects:[{id:'bench',title:'Bench'}]},holdings=inventoryComparisonRows(book,entities,resource,new Set([null,'bench']));
+ const holdings=[null,'bench'].map(projectId=>({projectId,label:projectId??'Organization',physical:'0',reserved:'0',available:'0',...inventoryBOMUsage(entities,'item',new Set([projectId]))}));
  assert.equal(holdings[0].used,'9007199254740993');assert.equal(holdings[1].used,'3');
  const figure=inventoryComparisonFigure({key:'item',title:'Component',data:resource.data,holdings},{comparisonMetrics:['available','used','scrapped']});
  assert.deepEqual(figure.series.map(s=>s.id),['available','used','scrapped']);assert.equal(figure.series[1].points[1].y,3);

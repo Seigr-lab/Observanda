@@ -1,4 +1,4 @@
-import {projectUsesTool,projectToolScope} from '../project-tools.js';
+import {projectToolScope} from '../project-tools.js';
 import {descendants,locationName} from '../workspace-structure.js';
 import {modelMessages} from '../model-messages.js';
 import messages from '../locales/en/moduleEditors.json' with {type:'json'};
@@ -18,10 +18,6 @@ export function scopedItems(book,entities,scope=null,recursive=true){
  if(!scope)return entities;
  const ids=recursive?descendants(book,scope):new Set([scope]),index=new Map(entities.map(e=>[e.id,e]));
  return entities.filter(e=>ids.has(ownerOf(e,index)));
-}
-export function toolItems(book,entities,moduleId){
- const index=new Map(entities.map(e=>[e.id,e]));
- return entities.filter(e=>projectUsesTool(book,ownerOf(e,index),moduleId));
 }
 export function ownerDescriptor(book,id){
  const name=id?locationName(book,id):book.title;

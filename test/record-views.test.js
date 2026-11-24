@@ -8,7 +8,7 @@ import os from 'node:os';
 import {Workspace} from '../src/storage.js';
 import {RecordViews} from '../src/record-views.js';
 import {viewQuery,validViewQuery,viewScopeIssue,viewScopeLabel} from '../src/web/record-view-model.js';
-import {queryRecords} from '../src/web/record-query.js';
+import {queryRecords} from './record-query-helpers.js';
 import {queryFixture} from './record-query-fixture.js';
 import {createWorkspaceAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';

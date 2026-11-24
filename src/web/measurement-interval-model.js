@@ -29,9 +29,4 @@ export function validIntervalUncertainty(value){
  if(!exact(value,['version','kind','method','coverage',...(value?.version===2?['resourcePolicy']:[])])||![1,2].includes(value.version)||value.version===2&&!validDatasetResourcePolicy(value.resourcePolicy)||!['declared-interval','derived-enclosure'].includes(value.kind)||!exact(value.method,['name','version','reference'])||!text(value.method.name,300)||!value.method.name.trim()||!text(value.method.version,100)||!reference(value.method.reference)||!validIntervalCoverage(value.coverage,value.resourcePolicy))return false;
  return value.kind!=='derived-enclosure'||value.coverage===null&&value.method.name===INTERVAL_ALGORITHM&&value.method.version==='1'&&value.method.reference===null;
 }
-export function intervalReferences(value){
- if(!validIntervalUncertainty(value))throw Error('Declare the interval method and valid coverage metadata.');
- return value.method.reference?[value.method.reference]:[];
-}
-
 export function validateIntervalUncertainty(value,{budget}={}){if(!validIntervalUncertainty(value))throw RangeError('Declare valid interval uncertainty');if(value.version===2&&value.coverage){const level=validatePolicyScalar(value.coverage.level,value.resourcePolicy,{budget});if(level.numerator<0n||level.numerator>level.denominator)throw RangeError('Coverage must lie between zero and one');}return value;}

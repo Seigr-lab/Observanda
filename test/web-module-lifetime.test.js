@@ -2,7 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {moduleWorkbench} from '../src/web/module-workbench.js';
-import {FEATURE_MODULES,registerFeatureModule} from '../src/web/feature-modules.js';
+import {FEATURE_MODULES} from '../src/web/feature-modules.js';
+// Adds a fixture manifest exactly as the built-in modules are declared.
+const registerFeatureModule=module=>{const value=Object.freeze({description:'',pages:[],navigation:[{action:'module-open',moduleId:module.id,label:module.label,icon:'folder'}],...module});FEATURE_MODULES.push(value);return value;};
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 function fixture(t,{delayed=false,scoped=false}={}){
  const id='lifetime-'+randomUUID(),created=[],state={storage:{contextId:'workspace'},book:{id:randomUUID(),projects:[]},projectOwner:{projectId:randomUUID()},dashboardSettings:{enabledModules:[id]},page:'workspace',moduleId:id,modulePath:''};let renders=0;

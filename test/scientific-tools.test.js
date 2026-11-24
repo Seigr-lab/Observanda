@@ -9,7 +9,7 @@ const calculate=(expression,options)=>math.calculate(expression,policyEngine(opt
 import {formula,reaction} from '../src/web/tools/stoichiometry.js';
 import {chemicalPreview} from '../src/tools/chemistry.js';
 import {validateTool} from '../src/modules/tools.js';
-import {timelineRecords} from '../src/web/tools/timeline.js';
+import {timelineRecords} from './timeline-oracle.js';
 import {sampleNotebook} from '../src/sample.js';
 import {randomUUID} from 'node:crypto';
 test('scientific expressions use restricted syntax, units and selected angles',()=>{

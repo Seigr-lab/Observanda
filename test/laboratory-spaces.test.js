@@ -12,7 +12,7 @@ import {workspaceModules} from '../src/modules/index.js';
 import {ModuleReader} from '../src/modules/reader.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {createModuleHost,moduleForEntity} from '../src/web/feature-modules.js';
-import {laboratoryProfiles,enableProfile,availableSections} from '../src/web/laboratory/catalog.js';
+import {laboratoryProfiles,enableProfile,sectionAvailable} from '../src/web/laboratory/catalog.js';
 // Lab book profile text is a deferred catalogue; these checks read profiles directly.
 async function setup(t,prefix,title){
  const directory=await mkdtemp(path.join(os.tmpdir(),prefix)),book=createNotebook(title),{workspace,vault}=await encryptedFixture(directory,book);
@@ -27,7 +27,7 @@ test('combined lab submodules retain customized sections and saved evidence acro
  const lab={name:'Computing and field station',description:'',archived:false,profiles:[],sections:[],links:[]};
  for(const profile of laboratoryProfiles)enableProfile(lab,profile.id,true);
  const totalSections=laboratoryProfiles.reduce((sum,p)=>sum+p.sections.length,0);
- assert.equal(lab.profiles.length,laboratoryProfiles.length);assert.equal(availableSections(lab).length,totalSections);
+ assert.equal(lab.profiles.length,laboratoryProfiles.length);assert.equal(lab.sections.filter(section=>sectionAvailable(lab,section)).length,totalSections);
  const section=lab.sections.find(s=>s.profileId==='computer-it');
  section.label='Build provenance';section.fields.push({key:'temperature',label:'Ambient temperature',type:'number',unit:'C',required:true,choices:[]});
  const labId=randomUUID(),entryId=randomUUID();
@@ -37,7 +37,7 @@ test('combined lab submodules retain customized sections and saved evidence acro
  assert.equal((await save('lab-entry',entryId,entry,null,cmd)).replayed,true);
  section.fields[0].label='Renamed current field';enableProfile(lab,'computer-it',false);
  await save('lab-space',labId,lab,1);
- assert.equal(availableSections(lab).length,totalSections-laboratoryProfiles.find(p=>p.id==='computer-it').sections.length);
+ assert.equal(lab.sections.filter(section=>sectionAvailable(lab,section)).length,totalSections-laboratoryProfiles.find(p=>p.id==='computer-it').sections.length);
  // A reopened workspace reads the saved entry by itself, never as one module document.
  assert.deepEqual((await new ModuleReader(new Workspace(ws.root,vault)).selected({workspaceId:book.id,id:entryId})).entity.data,entry);
  await save('lab-entry',entryId,{...entry,notes:'Retained work can still be amended.'},1);

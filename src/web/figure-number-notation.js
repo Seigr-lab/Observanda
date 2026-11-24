@@ -3,7 +3,6 @@
 // language. Digits come from the correctly rounded decimal spelling of the
 // stored number, never from repeated floating-point arithmetic, so a label
 // never claims digits the value does not have.
-export const FIGURE_NOTATIONS=['decimal','scientific','engineering','si'];
 const SUPERSCRIPT={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻'};
 // SI brochure (9th edition, 2022 amendment): quecto to quetta.
 const SI_PREFIXES=new Map([[-30,'q'],[-27,'r'],[-24,'y'],[-21,'z'],[-18,'a'],[-15,'f'],[-12,'p'],[-9,'n'],[-6,'μ'],[-3,'m'],[0,''],[3,'k'],[6,'M'],[9,'G'],[12,'T'],[15,'P'],[18,'E'],[21,'Z'],[24,'Y'],[27,'R'],[30,'Q']]);

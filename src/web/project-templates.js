@@ -18,8 +18,6 @@ export function starterTemplate(id){
  return {name:profile.label,configuration};
 }
 export const templateAvailable=(template,settings)=>!!template&&template.configuration.profiles.filter(p=>p.enabled).every(p=>enabledLabBookTypes(settings).some(active=>active.id===p.id));
-export const newLabBookConfiguration=(template,settings)=>templateAvailable(template,settings)?copyConfiguration(template.configuration):emptyConfiguration();
-export const templateChoices=(book,settings)=>book.projects.filter(p=>templateAvailable(p.labBookTemplate,settings)).map(p=>({id:p.id,label:p.labBookTemplate.name+' / '+p.title,template:p.labBookTemplate}));
 
 // Native templates retain their profiles in an immutable configuration. Read
 // those profiles in pages without loading their sections or changing the saved

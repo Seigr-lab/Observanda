@@ -13,7 +13,6 @@ export const STARTING_THEMES = Object.freeze({
   }) })
 });
 export const startingAppearance = name => ({ ...STARTING_THEMES[name].appearance });
-export const sameAppearance = (a, b) => Boolean(a && b && APPEARANCE_KEYS.every(key => a[key] === b[key])&&['fontAxes','headingFontAxes'].every(key=>JSON.stringify(a[key]??{})===JSON.stringify(b[key]??{})));
 export function validAppearance(a) {
   if (!a || typeof a !== 'object' || Array.isArray(a) || !APPEARANCE_KEYS.every(k => Object.hasOwn(a, k)) || Object.keys(a).some(k=>!APPEARANCE_KEYS.includes(k)&&!['fontAxes','headingFontAxes'].includes(k)) || ['fontAxes','headingFontAxes'].some(k=>a[k]!==undefined&&!validAxes(a[k]))) return false;
   return ['research', 'studio'].includes(a.theme) && ['accent', 'background', 'surface', 'text', 'muted', 'border'].every(k => typeof a[k] === 'string' && /^#[0-9a-f]{6}$/i.test(a[k]))
@@ -34,12 +33,4 @@ export function contrastRatio(first, second) {
   };
   const a = luminance(first), b = luminance(second);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
-export function contrastChecks(a) {
-  return [
-    ['Body text', Math.min(contrastRatio(a.text, a.background), contrastRatio(a.text, a.surface)), 4.5],
-    ['Secondary text', Math.min(contrastRatio(a.muted, a.background), contrastRatio(a.muted, a.surface)), 4.5],
-    ['Links', Math.min(contrastRatio(a.accent, a.background), contrastRatio(a.accent, a.surface)), 4.5],
-    ['Figure marks on white', contrastRatio(a.accent, '#ffffff'), 3]
-  ];
 }

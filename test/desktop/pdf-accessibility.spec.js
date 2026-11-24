@@ -12,7 +12,7 @@ import {pdfLayoutPreset} from '../../src/web/pdf-layout-model.js';
 import {pdfStructureDefaults,pdfCaptionDefaults} from '../../src/web/pdf-structure-model.js';
 import {pdfCompositionDefaults} from '../../src/web/pdf-composition-model.js';
 import {createFigure} from '../../src/web/figure-model.js';
-import {appendPdfCrossReference} from '../../src/web/pdf-cross-reference-model.js';
+import {appendPdfCrossReference} from '../pdf-reference-content.js';
 const text=value=>({type:'text',text:value}),paragraph=value=>({type:'paragraph',content:[text(value)]});
 function flatten(root){const rows=[],pending=[root];while(pending.length){const node=pending.pop();if(!node)continue;rows.push(node);for(let i=(node.children?.length??0)-1;i>=0;i--)pending.push(node.children[i]);}return rows;}
 function taggedText(tree,items){

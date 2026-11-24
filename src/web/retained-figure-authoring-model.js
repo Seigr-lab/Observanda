@@ -36,14 +36,6 @@ export function validManualFigureOperation(value){
  }
  return false;
 }
-export const validManualFigureImport=value=>exact(value,['source','mode','plotId'],['source','mode'])&&validMaterialReference(value.source)&&value.source.kind==='analysis'&&['replace','append','panel'].includes(value.mode)&&(value.mode==='append'?researchId(value.plotId):value.plotId===undefined||researchId(value.plotId));
-// An authored edit never retains the claim that its changed coordinates are the
-// original source measurement. The containing revision pins the prior source.
-export function authoredPointValue(point,patch){
- if(!object(point)||!validAuthoredPointPatch(patch))throw Error('Invalid measurement edit.');
- const {source,...value}=point;void source;return {...value,...patch};
-}
-
 // Authored figures can combine exact observations from multiple analyses.
 // Their private receipts retain the original analysis/member identity; clients
 // never provide these bindings in authoring commands.

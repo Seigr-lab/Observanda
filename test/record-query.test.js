@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import {parseRecordTagList,formatRecordTagList} from '../src/web/record-tags-model.js';
 import assert from 'node:assert/strict';
 import {queryFixture} from './record-query-fixture.js';
-import {queryRecords,recordBrowse,browseIssue} from '../src/web/record-query.js';
+import {recordBrowse,browseIssue} from '../src/web/record-query.js';
+import {queryRecords} from './record-query-helpers.js';
 import {recordsIn} from '../src/web/workspace-structure.js';
 import {validateNotebook} from '../src/model.js';
 

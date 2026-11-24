@@ -67,9 +67,3 @@ export function pdfCompositionGeometry(selected,area,{xMm,yMm,widthMm,heightMm},
  if(![xMm,yMm].every(Number.isFinite)||selected.widthMm>area.widthMm||selected.heightMm>area.heightMm)return null;
  return {...selected,xMm:Math.max(0,Math.min(round(xMm),area.widthMm-selected.widthMm)),yMm:Math.max(0,Math.min(round(yMm),area.heightMm-selected.heightMm))};
 }
-export function pdfMoveCompositionBox(section,layout,key,geometry,{snap=true}={}){
- const area=pdfCompositionArea(layout),value=section.composition;if(!area||!validPdfComposition(value))return null;
- const selected=value.boxes.find(box=>pdfCompositionKey(box.target)===key);if(!selected)return null;
- const box=pdfCompositionGeometry(selected,area,geometry,snap&&value.snap?value.gridMm:0);
- return box?{...value,boxes:value.boxes.map(item=>item===selected?box:item)}:null;
-}

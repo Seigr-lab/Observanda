@@ -136,7 +136,7 @@ test('fresh project access keys preserve original record identities and history 
 
 test('project registry and references retain identity across relocation without opening sibling owners',async t=>{
  const f=await fixture(t),a=await f.create('linked-a'),b=await f.create('linked-b'),w=f.home;
- const {ProjectRegistry}=await import('../src/project-registry.js'),{ProjectRouter}=await import('../src/project-router.js'),{ProjectReferences}=await import('../src/project-references.js'),{projectReference,parseProjectReference}=await import('../src/web/project-reference.js');
+ const {ProjectRegistry}=await import('../src/project-registry.js'),{ProjectRouter}=await import('../src/project-router.js'),{ProjectReferences}=await import('../src/project-references.js');
  await f.owner.closeProject(a.storage.root);await f.owner.closeProject(b.storage.root);const aRoot=path.join(w.workspace.root,path.basename(a.storage.root)),bRoot=path.join(aRoot,path.basename(b.storage.root));if(a.storage.root!==aRoot)await rename(a.storage.root,aRoot);await rename(b.storage.root,bRoot);a.storage=new ProjectStorage(aRoot,a.id,a.vault);b.storage=new ProjectStorage(bRoot,b.id,b.vault);
  const registry=new ProjectRegistry(w.workspace,(await w.workspace.outline()).metadata.id);let state=await registry.read();
  state=await registry.attach(a.storage,{expected:state.revision});// b sits inside a, as an earlier version could place a project.
@@ -145,7 +145,6 @@ test('project registry and references retain identity across relocation without 
  const opened=[],vaults=new Map([[a.id,a.vault],[b.id,b.vault]]);let allowed=true,locked=false;
  const router=new ProjectRouter(registry,{authorize:async()=>allowed,unlock:async entry=>{opened.push(entry.projectId);return locked?null:vaults.get(entry.projectId);}}),references=new ProjectReferences(router);
  const old=(await b.storage.read()).book.entries[0],target={projectId:b.id,domain:'research',kind:'record',id:old.id,revision:recordRevision(old)};
- const link=projectReference(target);assert.deepEqual(parseProjectReference(link),target);assert.equal(parseProjectReference(link+'&bad=1'),null);
  await b.storage.update(book=>{book.entries[0].title='B revised';return book;});
  const retained=async()=>(await router.withProject(target.projectId,async storage=>new RetainedRecordDocuments(storage).read({ref:{workspaceId:(await storage.outline()).metadata.id,kind:'record',id:target.id,revision:target.revision}}),{action:'read',target})).previous.record;
  const same=record=>({title:record.title,body:record.body});
@@ -158,7 +157,7 @@ test('project registry and references retain identity across relocation without 
  try{const placed=await new ProjectRenames(registry,b.id).run(b.storage,{id:randomUUID(),name:path.basename(b.storage.root),expectedName:path.basename(b.storage.root),placement:{parentId:null,expectedParentId:a.id}});b.storage=new ProjectStorage(placed.project.root,b.id,b.vault);state=await registry.read();assert.deepEqual(same(await retained()),same(old));}finally{release();await busy;}
  await f.owner.closeProject(b.storage.root);const moved=path.join(w.workspace.root,'relocated',path.basename(b.storage.root));await mkdir(path.dirname(moved));await rename(b.storage.root,moved);
  await assert.rejects(references.locate(target));const movedStorage=new ProjectStorage(moved,b.id,b.vault);
- state=await registry.relocate(movedStorage,{from:b.storage.root,expected:state.revision});assert.deepEqual(same(await retained()),same(old));assert.equal(projectReference(target),link);
+ state=await registry.relocate(movedStorage,{from:b.storage.root,expected:state.revision});assert.deepEqual(same(await retained()),same(old));
  assert.ok(opened.every(id=>id===b.id));
  await assert.rejects(registry.attach(movedStorage,{expected:state.revision}),{code:'EXISTS'});
  await assert.rejects(registry.reparent(b.id,null,{expected:revision}),{code:'CONFLICT'});

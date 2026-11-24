@@ -15,7 +15,6 @@ import {validQuantity} from './measurement-model.js';
 const keys=(value,names)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).every(key=>names.includes(key));
 const text=(value,max)=>typeof value==='string'&&value.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value);
 export const CALCULATION_GRAPH_TOOL='Observanda calculation graph';
-export const CALCULATION_GRAPH_COLLECTIONS=['bindings','nodes','outputs'];
 export const graphPosition=value=>Number.isSafeInteger(value)&&value>=0;
 export const validGraphAddress=value=>keys(value,['id','position'])&&researchId(value.id)&&graphPosition(value.position);
 export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';

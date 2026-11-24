@@ -11,7 +11,3 @@ export function queryPanel(book,panel){
   return {projects:book.projects.filter(p=>ids.has(p.id)),notebooks,entries,project:book.projects.find(p=>p.id===c.projectId),notebook:notebooks.find(n=>n.id===c.notebookId)};
  }catch(error){return {unavailable:error.message};}
 }
-export function matchesTool(tool,search){
- const words=search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
- const haystack=[tool.name,tool.description,tool.category].join(' ').toLocaleLowerCase();return words.every(word=>haystack.includes(word));
-}

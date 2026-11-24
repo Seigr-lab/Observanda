@@ -11,7 +11,8 @@ import {createRun} from '../src/web/record-workflow.js';
 import {emptyAttempt,validAttempt} from '../src/web/attempt-model.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';
 import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
-import {queryRecords,recordQueryDocument,recordQueryMatcher} from '../src/web/record-query.js';
+import {recordQueryDocument,recordQueryMatcher} from '../src/web/record-query.js';
+import {queryRecords} from './record-query-helpers.js';
 import {validateNotebook} from '../src/model.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 

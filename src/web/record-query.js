@@ -41,9 +41,6 @@ export function recordQueryOrder(browse={}){
  const b=recordBrowse(browse);
  return (a,c)=>(b.sort==='title'?compareTitles(a.title,c.title):compareRecordDates(a,c,{descending:b.sort==='date-desc'}))||compareKey(a.id,c.id);
 }
-export function queryRecords(records,query={}){
- return records.filter(recordQueryMatcher(query)).sort(recordQueryOrder(query.browse));
-}
 export function recordReferenceTargets(record){
  const mentions=[record.body,...(record.sections??[]).map(s=>s.body)].flatMap(proseReferences).map(target=>({type:'Mentioned in text',target}));
  const references=[...(record.relations??[]),...mentions,...attemptReferences(record.attempt).map(target=>({type:target.label,target}))].filter(l=>l.target.kind==='record').map(l=>({workspaceId:l.target.workspaceId,id:l.target.id,type:l.type,...(l.target.revision?{revision:l.target.revision}:{})}));

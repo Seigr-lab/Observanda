@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {describeRecoveryValue} from '../src/web/record-recovery-value.js';
+import {describeRecoveryValue} from './record-recovery-helpers.js';
 import {reconcileRecords} from '../src/web/record-merge.js';
 import {recordRecoveryMessage} from '../src/web/record-recovery-messages.js';
 import {execFile} from 'node:child_process';

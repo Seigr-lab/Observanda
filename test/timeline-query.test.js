@@ -13,7 +13,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {TimelineQuery} from '../src/timeline-query.js';
 import {timelineDefaults,timelineQuery,timelineOrder} from '../src/web/tools/timeline-model.js';
 import {validateTimelinePage} from '../src/web/tools/timeline-page.js';
-import {timelineRecords} from '../src/web/tools/timeline.js';
+import {timelineRecords} from './timeline-oracle.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
