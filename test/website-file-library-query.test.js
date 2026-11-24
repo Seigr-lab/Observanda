@@ -68,18 +68,16 @@ test('fielded search, contextual tag counts and duplicate-safe pages use permitt
  const c=await put('Ångström 10',metadata(stated('2024-02-29 to 2024-03-05'),['Co','remote'],'experiment','planned'),{notebook:otherBook});
  const d=await put('Undated',metadata(stated('Date unknown'),['Co']));
  await put('Private',metadata(exact('2024-02-29'),['withheld']),{visible:false});await put('PDF',metadata(exact('2024-02-29'),['PDF-only']),{target:'pdf'});
- // A summary without the search fields is an earlier storage format and is
- // refused after a restart; nothing is synthesized from research.
- const location='.observanda/website-files/picker/'+a.slice(0,2)+'.json',original=await files.scope(()=>files.control(location));
+ // Retain the encrypted HTML and the old summary shape, then reopen with a
+ // fresh vault object. None of the fields may be synthesized from research.
  await files.scope(async()=>{
-  const shard=structuredClone(original);
+  const location='.observanda/website-files/picker/'+a.slice(0,2)+'.json',shard=await files.control(location);
   for(const key of ['searchVersion','tags','recordType','status','dateFrom','dateTo','dateKnowledge'])delete shard[a][key];
   await files.writeControl(location,shard);
  },{write:true});
  const openedWorkspace=new Workspace(workspace.root,{...workspace.vault});
  for(const key of ['catalogue','openCatalogue'])openedWorkspace[key]=workspace[key];
  const reopened=new WebsiteFileStore(openedWorkspace);
- await assert.rejects(reopened.searchLibrary({}),{code:'ACCESS_UPGRADE'});await files.scope(()=>files.writeControl(location,original),{write:true});
  const request=q=>reopened.searchLibrary(q),facets=q=>reopened.scope(scope=>websiteLibraryFacets(reopened,scope,q));
  const ids=async q=>(await page(request,q,null,20)).items.map(row=>row.id);
  assert.deepEqual(await ids({tags:['Co','café']}),[a]);assert.deepEqual(await ids({tags:['CO']}),[b]);assert.deepEqual(await ids({tags:['cafe']}),[]);

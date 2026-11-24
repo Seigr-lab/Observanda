@@ -8,9 +8,9 @@ import {websiteSearchFields,fold} from './website-file-library-fields.js';
 import {libraryQuery,matchesQuery,compareLibraryRows,libraryMatchRank,fingerprint,libraryCursor,readLibraryCursor} from './website-file-library-query.js';
 
 const root='.observanda/website-files',index=root+'/picker',generation=index+'/generation.json';
-const views=new WeakMap(),validId=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
+const views=new WeakMap(),legacyViews=new WeakMap(),validId=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
 const shardFile=id=>index+'/'+id.slice(0,2)+'.json';
-const scanLimit=4096,searchKeyBudget=8*1024*1024;
+const scanLimit=4096,olderLimit=40,searchKeyBudget=8*1024*1024;
 const concealed=node=>['script','style','template','noscript'].includes(node.tagName)||node.attrs?.some(a=>a.name==='hidden'||a.name==='aria-hidden'&&a.value==='true');
 function shown(node){for(let parent=node;parent;parent=parent.parentNode)if(concealed(parent))return false;return true;}
 
@@ -98,14 +98,31 @@ async function census(store,scope,epoch,signal){
  }
 }
 async function visitWindow(store,names,at,stamp,{signal,visit,carry}){
- let visited=0,groups=0,group=null,metadata;
- for(;at<names.length&&visited<scanLimit;at++,visited++){
+ let visited=0,older=0,groups=0,group=null,metadata;
+ for(;at<names.length&&visited<scanLimit&&older<olderLimit;at++,visited++){
   signal?.throwIfAborted();const id=names[at];if(stamp.pending.has(id))continue;
   if(group!==id.slice(0,2)){if(++groups>32)break;group=id.slice(0,2);metadata=carry?.key===group?carry.rows:await shard(store,id);if(carry){carry.key=group;carry.rows=metadata;}}
   let item=metadata[id];
-  // Every saved source has a compact row (null for private and PDF sources)
-  // written with it; a missing or earlier row is an earlier storage format.
-  if(item===undefined||item&&item.searchVersion!==1)throw new AppError('ACCESS_UPGRADE');
+  if(item===undefined||item&&item.searchVersion!==1){
+   // Recover only approved fields from a saved fragment when its compact
+   // metadata predates those fields. PDF and withdrawn sources have no row.
+   const vault=store.workspace.vault;let cache=legacyViews.get(vault);
+   if(cache?.token!==stamp.visibilityToken||cache.root!==store.workspace.root){cache={token:stamp.visibilityToken,root:store.workspace.root,rows:new Map(),bytes:0};legacyViews.set(vault,cache);}
+   if(cache.rows.has(id))item=cache.rows.get(id).item;
+   else{
+    older++;const source=await store.source(id,{pending:true});
+    if(!source?.visible||source.target!=='website')item=null;
+    else{
+     const fragment=parseFragment(await store.readText(source.html,{signal})),prior=item?.revision===source.revision?item:null;
+     item={...describe(source,prior?.preview??excerpt(fragment,source.title),prior??{}),...websiteSearchFields(fragment)};
+    }
+    const bytes=128+Buffer.byteLength(JSON.stringify(item))*2;
+    if(bytes<=2*1024*1024){
+     while(cache.bytes+bytes>2*1024*1024){const first=cache.rows.keys().next().value;cache.bytes-=cache.rows.get(first).bytes;cache.rows.delete(first);}
+     if(!cache.rows.has(id)){cache.rows.set(id,{item,bytes});cache.bytes+=bytes;}
+    }
+   }
+  }
   if(!item)continue;
   if(item.id!==id||!validId(item.revision)||typeof item.title!=='string'||typeof item.media!=='boolean')throw new AppError('FORMAT');
   if(visit(item)===false){at++;break;}
@@ -126,8 +143,7 @@ export async function* scanEligibleWebsiteRows(store,scope,stamp,{signal}={}){
 export async function indexedWebsiteRow(store,source,{signal}={}){
  if(!source?.visible||source.target!=='website')return null;
  const prior=(await shard(store,source.id))[source.id];
- if(prior&&prior.searchVersion!==1)throw new AppError('ACCESS_UPGRADE');
- if(prior?.revision===source.revision)return prior;
+ if(prior?.revision===source.revision&&prior.searchVersion===1)return prior;
  const fragment=parseFragment(await store.readText(source.html,{signal}));
  return {...describe(source,excerpt(fragment,source.title),prior??{}),...websiteSearchFields(fragment)};
 }
