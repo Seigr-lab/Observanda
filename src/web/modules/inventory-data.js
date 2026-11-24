@@ -12,10 +12,10 @@ function verified(result,workspaceId,limit){
 export function inventoryPageProvider(type){return {
  metadataOnly:true,pageSize:25,
  references:item=>[...(item.data.links??[]),...Object.values(item.data).flatMap(proseReferences).map(r=>({workspaceId:r.workspaceId,type:r.kind,id:r.id}))],
- loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
+ loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.panelConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
  load:async({api,context:c,options={},signal})=>{
   const limit=Math.min(25,c.recordLimit??7);
-  const result=dashboardCollection(c)?await moduleCollectionQuery(api,c,'inventory',type,options,{},signal):await api('/api/modules/inventory/dashboard',{workspaceId:c.book.id,type,...(type==='category'?{}:{scopeIds:[...dashboardScope(c.book,options,c.legacyConfig)]}),query:options.search??'',status:options.status??'',...(type==='resource'?{kind:options.kind||null,keys:options.resourceMode==='selected'?options.resourceIds??[]:null}:{}),limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
+  const result=dashboardCollection(c)?await moduleCollectionQuery(api,c,'inventory',type,options,{},signal):await api('/api/modules/inventory/dashboard',{workspaceId:c.book.id,type,...(type==='category'?{}:{scopeIds:[...dashboardScope(c.book,options,c.panelConfig)]}),query:options.search??'',status:options.status??'',...(type==='resource'?{kind:options.kind||null,keys:options.resourceMode==='selected'?options.resourceIds??[]:null}:{}),limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
   return verified(result,c.book.id,limit);
  },
  discover:({api,context,search,offset,limit,signal})=>dashboardCollection(context)?moduleCollectionDiscovery(api,context,'inventory',type,{search,offset,limit,signal}):api('/api/modules/inventory/discovery',{workspaceId:context.book.id,type,search,offset,limit},{adopt:false,signal}),

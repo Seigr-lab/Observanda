@@ -5,7 +5,7 @@ import {PUBLIC_POPUPS_SCRIPT} from './publication-popups.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
 import {PUBLIC_REGIONS_SCRIPT} from './public-regions.js';
 import {FileContent} from './file-content.js';
-import {legacyPagePath} from './web/publication-links-model.js';
+import {relativePagePath} from './web/publication-links-model.js';
 import {knownPublicBookScript} from './publication-scripts.js';
 import {PUBLIC_FEEDS_SCRIPT,feedFilePath} from './publication-feeds.js';
 import { isBundledFont } from './fonts.js';
@@ -15,7 +15,7 @@ import {createHash} from 'node:crypto';
 const uuid = '[0-9a-f-]{36}';
 const textName = new RegExp(`^(?:index\\.html|styles\\.css|publication\\.json|\\.nojekyll|figures/${uuid}(?:-${uuid})?(?:\\.[a-z]{2,3})?\\.svg|figures/${uuid}(?:-${uuid})?\\.csv|media/${uuid}\\.[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?\\.vtt|(?:projects|notebooks|entries|pages)/${uuid}\\.html)$`);
 const mediaName = new RegExp(`^media/${uuid}\\.(png|wav|mp4)$`);
-const publicTextFile=name=>name==='browse.html'||feedFilePath(name)||textName.test(name)||legacyPagePath(name);
+const publicTextFile=name=>name==='browse.html'||feedFilePath(name)||textName.test(name)||relativePagePath(name);
 const checkedFonts=new Map();
 // Buffered and retained outputs share the exact byte decoding and public policy.
 export function assertPublicFileBytes(name,bytes,{type,blockedValues=[]}){

@@ -2,9 +2,9 @@ import {dashboardSourceIdentity} from './dashboard-source-key.js';
 import {RECORD_TYPES,STATUSES} from './record-types.js';
 // Shared, versioned presentation contracts. No research, secrets or file paths belong here.
 export const defaultPanelConfig = () => ({title:'',workspaceId:null,projectId:null,notebookId:null,recordType:'all',status:'all',tag:''});
-const legacyModule=tool=>['projects','workspace'].includes(tool)?'projects':['laboratory','samples','analyses','lab-events'].includes(tool)?'laboratory':['website','pages'].includes(tool)?'publishing':['records','projects','notebooks','media','files','figures','contributors','sections','relations','workspace'].includes(tool)?'research':null;
-export const createPanel = (tool,id,width='standard') => ({id,tool,moduleId:legacyModule(tool),width,height:0,column:null,hidden:false,source:null,fields:null,presentation:tool==='projects'?'overview':tool==='figures'?'chart':['media','files'].includes(tool)?'media':'summary',options:{},count:6,config:defaultPanelConfig()});
-export const defaultShortcuts=()=>['records','projects','figures','contributors'].map(tool=>({id:tool,moduleId:legacyModule(tool),source:{provider:tool,key:null},workspaceId:null}));
+const toolModule=tool=>['projects','workspace'].includes(tool)?'projects':['laboratory','samples','analyses','lab-events'].includes(tool)?'laboratory':['website','pages'].includes(tool)?'publishing':['records','projects','notebooks','media','files','figures','contributors','sections','relations','workspace'].includes(tool)?'research':null;
+export const createPanel = (tool,id,width='standard') => ({id,tool,moduleId:toolModule(tool),width,height:0,column:null,hidden:false,source:null,fields:null,presentation:tool==='projects'?'overview':tool==='figures'?'chart':['media','files'].includes(tool)?'media':'summary',options:{},count:6,config:defaultPanelConfig()});
+export const defaultShortcuts=()=>['records','projects','figures','contributors'].map(tool=>({id:tool,moduleId:toolModule(tool),source:{provider:tool,key:null},workspaceId:null}));
 export const defaultDashboard=()=>({formatVersion:5,enabledModules:['publishing'],defaultId:'main',shortcuts:defaultShortcuts(),views:[{id:'main',name:'Dashboard',panels:[createPanel('records','recent','wide'),createPanel('projects','collections')]}]});
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const keys=(v,fields)=>object(v)&&Object.keys(v).length===fields.length&&fields.every(f=>Object.hasOwn(v,f));

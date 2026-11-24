@@ -10,10 +10,10 @@ export function dashboardRecordClient(provider,{records=false,structure=false}={
    if(result.workspaceId!==c.book.id||result.etag!==c.etag||result.provider!==provider)throw Error(t('dashboardLibrary','invalidPage'));
    return result;
   },
-  loadKey:(c,options)=>JSON.stringify([Boolean(c.outline),c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
+  loadKey:(c,options)=>JSON.stringify([Boolean(c.outline),c.book.id,c.etag,c.panelConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
   load:async({api,context:c,options={},signal})=>{
    if(!c.outline)return null;
-   const limit=c.recordLimit??7,result=await api(dashboardCollection(c)?dashboardCollectionRoute(c,structure?'structure':'records'):'/api/workspace/read/dashboard',{workspaceId:c.book.id,etag:c.etag,provider,config:{...defaultPanelConfig(),...c.legacyConfig},options,limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
+   const limit=c.recordLimit??7,result=await api(dashboardCollection(c)?dashboardCollectionRoute(c,structure?'structure':'records'):'/api/workspace/read/dashboard',{workspaceId:c.book.id,etag:c.etag,provider,config:{...defaultPanelConfig(),...c.panelConfig},options,limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
    const rows=records?result.records:result.items,id=row=>records?dashboardRecordIdentity(row):row.key;
    if(result.workspaceId!==c.book.id||result.etag!==c.etag||dashboardCollection(c)&&result.collection!==true||!Array.isArray(rows)||rows.length>limit||
     !Number.isSafeInteger(result.total)||result.total<rows.length||!Number.isSafeInteger(result.offset)||result.offset<0||result.offset+rows.length>result.total||result.total>0&&!rows.length||

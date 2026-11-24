@@ -11,10 +11,10 @@ const range=()=>{const start=new Date(),end=new Date(start);end.setDate(end.getD
 function checkSources(result){const failed=result.sourceErrors?.[0]??result.sources?.find(s=>s.error);if(failed)throw Error(tr('sourceFailed',{name:calendarSourceName(failed),error:calendarSourceError(failed)}));return result;}
 export function registerCombinedCalendar(registry){
  registry.register({id:'calendar-agenda',label:tr('combined'),group:tr('group'),purpose:tr('purposeCombined'),presentation:()=>({label:tr('combined'),group:tr('group'),purpose:tr('purposeCombined')}),icon:'records',metadataOnly:true,pageSize:25,scoped:true,defaultFields:['owner','calendar','startsAt','endsAt','location','status'],settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[])],
-  loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor,range()]),
+  loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.panelConfig,options,c.recordLimit,c.recordKey,c.recordCursor,range()]),
   async load({api,context:c,options={},signal}){
    if(dashboardCollection(c))return checkSources(await calendarCollectionQuery(api,c,options,range(),{},signal));
-   const limit=Math.min(25,c.recordLimit??7),result=await api('/api/calendars/page',{workspaceId:c.book.id,...range(),scopeIds:[...dashboardScope(c.book,options,c.legacyConfig)],limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
+   const limit=Math.min(25,c.recordLimit??7),result=await api('/api/calendars/page',{workspaceId:c.book.id,...range(),scopeIds:[...dashboardScope(c.book,options,c.panelConfig)],limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
    return checkSources(verifiedCalendarPage(result,c.book.id,{limit}));
   },
   async discover({api,context,search,offset,limit,signal}){

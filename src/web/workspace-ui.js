@@ -38,7 +38,7 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
     if(state.projectOwner&&!state.projectOwner.labBookId)return ownedRecent.view();
     if(!state.workspaceOutline)return recordsTable(records(id).sort((a,b)=>(b.updatedAt??b.occurredOn).localeCompare(a.updatedAt??a.occurredOn)).slice(0,10));
     bind();if(!recentSession){recentContext=recentContextId();recentSession=createDataSession(workspaceData,{api,onChange:()=>{const host=document.getElementById('project-recent-records');if(recentActive()&&host)host.innerHTML=recentRecords(state.project);}});}
-    const context={book:state.book,etag:state.etag,outline:true,legacyConfig:defaultPanelConfig(),recordLimit:10,recordKey:null,dataSlot:'project-recent'};
+    const context={book:state.book,etag:state.etag,outline:true,panelConfig:defaultPanelConfig(),recordLimit:10,recordKey:null,dataSlot:'project-recent'};
     const result=recentSession.read('records',context,{scopeMode:'selected',projectIds:[id],includeDescendants:true,includeWorkspace:false});
     if(result.status==='loading')return `<p role="status">${text('recentLoading')}</p>`;
     if(result.status!=='ready')return '<p role="alert">'+esc(result.error?.message||t('workspaceViews','recentFailed'))+`</p><button class="button" data-action="project-recent-retry">${text('recentRetry')}</button>`;

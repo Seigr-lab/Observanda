@@ -16,7 +16,7 @@ import {labBookProfileLabel} from '../project-type-presentation.js';
 export function registerLabWorkspaceData(registry,{profile=null}={}){
  const prefix=profile?laboratoryModuleId(profile.id):'lab';
  const text=key=>t('labBookData',key);
- const notebooks=(c,options)=>labDataNotebooks(dashboardBooks(c.book,options,c.legacyConfig),profile);
+ const notebooks=(c,options)=>labDataNotebooks(dashboardBooks(c.book,options,c.panelConfig),profile);
  for(const records of [false,true])registry.register({
   id:prefix+(records?'-records':'-spaces'),label:(profile?labBookProfileLabel(profile.id)+' / ':'')+text(records?'records':'books'),group:profile?labBookProfileLabel(profile.id):text('books'),purpose:text(records?'purposeRecords':'purposeBooks'),icon:'laboratory',metadataOnly:true,defaultFields:records?['location','notebook','recordType','occurredOn']:['location','profiles'],
   ...dashboardRecordClient(prefix+(records?'-records':'-spaces'),{records,structure:!records}),

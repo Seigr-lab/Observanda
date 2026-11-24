@@ -49,11 +49,11 @@ export class WorkspaceDatabases{
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
   const binding=await catalogueBinding(await realpath(root));
   if(binding?.placement!=='installation')return this.environment(root,{vault});
-  this.legacyStart??=(async()=>{
+  this.installationStart??=(async()=>{
    const env={...this.env},service=await startManagedPostgres({directory:this.directory,env,signal:this.signal,onProgress:this.onProgress,existingOnly:true});
    return {env,service};
-  })().catch(error=>{this.legacyStart=null;throw error;});
-  return (await this.legacyStart).env;
+  })().catch(error=>{this.installationStart=null;throw error;});
+  return (await this.installationStart).env;
  }
  async acquireEnvironment(root,options={}){
   options.signal?.throwIfAborted();
@@ -130,7 +130,7 @@ export class WorkspaceDatabases{
      const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
     }),
     (async()=>{const owner=await this.scratchStart?.catch(()=>null);await owner?.service.close();})(),
-    (async()=>{const owner=await this.legacyStart?.catch(()=>null);await owner?.service.close();})(),
+    (async()=>{const owner=await this.installationStart?.catch(()=>null);await owner?.service.close();})(),
    ]);}finally{this.detach?.();}
    const failed=closed.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   })();

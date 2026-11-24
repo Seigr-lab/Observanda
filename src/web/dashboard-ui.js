@@ -115,7 +115,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,f
  function cardPage(panel){const signature=JSON.stringify([state.book.id,state.etag,reference(panel),panel.config,panel.options,panel.count]);let value=cardPages.get(panel.id);if(value?.signature!==signature){value={signature,cursor:null};cardPages.set(panel.id,value);}return value;}
  function read(panel){
   if(panel.config.workspaceId&&panel.config.workspaceId!==state.book.id)return {status:'foreign',items:[]};
-  const ref=reference(panel),result=session.read(ref.provider,{...context(),legacyConfig:panel.config,dataSlot:'card:'+panel.id,recordLimit:Math.min(100,panel.count),recordKey:ref.key,recordCursor:cardPage(panel).cursor},panel.options);
+  const ref=reference(panel),result=session.read(ref.provider,{...context(),panelConfig:panel.config,dataSlot:'card:'+panel.id,recordLimit:Math.min(100,panel.count),recordKey:ref.key,recordCursor:cardPage(panel).cursor},panel.options);
   return {...result,items:ref.key===null?result.items:result.items.filter(i=>dashboardPinnedItem(i,ref.key,state.book.id))};
  }
  function title(panel){return panel.config.title||(reference(panel).key!==null?read(panel).items[0]?.title:null)||provider(panel)?.label||dt("unavailableData");}

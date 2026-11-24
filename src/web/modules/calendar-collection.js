@@ -9,7 +9,7 @@ export function calendarCollectionIdentity(key,workspaceId){
  return {workspaceId,key,legacy:true};
 }
 export async function calendarCollectionQuery(api,context,options,range,values={},signal){
- const command={workspaceId:context.book.id,config:context.legacyConfig??defaultPanelConfig(),options,...range,mode:'agenda',limit:Math.min(25,context.recordLimit??7),key:context.recordKey??null,cursor:context.recordCursor??null,offset:0,search:'',...values};
+ const command={workspaceId:context.book.id,config:context.panelConfig??defaultPanelConfig(),options,...range,mode:'agenda',limit:Math.min(25,context.recordLimit??7),key:context.recordKey??null,cursor:context.recordCursor??null,offset:0,search:'',...values};
  const result=await api(dashboardCollectionRoute(context,'calendar'),command,{adopt:false,signal});
  const fail=()=>{throw Error(t('calendar','invalidPage'));},token=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=4096;
  if(result?.workspaceId!==context.book.id||result.collection!==true||!Array.isArray(result.events)||result.events.length>command.limit||!Number.isSafeInteger(result.total)||!Number.isSafeInteger(result.offset)||result.offset<0||result.total<result.offset+result.events.length||!Array.isArray(result.sourceErrors)||result.sourceErrors.length>30||result.sourceErrors.some(s=>typeof s.name!=='string'||typeof s.error!=='string'))fail();

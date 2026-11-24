@@ -16,9 +16,9 @@ export function registerPlanningCards(registry){
   references:item=>[...(item.data.links??[]),...Object.values(item.data).flatMap(proseReferences).map(r=>({workspaceId:r.workspaceId,type:r.kind,id:r.id}))],
   fieldMetadata:Object.fromEntries(['owner','status','priority','dueOn','assignees','checklist','color','startsAt','endsAt','location','resource','notes'].map(key=>[key,{label:tr(key)}])),
   settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[]),{key:'search',label:tr('search'),type:'text'},{key:'status',label:tr('filterStatus'),type:'text'}],
-  loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
+  loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.panelConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
   load:async({api,context:c,options={},signal})=>{
-   const limit=Math.min(25,c.recordLimit??7),result=dashboardCollection(c)?await moduleCollectionQuery(api,c,'planning',type,options,{},signal):await api('/api/modules/planning/dashboard',{workspaceId:c.book.id,type,scopeIds:[...dashboardScope(c.book,options,c.legacyConfig)],query:options.search??'',status:options.status??'',limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
+   const limit=Math.min(25,c.recordLimit??7),result=dashboardCollection(c)?await moduleCollectionQuery(api,c,'planning',type,options,{},signal):await api('/api/modules/planning/dashboard',{workspaceId:c.book.id,type,scopeIds:[...dashboardScope(c.book,options,c.panelConfig)],query:options.search??'',status:options.status??'',limit,key:c.recordKey??null,cursor:c.recordCursor??null},{adopt:false,signal});
    if(result?.workspaceId!==c.book.id||!Array.isArray(result.items)||result.items.length>limit||result.items.some(e=>typeof e.key!=='string'||dashboardCollection(c)&&!validModuleCollectionItem(e)||typeof e.title!=='string'||!e.data)||!Number.isSafeInteger(result.offset)||result.offset<0||!Number.isSafeInteger(result.total)||result.total<result.offset+result.items.length||![result.cursor,result.nextCursor,result.previousCursor].every(token))throw Error(tr('invalid'));
    return result;
   },

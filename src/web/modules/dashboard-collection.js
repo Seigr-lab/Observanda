@@ -5,7 +5,7 @@ import {defaultPanelConfig} from '../dashboard-model.js';
 import {dashboardSourceIdentity,dashboardSourceKey} from '../dashboard-source-key.js';
 export {dashboardCollection};
 export function moduleCollectionQuery(api,context,area,type,options={},values={},signal){
- return api(dashboardCollectionRoute(context,'modules'),{workspaceId:context.book.id,area,type,config:context.legacyConfig??defaultPanelConfig(),options,mode:'page',key:context.recordKey??null,cursor:context.recordCursor??null,limit:Math.min(25,context.recordLimit??7),offset:0,keys:null,...values},{adopt:false,signal});
+ return api(dashboardCollectionRoute(context,'modules'),{workspaceId:context.book.id,area,type,config:context.panelConfig??defaultPanelConfig(),options,mode:'page',key:context.recordKey??null,cursor:context.recordCursor??null,limit:Math.min(25,context.recordLimit??7),offset:0,keys:null,...values},{adopt:false,signal});
 }
 export function validModuleCollectionItem(item){const source=dashboardSourceIdentity(item?.key);return Boolean(source?.workspaceId&&source.key&&!source.key.includes(':')&&validDashboardOwner(item,item.key));}
 export function moduleCollectionDiscovery(api,context,area,type,{search,offset,limit,signal}){

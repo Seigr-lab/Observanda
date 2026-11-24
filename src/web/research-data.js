@@ -62,7 +62,7 @@ export function registerResearchData(registry,{section='all'}={}){
     if(loaded?.collection&&!projection)return loaded.items;
     if(loaded?.collection)return rawItems({...context,book:{...context.book,entries:loaded.records??[]}},loaded,options);
     if(!p.scope)return rawItems(context,loaded,options);
-    const config={...defaultPanelConfig(),...context.legacyConfig,...options};
+    const config={...defaultPanelConfig(),...context.panelConfig,...options};
     const scope=queryPanel(context.book,{config,options});if(scope.unavailable)throw new Error(scope.unavailable);
     return rawItems({...context,sourceBook:context.book,book:{...context.book,entries:loaded?.records??scope.entries,projects:scope.projects,notebooks:scope.notebooks}},loaded,options);
    }

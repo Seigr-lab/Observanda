@@ -20,7 +20,7 @@ export function registerLaboratoryData(registry){
   };
   registry.register({...definition,label:tr(definition.id==='lab-events'?'events':definition.id),group:tr('title'),purpose:tr(({samples:'purposeSamples',analyses:'purposeAnalyses','lab-events':'purposeEvents'})[definition.id]),icon:'laboratory',pageSize:25,scoped:true,metadataOnly:true,settings:(c,options,panel)=>dashboardCollection(c)?[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel)]:[],
    fieldMetadata:{owner:{label:tr('owner')}},
-   loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
+   loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.panelConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
    load:({api,context,options={},signal})=>dashboardCollection(context)?sampleCollectionQuery(api,context,definition.view,options,{},signal):query(api,context,{limit:context.recordLimit??7,key:context.recordKey??null,cursor:context.recordCursor??null},signal),
    discover:async({api,context,search,offset,limit,signal})=>{
     const result=dashboardCollection(context)?await sampleCollectionQuery(api,context,definition.view,{search},{mode:'discovery',offset,limit,key:null,cursor:null},signal):await query(api,context,{search,offset,limit},signal);
@@ -33,7 +33,7 @@ export function registerLaboratoryData(registry){
   load:async({api,context,options={},signal})=>{
    if(dashboardCollection(context))return sampleCollectionQuery(api,context,'samples',options,{mode:'counts',limit:1,key:null,cursor:null},signal);
    const command={workspaceId:context.book.id,view:'samples',limit:1};return validateSamplePage(await api('/api/laboratory/read/query',command,{adopt:false,signal}),command);
-  },loadKey:(context,options)=>JSON.stringify([context.book.id,context.etag,context.legacyConfig,options]),defaultFields:['samples','inReview','approved'],fieldMetadata:{samples:{label:tr('samples')},inReview:{label:tr('inReview')},approved:{label:tr('approvedCount')}},
+  },loadKey:(context,options)=>JSON.stringify([context.book.id,context.etag,context.panelConfig,options]),defaultFields:['samples','inReview','approved'],fieldMetadata:{samples:{label:tr('samples')},inReview:{label:tr('inReview')},approved:{label:tr('approvedCount')}},
   items:(context,result)=>[{key:context.book.id,title:tr('title'),data:{samples:result.counts.samples,inReview:result.counts.review,approved:result.counts.approved},...(dashboardCollection(context)?{}:{action:{name:'laboratory-samples'}})}]
  });
 }
