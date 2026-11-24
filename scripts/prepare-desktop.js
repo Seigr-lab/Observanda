@@ -1,4 +1,4 @@
-import {mkdir,mkdtemp,writeFile,readFile,copyFile,cp,rm,readdir,lstat} from 'node:fs/promises';
+import {mkdir,mkdtemp,writeFile,readFile,copyFile,cp,rm,readdir,lstat,open} from 'node:fs/promises';
 import {createReadStream,createWriteStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import {createHash} from 'node:crypto';
@@ -66,10 +66,13 @@ if(process.platform==='win32'){
   // Replace the generic configured ELF library paths with paths relative to
   // each installed binary, including the nested extension-library directory.
   const libraries=path.join(out,'postgresql/lib');
+  // Every ELF file is relocated, by its header: make install also places helper
+  // programs under lib (pgxs), and each must find the bundled libraries.
+  const elf=async file=>{const handle=await open(file,'r');try{const header=Buffer.alloc(4),{bytesRead}=await handle.read(header,0,4,0);return bytesRead===4&&header.equals(Buffer.from([127,69,76,70]));}finally{await handle.close();}};
   async function relocate(directory){for(const name of await readdir(directory)){
    const file=path.join(directory,name),stat=await lstat(file);if(stat.isSymbolicLink())continue;
    if(stat.isDirectory()){await relocate(file);continue;}
-   if(directory===path.join(out,'postgresql/bin')||/\.so(?:\.[0-9]+)*$/.test(name))await run('/usr/bin/patchelf',['--set-rpath','$ORIGIN/'+(path.relative(directory,libraries)||'.'),file]);
+   if(await elf(file))await run('/usr/bin/patchelf',['--set-rpath','$ORIGIN/'+(path.relative(directory,libraries)||'.'),file]);
   }}
   await relocate(path.join(out,'postgresql/bin'));await relocate(libraries);
   await verifyLinuxRuntime(path.join(out,'postgresql'),{executables:['bin/postgres','bin/initdb','bin/pg_ctl','bin/pg_dump','bin/pg_restore'],admission:await sealPreparedRuntime(path.join(out,'postgresql'))});
