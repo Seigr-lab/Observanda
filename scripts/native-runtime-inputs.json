@@ -1,4 +1,23 @@
 {
   "format": 1,
-  "inputs": []
+  "inputs": [
+    {
+      "kind": "git",
+      "platform": "linux",
+      "arch": "x64",
+      "source": "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.56.0.tar.xz",
+      "sourceSha256": "26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3",
+      "treeSha256": "32a1c4040fef0339b0bb97f2a101f0360a222228e0144031b2ce447ea05fbe06",
+      "build": "Built on Ubuntu 24.04 x64 with prefix=/ RUNTIME_PREFIX=YesPlease gitexecdir=libexec/git-core NO_TCLTK NO_GETTEXT NO_PERL NO_PYTHON NO_RUST INSTALL_SYMLINKS; COPYING as LICENSE; remote helpers linked into bin; non-core shared libraries from Ubuntu 24.04 copied into lib with $ORIGIN search paths and their copyright files in share/licenses."
+    },
+    {
+      "kind": "media",
+      "platform": "linux",
+      "arch": "x64",
+      "source": "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-20-12-40/ffmpeg-n9.0.2-61-gd59078794d-linux64-gpl-9.0.tar.xz",
+      "sourceSha256": "080e804801eac92399a98687575b64aa38e557ed651cc381dfbc1e8fe5c2ccd8",
+      "treeSha256": "af245ceb9bb67f4176b65f78ae8cc07933e963dafdffcb5f937fd343dc3ee64b",
+      "build": "bin/ffmpeg and bin/ffprobe from the release archive, LICENSE.txt as LICENSE."
+    }
+  ]
 }
