@@ -227,3 +227,24 @@ test('small insertions and removals compare only changed branches across rotatio
   assert.ok(reads<600,'Small edits must not walk all retained nodes: '+reads);
  }
 });
+
+test('a connection reuses read index nodes, while verification and backups still read every stored node',async t=>{
+ const {ws,directory,vault}=await fixture(t),{catalogueDescriptor}=await import('../src/research-catalogue.js');
+ await write(ws,async s=>{for(let i=0;i<40;i++)await s.putObject(key(i),{private:'Original '+i});});
+ // Within one connection scope, the first transaction's read keeps the path's
+ // nodes; a later transaction on that connection reads none of them again.
+ const reads=[];
+ await ws.withCatalogueConnections(async()=>{
+ assert.deepEqual(await ws.catalogue(s=>s.object(key(7))),{private:'Original 7'});
+ await ws.catalogue(async s=>{const get=s.db.get.bind(s.db);s.db.get=(sql,...args)=>{if(String(args[0]).startsWith('object-index:'))reads.push(args[0]);return get(sql,...args);};try{assert.deepEqual(await s.object(key(7)),{private:'Original 7'});}finally{s.db.get=get;}});
+ });
+ assert.deepEqual(reads,[]);
+ const db=await ws.openCatalogue();t.after(()=>db.close());
+ const head=await ws.catalogue(s=>new ObjectIndex(s).head()),rootSlot='object-index:'+head.root.key,root=await db.get('SELECT payload FROM state WHERE slot=$1',rootSlot);
+ await db.run('DELETE FROM state WHERE slot=$1',rootSlot);
+ try{
+  const outline=await ws.outline();
+  await assert.rejects(ws.catalogue(s=>s.verify(catalogueDescriptor(outline.metadata))),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(async()=>copyWorkspace(await copyPlan(ws.root,path.join(directory,'damaged-backup'),{vault}),{vault}),{code:'CATALOGUE_DAMAGED'});
+ }finally{await db.run('INSERT INTO state VALUES ($1,$2)',rootSlot,root.payload);}
+});

@@ -3,6 +3,7 @@ import {catalogueIndexedCount,cataloguePrefixExists} from './postgres-indexes.js
 // branch's hash; one object edit changes only its search path and rotations.
 // All calls run in the catalogue's existing transaction: writers hold its lock,
 // readers use a repeatable-read snapshot. Nodes never outlive their objects.
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
@@ -27,6 +28,26 @@ const validRef=ref=>{
 const equal=(a,b)=>a?.hash===b?.hash;
 const authenticatedNodes=new WeakMap();
 const authenticatedHeads=new WeakMap();
+// Index nodes are content-addressed: the hash checked when a node was first read
+// names exactly its {id,revision,left,right}. Nodes hold identifiers and hashes,
+// never record content, so one catalogue connection may reuse them across its
+// transactions. Every lookup still starts from a freshly read root, and a node is
+// found only through a parent that names its hash, so no stale node is returned.
+const connectionNodes=new WeakMap(),CONNECTION_NODES=8192,CONNECTION_NODE_BYTES=8*1024*1024,storedNodes=new AsyncLocalStorage();
+// A catalogue audit looks for damaged rows, so it reads every node from its row.
+export const withStoredIndexNodes=operation=>storedNodes.run(true,operation);
+function connectionNode(db,slot){
+ if(storedNodes.getStore())return null;
+ const cache=db&&connectionNodes.get(db),node=cache?.nodes.get(slot);if(!node)return null;
+ cache.nodes.delete(slot);cache.nodes.set(slot,node);return node;
+}
+function keepConnectionNode(db,slot,node,bytes){
+ if(!db||typeof db!=='object'||bytes>64*1024)return;
+ let cache=connectionNodes.get(db);if(!cache){cache={nodes:new Map(),bytes:0};connectionNodes.set(db,cache);}
+ if(cache.nodes.has(slot))return;
+ while(cache.nodes.size>=CONNECTION_NODES||cache.bytes+bytes>CONNECTION_NODE_BYTES){const [first,value]=cache.nodes.entries().next().value;cache.nodes.delete(first);cache.bytes-=authenticatedNodes.get(value)?.bytes??0;}
+ cache.nodes.set(slot,node);cache.bytes+=bytes;
+}
 const validNode=node=>node&&Object.keys(node).sort().join()==='id,left,revision,right'&&identifier(node.id)&&revision(node.revision)&&validRef(node.left)&&validRef(node.right)&&Math.abs(height(node.left)-height(node.right))<=1;
 export class ObjectIndex{
  constructor(store,{namespace='object-index:',immutable=false,nodeStorage=null,authenticateOnWrite=false,cacheReads=false,scanAhead=false,cacheSize=128,write=null}={}){
@@ -86,6 +107,7 @@ export class ObjectIndex{
   // The shared cache holds frozen values only within this fixed catalogue
   // audit. node() still authenticates the value and validates every new bound.
   const cached=this.store.readCache?.node(this.slot(ref));if(cached)return cached;
+  const shared=connectionNode(this.store.db,this.namespace+ref.hash);if(shared)return shared;
   await this.prefetch(ref);if(this.cache.has(ref.hash))return this.cache.get(ref.hash);
   const slot=this.slot(ref),load=()=>this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
   const row=this.store.readCache?await this.store.readCache.row(slot,load):await load();return row?this.store.decode('state',slot,row.payload):this.readMissingNode(ref);
@@ -166,6 +188,7 @@ export class ObjectIndex{
   // A frozen value's authenticated identity is independent of the index
   // instance. Weak receipts retain no nodes after their bounded caches close.
   if(proof.hash!==ref.hash||proof.key!==ref.key||proof.height!==ref.height||proof.count!==ref.count||lower!==null&&value.id<=lower||upper!==null&&value.id>=upper)fail();
+  if(loaded&&!this.nodeStorage)keepConnectionNode(this.store?.db,this.namespace+ref.hash,value,proof.bytes);
   if(loaded&&(this.immutable||this.cacheReads||this.store?.readCache))this.cacheNode(ref,value);
   // Local hits are shared-cache uses too. Restore a useful authenticated path
   // after bounded prefetch evicts it, without admitting pending writer nodes.

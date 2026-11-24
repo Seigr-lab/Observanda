@@ -4,11 +4,15 @@ import {withScratch,withScratchSession} from './scratch-work.js';
 import {digest,serialize} from './storage-format.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 import {withRecordEncodingAudit} from './record-document-encoding.js';
+import {withStoredIndexNodes} from './object-index.js';
 export function verificationContext(metadata){
  // These values cannot change record validation or projection.
  const {revision,updatedAt,...context}=metadata;void revision;void updatedAt;return context;
 }
 export async function withCatalogueVerification(store,operation){
+ return withStoredIndexNodes(()=>verifyCatalogueSnapshot(store,operation));
+}
+async function verifyCatalogueSnapshot(store,operation){
  const {transaction_isolation:isolation}=await store.db.get('SHOW transaction_isolation');
  // A writer-owned READ COMMITTED transaction can observe newer external SQL
  // changes. Only a fixed database snapshot permits reusing earlier checks.
