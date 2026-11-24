@@ -10,19 +10,20 @@ test('a solo encrypted workspace can authorize another device and recover withou
  test.setTimeout(60000);page.setDefaultTimeout(8000);
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-sharing-ui-')),root=path.join(parent,'work');
  const apps=[],contexts=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
- async function server(name){const app=await startServer({root,port:0,preferencesFile:path.join(parent,name+'.preferences.json'),deviceStore:new DeviceStore({file:path.join(parent,name+'.device')})});apps.push(app);return app;}
+ async function server(name,location=root){const app=await startServer({root:location,port:0,preferencesFile:path.join(parent,name+'.preferences.json'),deviceStore:new DeviceStore({file:path.join(parent,name+'.device')})});apps.push(app);return app;}
  try{
   const app=await server('owner');await page.goto(app.url);await page.getByLabel('Workspace name',{exact:true}).fill('Shared research');
   await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByLabel('Use this device',{exact:false})).toBeChecked();
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Shared research');
-  expect(encrypted(await readFile(path.join(root,'workspace.observanda')))).toBe(true);
-  expect(JSON.parse(await readFile(path.join(root,'.observanda','research.observanda'),'utf8')).format).toBe('observanda-postgresql');
+  // Setup creates the workspace in a folder named after it, beside the configured location.
+  expect(encrypted(await readFile(path.join(parent,'Shared research','workspace.observanda')))).toBe(true);
+  expect(JSON.parse(await readFile(path.join(parent,'Shared research','.observanda','research.observanda'),'utf8')).format).toBe('observanda-postgresql');
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('1 authorized device');
   await page.getByRole('button',{name:'Create recovery key',exact:true}).click();await page.getByRole('button',{name:'Generate recovery key',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Save your recovery key'})).toBeVisible();const recovery=await page.getByLabel('Recovery key',{exact:true}).inputValue();
   await page.getByRole('button',{name:'Done',exact:true}).click();await expect(page.locator('[data-recovery-secret]')).toHaveValue('');
-  const peer=await server('peer'),peerContext=await browser.newContext();contexts.push(peerContext);const peerPage=await peerContext.newPage();peerPage.setDefaultTimeout(8000);await peerPage.goto(peer.url);
+  const peer=await server('peer',path.join(parent,'Shared research')),peerContext=await browser.newContext();contexts.push(peerContext);const peerPage=await peerContext.newPage();peerPage.setDefaultTimeout(8000);await peerPage.goto(peer.url);
   await expect(peerPage.getByRole('heading',{name:'Unlock workspace'})).toBeVisible();await peerPage.getByRole('button',{name:'Get this device’s access request'}).click();
   const request=await peerPage.getByLabel('Public access request').inputValue();await peerPage.getByRole('button',{name:'Close',exact:true}).click();
   await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();await page.getByText('Add a device',{exact:true}).click();await page.getByLabel('Recipient’s public access request').fill(request);
@@ -37,7 +38,7 @@ test('a solo encrypted workspace can authorize another device and recover withou
   await expect(page.getByRole('heading',{name:'Workspace access',exact:true})).toBeInViewport();
   await expect(page.getByRole('dialog').getByRole('button',{name:'Close',exact:true})).toBeInViewport();
   await peerPage.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(peerPage.locator('.workspace-name')).toHaveText('Shared research');
-  const replacement=await server('replacement'),replacementContext=await browser.newContext();contexts.push(replacementContext);const replacementPage=await replacementContext.newPage();replacementPage.setDefaultTimeout(8000);
+  const replacement=await server('replacement',path.join(parent,'Shared research')),replacementContext=await browser.newContext();contexts.push(replacementContext);const replacementPage=await replacementContext.newPage();replacementPage.setDefaultTimeout(8000);
   await replacementPage.goto(replacement.url);await expect(replacementPage.getByRole('heading',{name:'Unlock workspace'})).toBeVisible();
   await replacementPage.getByText('Use a recovery key',{exact:true}).click();await replacementPage.getByLabel('Recovery key',{exact:true}).fill(recovery);
   await replacementPage.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(replacementPage.locator('.workspace-name')).toHaveText('Shared research');
@@ -54,9 +55,10 @@ test('setup requires portable encryption when OS device protection is unavailabl
   await expect(page.getByLabel('Use a password',{exact:false})).toBeChecked();
   await page.getByLabel('Password',{exact:true}).fill('portable browser test passphrase');await page.getByLabel('Confirm password',{exact:true}).fill('portable browser test passphrase');
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Portable research');
-  expect(encrypted(await readFile(path.join(root,'workspace.observanda')))).toBe(true);
-  expect(JSON.parse(await readFile(path.join(root,'.observanda','research.observanda'),'utf8')).format).toBe('observanda-postgresql');
-  await app.close();app=await startServer({root,port:0,deviceStore,preferencesFile:path.join(parent,'preferences')});await page.goto(app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
+  // Setup creates the workspace in a folder named after it, beside the configured location.
+  expect(encrypted(await readFile(path.join(parent,'Portable research','workspace.observanda')))).toBe(true);
+  expect(JSON.parse(await readFile(path.join(parent,'Portable research','.observanda','research.observanda'),'utf8')).format).toBe('observanda-postgresql');
+  await app.close();app=await startServer({root:path.join(parent,'Portable research'),port:0,deviceStore,preferencesFile:path.join(parent,'preferences')});await page.goto(app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
   await page.getByLabel('Password',{exact:true}).fill('portable browser test passphrase');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Portable research');
  }finally{await app.close();}
 });
