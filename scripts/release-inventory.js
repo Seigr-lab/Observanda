@@ -58,7 +58,8 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ar
   components.push({name:'Node.js/'+name,version:nodeVersions[name],includedIn:node.path,sha256:node.sha256});
  }
  await binary('PostgreSQL','postgresql/bin/postgres'+suffix,['--version'],output=>/PostgreSQL\)\s+(\S+)/.exec(output)?.[1]);
- for(const name of ['ffmpeg','ffprobe'])await binary(name,'media/bin/'+name+suffix,['-version'],output=>new RegExp('^'+name+' version ([0-9][0-9A-Za-z.+_-]*)','m').exec(output)?.[1]);
+ // Release builds name their version with a leading n (n9.0.2-61-...); the number follows.
+ for(const name of ['ffmpeg','ffprobe'])await binary(name,'media/bin/'+name+suffix,['-version'],output=>new RegExp('^'+name+' version n?([0-9][0-9A-Za-z.+_-]*)','m').exec(output)?.[1]);
  const git=await binary('Git','github/git/'+(platform==='win32'?'cmd/git.exe':'bin/git'),['--version'],output=>/^git version (\S+)/m.exec(output)?.[1]);
  if(platform==='win32'&&git.version!==githubRuntimeReleases.gitVersion.replace(/\.(\d+)$/,'.windows.$1'))throw Error('Bundled Windows Git differs from the pinned release.');
  const gitExecutable=path.join(root,git.path);if(await digest(gitExecutable)!==git.sha256)throw Error('Runtime changed before credential helper probe: Git');

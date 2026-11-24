@@ -72,3 +72,10 @@ test('unadmitted or modified executable trees are rejected before the first inve
  await assert.rejects(collectRuntimeInventory(p.root,p.options),/changed after admission/);
  assert.equal(p.calls.length,0);
 });
+
+test('ffmpeg release builds with an n before the version number are identified',async t=>{
+ const p=await probes(t),execute=p.options.execute;
+ const result=await collectRuntimeInventory(p.root,{...p.options,execute:async(file,args,options)=>['ffmpeg.exe','ffprobe.exe'].includes(path.basename(file))?{stdout:path.basename(file,'.exe')+' version n9.0.2-61-gd59078794d-20261120 Copyright (c) 2000-2026 the FFmpeg developers',stderr:''}:execute(file,args,options)});
+ assert.equal(result.components.find(component=>component.name==='ffmpeg').version,'9.0.2-61-gd59078794d-20261120');
+ assert.equal(result.components.find(component=>component.name==='ffprobe').version,'9.0.2-61-gd59078794d-20261120');
+});
