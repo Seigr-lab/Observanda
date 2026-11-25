@@ -884,7 +884,11 @@ function renderPage(){
  const helpTopic=({workspace:'getting-started',tools:'getting-started',entries:'records',editor:'records','record-reader':'records',website:'publishing',websites:'publishing',appearance:'publishing',publishing:'publishing',review:'publishing',storage:'storage',project:'getting-started',projects:'getting-started',module:({inventory:'inventory',timeline:'timeline',collaboration:'reviews',organizations:'reviews','pdf-editor':'publishing'})[state.moduleId]??'evidence'})[state.page];
  if(helpTopic)content='<div class="task-guidance"><button class="button subtle" data-action="context-help" data-topic="'+helpTopic+'">'+esc(ux('contextHelp'))+'</button>'+(['editor','record-reader','project','entries'].includes(state.page)?'<button class="button subtle" data-action="tools">'+esc(ux('tools'))+'</button>':'')+'</div>'+content;
  if(['tools','module'].includes(state.page)&&toolOrigin?.context===state.storage?.contextId)content='<button class="button task-return" data-action="tool-return">'+esc(ux('returnTask',{name:toolOrigin.title}))+'</button>'+content;
- content=content+sectionActions();return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
+ content=content+sectionActions();content=preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
+ // One page frame for every page: work pages use the full width, reading and
+ // settings pages one column (docs/ui-overhaul/2026-11-25-consistency-design.md).
+ const width=['workspace','entries','editor','module','laboratory','migration'].includes(state.page)?'wide':'column';
+ return '<div class="page-frame" data-page-width="'+width+'">'+content+'</div>';
 }
 
 function renderEntries() {

@@ -55,7 +55,6 @@
   "encryptedOpened": "S'ha verificat i obert la còpia xifrada. L'original continua a la carpeta anterior.",
   "accessSaved": "Configuració d'accés guardada.",
   "storageTitle": "Emmagatzematge i accés",
-  "storageSubtitle": "Fitxers de l'espai de treball, xifratge i configuració d'accés.",
   "workspaceStorage": "Emmagatzematge de l'espai de treball",
   "storageDataHelp": "Els registres, les dades dels mòduls, els esborranys, la configuració i els manifests d'evidències estan xifrats a PostgreSQL. Els fitxers originals d'evidències, els mitjans preparats i les claus d'accés es mantenen a la carpeta de l'espai de treball. Utilitza Copia l'espai de treball per incloure-ho tot en una còpia de seguretat verificada.",
   "copyPath": "Copia el camí",

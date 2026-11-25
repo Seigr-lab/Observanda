@@ -55,7 +55,6 @@
   "encryptedOpened": "Encrypted copy verified and opened. The original remains in its previous folder.",
   "accessSaved": "Access settings saved.",
   "storageTitle": "Storage & access",
-  "storageSubtitle": "Workspace files, encryption and access settings.",
   "workspaceStorage": "Workspace storage",
   "storageDataHelp": "Records, module data, drafts, settings and evidence manifests are encrypted in PostgreSQL. Original evidence files, prepared media and access keys remain in the workspace folder. Use Copy workspace to include both in a verified backup.",
   "copyPath": "Copy path",

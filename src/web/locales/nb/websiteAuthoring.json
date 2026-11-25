@@ -1,7 +1,6 @@
 {
   "pubLoading": "Laster publiseringsinnstillinger...",
   "pubLastOperation": "Siste operasjon",
-  "pubIntegrations": "Integrasjoner",
   "loginsTitle": "Tjenerpålogginger",
   "loginsHelp": "Sett opp hver webtjener én gang. Alle nettstedene i dette arbeidsområdet kan publisere til den, hvert i sin egen mappe eller sitt eget underdomene.",
   "loginsEmpty": "Ingen tjenerpålogginger ennå.",

@@ -13,24 +13,18 @@
   .preferences-tabs .button{
     white-space:normal;
   }
-  .preferences-content>.page-heading h1{
-    font-size:1.5rem;
-  }
   .preference-section-heading h2{
     margin-bottom:.3rem;
   }
   .preference-section-heading p{
     margin-top:0;
   }
-  .general-preferences{
-    max-width:56rem;
-  }
 
 .main-area,.desk-workspace{min-width:0}.desk-workspace{container-type:inline-size}
 .record-context{max-width:none;margin-bottom:1rem}
 .desk-workspace svg{width:20px;height:20px;flex:none}
 .desk-heading,.desk-heading>div{display:flex;align-items:center;justify-content:space-between;gap:1rem}
-.desk-heading{margin-bottom:1rem}.desk-heading h1{margin:0;font-size:1.7rem}
+.desk-heading{margin-bottom:0}.desk-heading h1{margin:0}
 .desk-workspace button,.desk-workspace input,.desk-workspace select{font:inherit;color:var(--ui-text)}
 .desk-button{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid var(--ui-border);border-radius:6px;background:var(--ui-surface);padding:.5rem .7rem;min-height:36px;cursor:pointer}
 .desk-button:hover{border-color:var(--ui-accent);background:var(--ui-tint)}

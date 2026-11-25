@@ -1,7 +1,6 @@
 {
   "pubLoading": "Loading publishing settings...",
   "pubLastOperation": "Last operation",
-  "pubIntegrations": "Integrations",
   "loginsTitle": "Server logins",
   "loginsHelp": "Set up each web server once. Every website of this workspace can publish to it, each into its own folder or subdomain.",
   "loginsEmpty": "No server logins yet.",

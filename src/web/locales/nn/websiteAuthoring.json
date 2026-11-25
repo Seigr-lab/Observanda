@@ -1,7 +1,6 @@
 {
   "pubLoading": "Lastar publiseringsinnstillingar...",
   "pubLastOperation": "Siste operasjon",
-  "pubIntegrations": "Integrasjonar",
   "loginsTitle": "Tenarinnloggingar",
   "loginsHelp": "Set opp kvar vevtenar éin gong. Alle nettstadene i dette arbeidsområdet kan publisere til han, kvar i si eiga mappe eller sitt eige underdomene.",
   "loginsEmpty": "Ingen tenarinnloggingar enno.",

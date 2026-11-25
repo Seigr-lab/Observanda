@@ -1,7 +1,6 @@
 {
   "pubLoading": "S’està carregant la configuració de publicació...",
   "pubLastOperation": "Última operació",
-  "pubIntegrations": "Integracions",
   "loginsTitle": "Inicis de sessió de servidor",
   "loginsHelp": "Configura cada servidor web una sola vegada. Tots els llocs web d'aquest espai de treball hi poden publicar, cadascun a la seva carpeta o subdomini.",
   "loginsEmpty": "Encara no hi ha cap inici de sessió de servidor.",

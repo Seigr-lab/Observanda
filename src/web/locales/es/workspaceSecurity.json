@@ -55,7 +55,6 @@
   "encryptedOpened": "Se ha verificado y abierto la copia cifrada. El original permanece en la carpeta anterior.",
   "accessSaved": "Configuración de acceso guardada.",
   "storageTitle": "Almacenamiento y acceso",
-  "storageSubtitle": "Archivos del espacio de trabajo, cifrado y configuración de acceso.",
   "workspaceStorage": "Almacenamiento del espacio de trabajo",
   "storageDataHelp": "Los registros, los datos de los módulos, los borradores, la configuración y los manifiestos de evidencias están cifrados en PostgreSQL. Los archivos originales de evidencias, los medios preparados y las claves de acceso se mantienen en la carpeta del espacio de trabajo. Utiliza Copiar espacio de trabajo para incluirlo todo en una copia de seguridad verificada.",
   "copyPath": "Copiar la ruta",

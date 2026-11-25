@@ -14,7 +14,7 @@ export function integrationsUI({state,api,esc,field,option,render,notify}){
  async function load(){state.publishing=await api('/api/publishing');await Promise.all([github.refresh(),servers.refresh()]);}
  function view(){
   if(!state.publishing)return '<p>'+esc(msg('pubLoading'))+'</p>';
-  return '<div class="page-heading"><div><h2>'+esc(msg('pubIntegrations'))+'</h2></div></div><div class="settings-grid">'+github.view()+servers.view()+'</div>';
+  return '<div class="settings-grid">'+github.view()+servers.view()+'</div>';
  }
  async function action(button){
   if(button.dataset.action==='publish-disconnect'){await api('/api/publishing/disconnect',{});await load();render();return true;}

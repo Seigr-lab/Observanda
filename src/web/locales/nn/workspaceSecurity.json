@@ -55,7 +55,6 @@
   "encryptedOpened": "Den krypterte kopien er verifisert og opna. Originalen blir i den førre mappa.",
   "accessSaved": "Tilgangsinnstillingar lagra.",
   "storageTitle": "Lagring og tilgang",
-  "storageSubtitle": "Arbeidsområdefiler, kryptering og tilgangsinnstillingar.",
   "workspaceStorage": "Lagring av arbeidsområde",
   "storageDataHelp": "Oppføringar, moduldata, utkast, innstillingar og evidensmanifest er krypterte i PostgreSQL. Originale evidensfiler, klargjorde medium og tilgangsnøklar blir i arbeidsområdemappa. Bruk Kopier arbeidsområde for å ta med begge delar i ein verifisert tryggleikskopi.",
   "copyPath": "Kopier stig",

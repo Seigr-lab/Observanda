@@ -1,7 +1,6 @@
 {
   "pubLoading": "Cargando la configuración de publicación...",
   "pubLastOperation": "Última operación",
-  "pubIntegrations": "Integraciones",
   "loginsTitle": "Inicios de sesión de servidor",
   "loginsHelp": "Configura cada servidor web una sola vez. Todos los sitios web de este espacio de trabajo pueden publicar en él, cada uno en su propia carpeta o subdominio.",
   "loginsEmpty": "Todavía no hay inicios de sesión de servidor.",
