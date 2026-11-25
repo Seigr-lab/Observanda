@@ -11,7 +11,7 @@ import {clearVault} from '../../src/encryption.js';
 import {initializeLocation} from '../../src/locations.js';
 import {workspaceManifest} from '../workspace-copy-helpers.js';
 import {testServer,TestDeviceStore} from '../device-fixture.js';
-import {preferences} from './preferences-helper.js';
+import {preferences,workspaceCommands} from './preferences-helper.js';
 import {randomUUID} from 'node:crypto';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
 import {WorkspaceEdits} from '../../src/workspace-edits.js';
@@ -120,7 +120,7 @@ test('default transactional workspace saves, reopens in the same folder and rest
   // compare only once it has settled.
   let initial=await manifest(root);
   await expect.poll(async()=>{const next=await manifest(root),settled=JSON.stringify(next)===JSON.stringify(initial);initial=next;return settled;},{timeout:30000,intervals:[1000]}).toBe(true);
-  await preferences(page,'Storage & access');
+  await workspaceCommands(page);
   await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Upgrade into a new copy',exact:true})).toHaveCount(0);
   expect(await manifest(root)).toEqual(initial);
@@ -182,7 +182,7 @@ test('encrypted PostgreSQL copies are verified, opened and edited independently 
   await expect(page.locator('.workspace-name')).toHaveText(path.basename(root));
   // Opening adopts the folder name as the workspace name, so the baseline is the opened original.
   const before=await original.read();
-  await preferences(page,'Storage & access');await expect(page.locator('main')).toContainText('PostgreSQL is connected.');
+  await workspaceCommands(page);await expect(page.locator('main')).toContainText('PostgreSQL is connected.');
   await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
   await page.getByLabel('Workspace folder',{exact:true}).fill(destination);
   await expect(page.getByRole('dialog')).toContainText('The original stays in its current folder');

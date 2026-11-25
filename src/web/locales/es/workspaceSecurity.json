@@ -58,7 +58,6 @@
   "workspaceStorage": "Almacenamiento del espacio de trabajo",
   "storageDataHelp": "Los registros, los datos de los módulos, los borradores, la configuración y los manifiestos de evidencias están cifrados en PostgreSQL. Los archivos originales de evidencias, los medios preparados y las claves de acceso se mantienen en la carpeta del espacio de trabajo. Utiliza Copiar espacio de trabajo para incluirlo todo en una copia de seguridad verificada.",
   "copyPath": "Copiar la ruta",
-  "openAnother": "Abrir otro espacio de trabajo",
   "filesLocations": "Archivos y ubicaciones",
   "readableExports": "Las vistas previas de los sitios web se mantienen en la memoria. Los sitios web y las hojas de resultados descargados son exportaciones legibles.",
   "encryptedDataHelp": "Los registros, el historial, los datos de laboratorio y la configuración privada están cifrados en PostgreSQL; los adjuntos originales y los medios preparados están cifrados en la carpeta del espacio de trabajo.",

@@ -32,7 +32,37 @@ export function storageUI({state,api,activity,esc,field,save,render,showDialog,n
   const workspaces=workspaceManagementUI({state,api,esc,deletion,render});
   const database=workspaceDatabaseUI({state,esc});
   const hint=()=>'<p class="muted">'+esc(tr('storageHint'))+'</p>'+portability.controls();
-  function view(){if(state.storage?.rename)return `<h1>${esc(tr('storageTitle'))}</h1>${workspaceRenamePanel(state.storage,esc)}`;state.storageBusy=activity.storageBusy();if(state.storageBusy)return `<h1>${esc(tr('storageTitle'))}</h1><div data-owned-activity></div>`;const s=state.storage;return `<div class="storage-grid"><section class="panel"><h2>${esc(tr('workspaceStorage'))}</h2><p>${esc(databaseMessage(s.database))}</p><p>${esc(tr('storageDataHelp'))}</p><p class="storage-path">${esc(s.root)}</p><div class="inline-actions"><button class="button" data-action="storage-copy-path">${esc(tr('copyPath'))}</button><button class="button" data-action="storage-open-dialog">${esc(tr('openAnother'))}</button><button class="button" data-action="storage-copy-dialog">${esc(t('access','copyTitle'))}</button><button class="button" data-action="storage-move-dialog">${esc(t('access','moveTitle'))}</button></div>${database.panel()}${hint()}${transfers.pending()}<details><summary>${esc(tr('filesLocations'))}</summary><dl class="storage-map">${s.locations.map(item=>`<dt>${esc(locationLabel(item.label))}</dt><dd>${esc(item.path)}</dd>`).join('')}</dl><p class="muted"><span class="storage-path">${esc(tr('applicationPath',{path:s.applicationRoot}))}</span></p></details><p class="muted">${esc(tr('readableExports'))}</p></section><section class="panel"><h2>${esc(tr('encryptedWorkspace'))}</h2><p>${esc(tr('encryptedDataHelp'))}</p><p class="muted">${esc(tr('visiblePathsHelp'))}</p><form id="storage-access-form">${field(esc(tr('usernameOptional')),`<input name="username" maxlength="80" autocomplete="username" value="${esc(state.access?.username??'')}">`)}${state.access.passwordAvailable?field(esc(tr('currentPassword')),'<input name="currentPassword" type="password" required autocomplete="current-password">'):''}${field(esc(tr('workspacePassword')),`<input name="password" type="password" ${state.access.deviceAvailable?'':'required'} minlength="12" maxlength="1024" autocomplete="new-password">`)}${field(esc(t('access','confirmPassword')),'<input name="confirmPassword" type="password" maxlength="1024" autocomplete="new-password">')}<p class="muted">${esc(tr('passwordChanges'))}${state.access.deviceAvailable?' '+esc(tr('deviceBlank')):''}</p><div class="inline-actions"><button class="button primary" type="submit">${esc(tr('saveAccess'))}</button><button class="button" type="button" data-action="storage-lock">${esc(tr('lockWorkspace'))}</button></div></form></section>${security.panel()}${state.access?.deviceAvailable?collaboration.panel():''}${preferencesPanel(s)}${maintenance.view()}<section class="panel">${deletion.button()}</section></div>`;}
+  function view(){if(state.storage?.rename)return `<h1>${esc(tr('storageTitle'))}</h1>${workspaceRenamePanel(state.storage,esc)}`;state.storageBusy=activity.storageBusy();if(state.storageBusy)return `<h1>${esc(tr('storageTitle'))}</h1><div data-owned-activity></div>`;return `<div class="storage-grid"><section class="panel"><h2>${esc(tr('encryptedWorkspace'))}</h2><p>${esc(tr('encryptedDataHelp'))}</p><p class="muted">${esc(tr('visiblePathsHelp'))}</p><form id="storage-access-form">${field(esc(tr('usernameOptional')),`<input name="username" maxlength="80" autocomplete="username" value="${esc(state.access?.username??'')}">`)}${state.access.passwordAvailable?field(esc(tr('currentPassword')),'<input name="currentPassword" type="password" required autocomplete="current-password">'):''}${field(esc(tr('workspacePassword')),`<input name="password" type="password" ${state.access.deviceAvailable?'':'required'} minlength="12" maxlength="1024" autocomplete="new-password">`)}${field(esc(t('access','confirmPassword')),'<input name="confirmPassword" type="password" maxlength="1024" autocomplete="new-password">')}<p class="muted">${esc(tr('passwordChanges'))}${state.access.deviceAvailable?' '+esc(tr('deviceBlank')):''}</p><div class="inline-actions"><button class="button primary" type="submit">${esc(tr('saveAccess'))}</button><button class="button" type="button" data-action="storage-lock">${esc(tr('lockWorkspace'))}</button></div></form></section>${security.panel()}${state.access?.deviceAvailable?collaboration.panel():''}</div>`;}
+  // Commands that act on this workspace live on the Workspaces page beside the list of
+  // workspaces; settings hold configuration only (docs/ui-overhaul/2026-11-25-consistency-design.md).
+  function storagePanel(){const s=state.storage;return `<section class="panel"><h2>${esc(tr('workspaceStorage'))}</h2><p>${esc(databaseMessage(s.database))}</p><p>${esc(tr('storageDataHelp'))}</p><p class="storage-path">${esc(s.root)}</p><div class="inline-actions"><button class="button" data-action="storage-copy-path">${esc(tr('copyPath'))}</button><button class="button" data-action="storage-copy-dialog">${esc(t('access','copyTitle'))}</button><button class="button" data-action="storage-move-dialog">${esc(t('access','moveTitle'))}</button></div>${database.panel()}${hint()}${transfers.pending()}<details><summary>${esc(tr('filesLocations'))}</summary><dl class="storage-map">${s.locations.map(item=>`<dt>${esc(locationLabel(item.label))}</dt><dd>${esc(item.path)}</dd>`).join('')}</dl><p class="muted"><span class="storage-path">${esc(tr('applicationPath',{path:s.applicationRoot}))}</span></p></details><p class="muted">${esc(tr('readableExports'))}</p></section>`;}
+  function thisWorkspace(){
+    if(!state.book||state.newWorkspace||!state.storage?.root||state.storage.rename)return '';
+    state.storageBusy=activity.storageBusy();
+    if(state.storageBusy)return `<section class="panel"><h2>${esc(tr('workspaceStorage'))}</h2><div data-owned-activity></div></section>`;
+    return storagePanel()+maintenance.view();
+  }
+  function workspacesView(options={}){return workspaces.view(options)+(options.standalone?'':thisWorkspace());}
+  function appPreferences(){return state.storage?preferencesPanel(state.storage):'';}
+  // Storage & access and Workspaces read the storage details fresh; while a copy or move
+  // runs they show its progress instead.
+  // Choosing Workspaces opens it like any page; a refresh after background work only redraws
+  // it, so a dialog still in use (a move's cleanup, say) stays open.
+  async function loadStorage(page,{refresh=false}={}){
+    const originPage=state.page,originRoute=location.hash,originSetup=Boolean(state.newWorkspace),dialogOpen=Boolean(document.querySelector('#dialog')?.open);
+    // A newer choice (another page, or starting a new workspace) wins over this read.
+    const moved=()=>state.page!==originPage||location.hash!==originRoute||Boolean(state.newWorkspace)!==originSetup;
+    const show=target=>{if(target==='workspaces'&&!refresh)workspaces.open({closeDialog:dialogOpen});else{state.page=target;render();}};
+    const observation=await activity?.refresh();
+    if(moved())return true;
+    if(observation?.busy&&(!observation.readable||observation.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&['running','queued'].includes(entry.state)))){state.storageBusy=true;show(page);return true;}
+    state.storageBusy=false;
+    const [storage,access]=await Promise.all([api('/api/storage'),api('/api/access/status')]);
+    const mediaPolicy=storage.rename?state.mediaPolicy:await api('/api/media-policy');
+    // A completed request must not take the user back from a newer route.
+    if(moved())return true;
+    Object.assign(state,{storage,access,mediaPolicy});show(page);return true;
+  }
   async function ready(){if(isUploading()){notify(tr('waitUpload'),true);return false;}if(state.publishing?.dirty){notify(tr('savePublishing'),true);return false;}await save();return !state.dirty;}
   async function action(button){const name=button.dataset.action;
     if(await maintenance.action(button))return true;
@@ -47,23 +77,15 @@ export function storageUI({state,api,activity,esc,field,save,render,showDialog,n
       const prefs=await api('/api/preferences');
       resetDialog(prefs);return true;
     }
+    // Workspaces with a workspace open also shows this workspace's storage, read fresh each time.
+    if(name==='storage-workspaces'&&state.book&&!state.newWorkspace&&!state.access?.locked)return loadStorage('workspaces');
     if(await workspaces.action(button))return true;
     if(name==='storage-open-recent'){if(await ready())chooseDialog('open',button.dataset.path);return true;}
     if(name==='storage-new'){if(!await ready())return true;document.querySelector('#dialog').close();state.newWorkspace=true;render();window.scrollTo(0,0);return true;}
     if(name==='storage-cancel-new'){state.newWorkspace=false;render();return true;}
 
-    if(name==='storage'){
-      const originPage=state.page,originRoute=location.hash;
-      const observation=await activity?.refresh();
-      if(state.page!==originPage||location.hash!==originRoute)return true;
-      if(observation?.busy&&(!observation.readable||observation.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&['running','queued'].includes(entry.state)))){state.storageBusy=true;state.page='storage';render();return true;}
-      state.storageBusy=false;
-      const [storage,access]=await Promise.all([api('/api/storage'),api('/api/access/status')]);
-      const mediaPolicy=storage.rename?state.mediaPolicy:await api('/api/media-policy');
-      // A completed request must not take the user back from a newer route.
-      if(state.page!==originPage||location.hash!==originRoute)return true;
-      Object.assign(state,{storage,access,mediaPolicy,page:'storage'});render();return true;
-    }
+    if(name==='storage')return loadStorage('storage');
+
     if(name==='activity-show'){activity.open();return true;}
     if(name==='storage-encrypt-dialog'){if(!await ready())return true;state.encryptionPlan=null;showDialog(`<form id="storage-encrypt-form"><h2 id="dialog-title">${esc(tr('privateSuccessor'))}</h2>${locationFields('','encrypted-destination')}${field(esc(tr('workspacePassword')),`<input name="password" type="password" ${state.access.deviceAvailable?'':'required'} minlength="12" maxlength="1024" autocomplete="new-password">`)}${field(esc(t('access','confirmPassword')),'<input name="confirmPassword" type="password" maxlength="1024" autocomplete="new-password">')}<p>${esc(tr('encryptHelp'))}</p><p class="muted">${esc(tr('encryptPasswordHelp'))}</p><div data-encryption-review></div><div class="dialog-actions"><button class="button" type="button" data-action="close-dialog">${esc(t('access','cancel'))}</button><button class="button primary" type="submit">${esc(tr('reviewEncrypted'))}</button></div></form>`);return true;}
     if(name==='storage-copy-path'){await navigator.clipboard.writeText(state.storage.root);notify(tr('pathCopied'));return true;}
@@ -119,5 +141,5 @@ export function storageUI({state,api,activity,esc,field,save,render,showDialog,n
   async function switched(){state.newWorkspace=false;state.book=null;state.etag=null;state.dirty=false;state.preview=null;state.laboratory=null;state.labTab='samples';state.labSearch='';state.publishing=null;state.publishOutcome=null;state.designSource='auto';state.designPage=null;state.designResult=null;state.selected=null;state.project=null;state.notebook='all';state.search='';state.filter='all';state.recordBrowse=null;state.page='workspace';history.replaceState(null,'','#/workspace');await reload();document.querySelector('#dialog').close();}
   async function refreshRename(){try{state.storage=await api('/api/storage');if(state.storage.rename){state.dirty=false;render();}}catch{ /* Retain the operation's original error when recovery metadata is unavailable. */ }}
   async function rename(name){if(!await ready())return false;try{state.storage=await accessOwners(()=>api('/api/storage/rename',{name,etag:state.etag}));await switched();state.page='preferences';history.replaceState(null,'','#/preferences');render();return true;}catch(error){await refreshRename();throw error;}}
-  return {agents:security.agents,rename,bind:maintenance.bind,recoveryPanel:()=>workspaceRenamePanel(state.storage,esc),workspaces,locationFields,view,lockView,unavailable,action,submit,input:el=>{if(el.closest('#security-grant-form')||el.matches('[data-access-checkpoint]')||el.matches('[data-agent-key-scope]')){security.input(el).catch(e=>notify(e.message,true));return true;}return folders.input(el);}};
+  return {agents:security.agents,workspacesView,appPreferences,refreshStorage:page=>loadStorage(page,{refresh:true}),rename,bind:maintenance.bind,recoveryPanel:()=>workspaceRenamePanel(state.storage,esc),workspaces,locationFields,view,lockView,unavailable,action,submit,input:el=>{if(el.closest('#security-grant-form')||el.matches('[data-access-checkpoint]')||el.matches('[data-agent-key-scope]')){security.input(el).catch(e=>notify(e.message,true));return true;}return folders.input(el);}};
 }

@@ -8,18 +8,18 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {InventoryReconciliation} from '../../src/modules/inventory-reconciliation.js';
-import {preferences} from './preferences-helper.js';
+import {preferences,workspaceCommands} from './preferences-helper.js';
 
 test('inventory maintenance can be cancelled and retried after navigation without polling hidden storage',async({page})=>{
  test.setTimeout(120000);const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-maintenance-ui-')),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore}),prepare=InventoryReconciliation.prototype.prepare;
  let paused=false,statusReads=0;const errors=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().endsWith('/maintenance/inventory/status'))statusReads++;});
  InventoryReconciliation.prototype.prepare=async function(options){if(!paused){paused=true;await wait(60000,null,{signal:options.signal});}return prepare.call(this,options);};
  try{
-  await page.goto(app.url);await preferences(page,'Storage & access');const panel=page.locator('[data-inventory-maintenance="storage-maintenance"]');
+  await page.goto(app.url);await workspaceCommands(page);const panel=page.locator('[data-inventory-maintenance="storage-maintenance"]');
   await expect(panel.getByRole('heading',{name:'Inventory check',exact:true})).toBeVisible();await expect(panel.getByRole('button',{name:'Check inventory',exact:true})).toBeEnabled();
   await panel.getByRole('button',{name:'Check inventory',exact:true}).click();await expect(panel.getByRole('button',{name:'Cancel check',exact:true})).toBeVisible();
   await preferences(page,'General');await expect(panel).toHaveCount(0);const before=statusReads;await page.waitForTimeout(1800);expect(statusReads).toBe(before);
-  await preferences(page,'Storage & access');await expect(panel.getByRole('button',{name:'Cancel check',exact:true})).toBeEnabled();await panel.getByRole('button',{name:'Cancel check',exact:true}).click();
+  await workspaceCommands(page);await expect(panel.getByRole('button',{name:'Cancel check',exact:true})).toBeEnabled();await panel.getByRole('button',{name:'Cancel check',exact:true}).click();
   await expect(panel.getByRole('status')).toContainText('Check cancelled.');await panel.getByRole('button',{name:'Retry check',exact:true}).click();await expect(panel.getByRole('status')).toHaveText('Inventory totals match the retained entries.',{timeout:30000});
   await expect(panel.getByRole('button',{name:'Check again',exact:true})).toBeEnabled();const completedReads=statusReads;await page.waitForTimeout(1800);expect(statusReads).toBe(completedReads);expect(errors).toEqual([]);
  }finally{InventoryReconciliation.prototype.prepare=prepare;await app.close();await clearVault(f.vault);expect(path.dirname(directory)).toBe(parent);expect(await realpath(directory)).toBe(directory);await rm(directory,{recursive:true,force:true});}

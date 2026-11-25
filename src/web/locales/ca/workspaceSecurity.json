@@ -58,7 +58,6 @@
   "workspaceStorage": "Emmagatzematge de l'espai de treball",
   "storageDataHelp": "Els registres, les dades dels mòduls, els esborranys, la configuració i els manifests d'evidències estan xifrats a PostgreSQL. Els fitxers originals d'evidències, els mitjans preparats i les claus d'accés es mantenen a la carpeta de l'espai de treball. Utilitza Copia l'espai de treball per incloure-ho tot en una còpia de seguretat verificada.",
   "copyPath": "Copia el camí",
-  "openAnother": "Obre un altre espai de treball",
   "filesLocations": "Fitxers i ubicacions",
   "readableExports": "Les previsualitzacions dels llocs web es mantenen a la memòria. Els llocs web i els fulls de resultats baixats són exportacions llegibles.",
   "encryptedDataHelp": "Els registres, l'historial, les dades de laboratori i la configuració privada estan xifrats a PostgreSQL; els adjunts originals i els mitjans preparats estan xifrats a la carpeta de l'espai de treball.",

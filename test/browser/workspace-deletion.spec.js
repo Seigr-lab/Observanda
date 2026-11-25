@@ -16,7 +16,6 @@ import {startServer} from '../../src/server.js';
 import {WorkspaceDeletions} from '../../src/workspace-deletion.js';
 import {rememberLocation,readPreferences} from '../../src/preferences.js';
 import {clearVault} from '../../src/encryption.js';
-import {preferences} from './preferences-helper.js';
 
 test('deleting from Workspaces confirms the name, clears local bindings, and leaves another workspace usable',async({page})=>{
  test.setTimeout(180000);
@@ -34,7 +33,7 @@ test('deleting from Workspaces confirms the name, clears local bindings, and lea
   await expect(dialog.getByText("The workspace's dedicated PostgreSQL database will also be removed.",{exact:true})).toBeVisible();
   await page.screenshot({path:test.info().outputPath('workspace-delete-dialog.png')});
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await access(f.workspace.root);
-  await preferences(page,'Storage & access');await page.getByRole('button',{name:'Delete workspace',exact:true}).click();
+  await page.locator('.workspace-management article').filter({hasText:f.workspace.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();
   await dialog.getByLabel('Type the workspace name to confirm').fill('wrong name');await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Delete workspace',exact:true}).click();
   await expect(dialog).toBeVisible();await access(f.workspace.root);
   await dialog.getByLabel('Type the workspace name to confirm').fill(path.basename(f.workspace.root));

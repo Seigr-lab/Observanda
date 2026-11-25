@@ -10,7 +10,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WorkspaceDatabases} from '../../src/workspace-databases.js';
 import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {catalogueBinding} from '../../src/postgres-activation.js';
-import {preferences} from './preferences-helper.js';
+import {workspaceCommands} from './preferences-helper.js';
 import {moveWorkspaceTo} from '../../src/workspace-move.js';
 import {websiteLibraryState} from './website-preparation-helper.js';
 
@@ -21,7 +21,7 @@ test('workspace owns its database, locks it and moves the whole workspace in the
  const detach=installDatabaseProvider(owner),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
-  await page.goto(app.url);await preferences(page,'Storage & access');
+  await page.goto(app.url);await workspaceCommands(page);
   await expect(page.getByText('This workspace owns its database files.',{exact:false})).toBeVisible();
   expect((await catalogueBinding(f.workspace.root)).placement).toBe('workspace');
   await expect(page.locator('p.storage-path').filter({hasText:path.join(f.workspace.root,'.observanda','postgresql')})).toBeVisible();
@@ -30,11 +30,11 @@ test('workspace owns its database, locks it and moves the whole workspace in the
   await page.getByRole('button',{name:'Lock workspace',exact:true}).last().click();
   await expect(page.getByRole('button',{name:'Unlock workspace',exact:true})).toBeVisible();
   expect(owner.instances.instances.has(f.workspace.root)).toBe(false);
-  await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await preferences(page,'Storage & access');
+  await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await workspaceCommands(page);
   await page.getByRole('button',{name:'Move workspace to another folder',exact:true}).click();
   const dialog=page.locator('#dialog');await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);
   await dialog.getByRole('button',{name:'Move and use this folder',exact:true}).click();
-  await expect(dialog).not.toBeVisible({timeout:60000});await preferences(page,'Storage & access');
+  await expect(dialog).not.toBeVisible({timeout:60000});await workspaceCommands(page);
   await expect(page.locator('p.storage-path').filter({hasText:path.join(destination,'.observanda','postgresql')})).toBeVisible({timeout:60000});
   await expect.poll(async()=>{try{await access(f.workspace.root);return true;}catch{return false;}}).toBe(false);
   await access(path.join(destination,'.observanda','postgresql','data','PG_VERSION'));
@@ -56,7 +56,7 @@ test('restarting after interrupted move offers the verified destination and fini
   await page.getByRole('button',{name:'Open moved workspace',exact:true}).click();
   const dialog=page.locator('#dialog');await expect(dialog.getByLabel('Workspace folder',{exact:true})).toHaveValue(destination);
   await dialog.getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
-  await preferences(page,'Storage & access');await page.getByRole('button',{name:'Retry original cleanup',exact:true}).click();
+  await workspaceCommands(page);await page.getByRole('button',{name:'Retry original cleanup',exact:true}).click();
   await dialog.getByRole('button',{name:'Retry original cleanup',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:45000});
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});
  }finally{await app?.close();await owner.close();detach();await clearVault(f?.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

@@ -11,7 +11,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {Workspace} from '../../src/storage.js';
 import {clearVault} from '../../src/encryption.js';
-import {preferences} from './preferences-helper.js';
+import {preferences,navigate} from './preferences-helper.js';
 
 test('existing workspace name, rename form, reopen and delete confirmation follow the exact folder',async({page})=>{
  test.setTimeout(120000);
@@ -33,7 +33,7 @@ test('existing workspace name, rename form, reopen and delete confirmation follo
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   }
   await page.reload();await preferences(page,'General');await expect(form.getByLabel('Workspace name',{exact:true})).toHaveValue('Research Workspace 1 – café');
-  await preferences(page,'Storage & access');await page.getByRole('button',{name:'Delete workspace',exact:true}).click();
+  await navigate(page,'Workspaces');await page.locator('.workspace-management article').filter({hasText:'Currently open'}).getByRole('button',{name:'Delete workspace',exact:true}).click();
   const dialog=page.locator('#dialog');await expect(dialog.getByText('Research Workspace 1 – café',{exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect(errors).toEqual([]);
  }finally{await app?.close();await owner.close();detach();await clearVault(f.vault);if(path.dirname(parent)!==await realpath(os.tmpdir())||!path.basename(parent).startsWith('observanda-browser-name-'))throw Error('Unexpected fixture root');await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

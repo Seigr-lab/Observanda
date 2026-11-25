@@ -39,11 +39,11 @@ test('structure progress retains measured row counts and the last meaningful sta
  const [entry]=registry.list('a');assert.equal(entry.progress.completed,37);assert.equal(entry.progress.stage,'records');assert.equal(entry.state,'completed');
 });
 
-test('activity retains only internal owning views and storage always returns to storage',()=>{
+test('activity retains only internal owning views; workspace commands return to Workspaces and access changes to Storage & access',()=>{
  const registry=new OperationActivity();
  for(const view of ['https://example.com','#/preferences/general?secret=private','javascript:alert(1)','#/modules/scientific-calculator/calculation'])registry.begin('a','/api/modules/drafts/write',{view});
- registry.begin('a','/api/storage/copy',{view:'#/workspace'});
- assert.deepEqual(registry.list('a').map(entry=>entry.view),[null,null,null,'#/modules/scientific-calculator/calculation','#/preferences/storage']);
+ registry.begin('a','/api/storage/copy',{view:'#/workspace'});registry.begin('a','/api/storage/encrypt',{view:'#/workspace'});registry.begin('a','job:inventory.reconcile',{view:'#/workspace'});
+ assert.deepEqual(registry.list('a').map(entry=>entry.view),[null,null,null,'#/modules/scientific-calculator/calculation','#/workspaces','#/preferences/storage','#/workspaces']);
  assert.ok(!JSON.stringify(registry.list('a')).includes('secret'));
 });
 

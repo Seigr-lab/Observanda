@@ -18,7 +18,7 @@ import {catalogueBinding} from '../../src/postgres-activation.js';
 import fs from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
 import {assertOwnersInCluster} from '../owner-workspace-fixture.js';
-import {preferences} from './preferences-helper.js';
+import {workspaceCommands} from './preferences-helper.js';
 // The server decides between a folder move and a copy by the volumes of the
 // workspace and of the destination's parent. Report another volume for that parent.
 function acrossVolumes(parent){
@@ -39,7 +39,7 @@ for(const across of [false,true])test((across?'Across volumes, ':'')+'Move works
   // On the same volume the stopped workspace moves as one folder: its cluster,
   // cluster identity and every project binding are kept.
   const cluster=(await catalogueBinding(f.workspace.root)).cluster,bindings=new Map([[source.projectId,await catalogueBinding(source.root)],[child.projectId,await catalogueBinding(child.root)]]);
-  const destination=path.join(directory,'Research Workspace 1');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});await page.goto(app.url);await preferences(page,'Storage & access');
+  const destination=path.join(directory,'Research Workspace 1');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});await page.goto(app.url);await workspaceCommands(page);
   const unlocked=await page.evaluate(async id=>{const storage=await fetch('/api/storage').then(r=>r.json());const response=await fetch('/api/projects/'+id+'/access/unlock',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({username:'Teacher',password:'Project password',recovery:''})});return {status:response.status,body:await response.text()};},source.projectId);expect(unlocked.status,unlocked.body).toBe(200);
   await page.getByRole('button',{name:'Move workspace to another folder',exact:true}).click();const form=page.locator('#storage-move-form');await form.getByLabel('Workspace folder',{exact:true}).fill(destination);let settleMove;const moveResponse=new Promise(resolve=>settleMove=resolve);await page.context().route('**/api/storage/move',async route=>{let response;try{response=await route.fetch({timeout:120000});const body=await response.body();settleMove(body.toString('utf8').trim().split('\n').at(-1));await route.fulfill({response,body});}catch(error){settleMove(String(error));if(!response)await route.abort().catch(()=>{});}},{times:1});await form.getByRole('button',{name:'Move and use this folder',exact:true}).click();let moveStatus;await expect.poll(async()=>moveStatus=await form.isVisible()?await form.locator('[data-transfer-error]').textContent()||'running':'complete',{timeout:120000}).not.toBe('running');
   // An IO failure hides its cause from the page; the move's own final line names its code

@@ -29,7 +29,8 @@ export function workspaceManagementUI({state,api,esc,deletion,render}){
   const entering=!active||context!==key;active=true;context=key;host=next;
   if(entering){result=null;void refresh();}else paint();
  }
- function open(){state.newWorkspace=false;state.page='workspaces';active=false;document.getElementById('dialog')?.close();render();}
+ // Choosing Workspaces from a dialog closes it; a dialog opened while the page was loading stays.
+ function open({closeDialog=true}={}){state.newWorkspace=false;state.page='workspaces';active=false;if(closeDialog)document.getElementById('dialog')?.close();render();}
  async function action(button){if(button.dataset.action==='storage-workspaces'){open();return true;}if(button.dataset.action==='storage-workspaces-retry'){await refresh();return true;}return false;}
  return {view,bind,open,refresh,action};
 }

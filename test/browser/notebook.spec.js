@@ -3,7 +3,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {contentBuffer} from '../../src/file-content.js';
 import {answerConfirmation} from './confirm-helper.js';
 import {sessionRequest} from './session-fixture.js';
-import {navigate,preferences,editWorkspace,openDefaultWebsite} from './preferences-helper.js';
+import {navigate,preferences,editWorkspace,openDefaultWebsite,workspaceCommands} from './preferences-helper.js';
 import {TestDeviceStore as DeviceStore} from '../device-fixture.js';
 import {readAccess,verifyAccess,createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {initializeLocation} from '../../src/locations.js';
@@ -474,12 +474,13 @@ test('setup chooses a storage folder and optional credentials, then enforces loc
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.setup-error')).toContainText('do not match');
   await page.getByLabel('Confirm password',{exact:true}).fill(password);await page.screenshot({path:test.info().outputPath('setup-storage.png'),fullPage:true});
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Research archive');
-  await preferences(page,'Storage & access');
+  await workspaceCommands(page);
   await expect(page.locator('main')).toContainText(destination);await page.getByText('Files and locations',{exact:true}).click();await expect(page.locator('.storage-map')).toContainText('Original media');
   await page.screenshot({path:test.info().outputPath('storage-settings.png'),fullPage:true});
   const saved=await new Workspace(destination,await verifyAccess(await readAccess(destination),'',password)).read();expect(saved.book.projects).toHaveLength(0);expect(saved.book.notebooks).toHaveLength(0);
   expect(JSON.stringify(saved.book)).not.toContain(password);expect(JSON.stringify(saved.book)).not.toContain(destination);
-  await page.locator('main').getByRole('button',{name:'Lock workspace',exact:true}).click();await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
+  // Locking is an access setting, in Storage & access.
+  await preferences(page,'Storage & access');await page.locator('main').getByRole('button',{name:'Lock workspace',exact:true}).click();await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
   expect((await sessionRequest(page,'get',app.origin+'/api/notebook')).status()).toBe(401);
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
   await page.getByLabel('Password',{exact:true}).fill('wrong');
@@ -495,7 +496,7 @@ test('storage settings copy a reviewed workspace, remember it and open existing 
   await encryptedSample(sampleNotebook());const before=await new Workspace(root,workspaceVault).read();
   const destination=path.join(parent,'relocated'),preferencesFile=path.join(parent,'copy-preferences.json');
   await app.close();app=await startServer({root,port:0,preferencesFile,headless:true,deviceStore});await page.goto(app.url);
-  await preferences(page,'Storage & access');
+  await workspaceCommands(page);
   await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
   await page.getByLabel('Workspace folder',{exact:true}).fill(destination);
   await expect(page.getByRole('dialog')).toContainText('The original stays in its current folder');
@@ -505,14 +506,14 @@ test('storage settings copy a reviewed workspace, remember it and open existing 
   await expect(page.locator('.workspace-name')).toHaveText('relocated');
   expect((await new Workspace(root,workspaceVault).read()).etag).toBe(before.etag);const copied=(await new Workspace(destination,workspaceVault).read()).book;expect(copied).toEqual({...before.book,title:'relocated',revision:before.book.revision+1,updatedAt:copied.updatedAt});expect(Date.parse(copied.updatedAt)).toBeGreaterThanOrEqual(Date.parse(before.book.updatedAt));
   expect(JSON.parse(await readFile(preferencesFile,'utf8')).workspace).toBe(destination);
-  await preferences(page,'Storage & access');await expect(page.locator('main')).toContainText(destination);
-  await page.getByRole('button',{name:'Open another workspace',exact:true}).click();
+  await workspaceCommands(page);await expect(page.locator('main')).toContainText(destination);
+  await page.getByRole('button',{name:'Open existing workspace',exact:true}).click();
   await page.getByLabel('Workspace folder',{exact:true}).fill(root);
   await page.getByRole('button',{name:'Browse server folders',exact:true}).click();await page.getByRole('button',{name:'Use this folder',exact:true}).click();
   await expect(page.getByLabel('Workspace folder',{exact:true})).toHaveValue(root);
   await page.getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();await expect(page.locator('.workspace-name')).toHaveText('A closer look');
-  await preferences(page,'Storage & access');await expect(page.locator('main')).toContainText(root);
-  await page.reload();await expect(page.getByRole('navigation',{name:'Preferences sections',exact:true}).getByRole('button',{name:'Storage & access',exact:true})).toHaveAttribute('aria-current','page');
+  await workspaceCommands(page);await expect(page.locator('main')).toContainText(root);
+  await page.reload();await expect(page.locator('main').getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await expect(page.locator('main')).toContainText(root);
 });
 
 test('an unavailable remembered folder offers recovery instead of first-run creation',async({page})=>{

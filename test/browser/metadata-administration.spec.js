@@ -10,7 +10,7 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {migrationFixture} from '../migration-fixture.js';
-import {navigate,preferences} from './preferences-helper.js';
+import {navigate,preferences,workspaceCommands} from './preferences-helper.js';
 for(const count of [65,650])test('storage, access and source inspection retain no research bodies at '+count+' records',async({page})=>{
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-administration-')),book={...sampleNotebook(),title:'workspace'},seed=book.entries[0];
@@ -22,12 +22,14 @@ for(const count of [65,650])test('storage, access and source inspection retain n
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  try{
   const session=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
-  await page.goto(app.origin+'/#/preferences/storage');await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
+  // The workspace's storage is on the Workspaces page; its access settings are in Storage & access.
+  await page.goto(app.origin+'/#/workspaces');await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
+  await preferences(page,'Storage & access');
   await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspace access',exact:true})).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();
   await navigate(page,'Workspaces');await page.getByRole('button',{name:'Inspect external logbook',exact:true}).click();
   await page.getByLabel('Source folder',{exact:true}).fill(source);await page.getByRole('button',{name:'Inspect source',exact:true}).click();await expect(page.getByRole('heading',{name:'Inventory fully accounted for',exact:true})).toBeVisible();await measure();
   await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();
-  await preferences(page,'Storage & access');await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
+  await workspaceCommands(page);await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
   expect(requests.filter(p=>p==='/api/notebook'||p==='/api/workspace/read/page'||p==='/api/workspace/read/selection')).toEqual([]);expect(errors).toEqual([]);expect(await f.workspace.catalogue(s=>s.head())).toBe(before);expect(heap).toBeLessThan(96*1024*1024);
   console.log(JSON.stringify({records:count,sampledBrowserHeapMiB:Math.round(heap/1024**2),originalReads:0}));
  }finally{ResearchCatalogue.prototype.read=original.read;ResearchCatalogue.prototype.record=original.record;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

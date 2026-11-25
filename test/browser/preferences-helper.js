@@ -36,3 +36,10 @@ export async function navigate(page,name){
  if(!await target.isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click();
  await target.click();if(name==='Website editor')await openDefaultWebsite(page);
 }
+
+// Commands that act on the open workspace (copy, move, portable copy, backup status,
+// inventory check) are on the Workspaces page, below the list of workspaces.
+export async function workspaceCommands(page){
+ await navigate(page,'Workspaces');
+ await expect(page.locator('main').getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();
+}

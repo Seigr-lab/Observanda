@@ -8,7 +8,7 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {updateWorkspaceAccess,workspaceAccess} from '../../src/security/workspace-access.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
-import {preferences} from './preferences-helper.js';
+import {workspaceCommands} from './preferences-helper.js';
 
 test('portable copy exposes measured verification progress inline and completes without changing the active workspace',async({page})=>{
  test.setTimeout(90000);
@@ -18,7 +18,7 @@ test('portable copy exposes measured verification progress inline and completes 
  let release;const gate=new Promise(resolve=>{release=resolve;}),verify=ResearchCatalogue.prototype.verifyRecordHistory;
  ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){await gate;return verify.apply(this,args);};
  try{
-  await page.goto(app.url);await preferences(page,'Storage & access');await page.getByRole('button',{name:'Create portable workspace copy',exact:true}).click();const dialog=page.locator('#dialog');
+  await page.goto(app.url);await workspaceCommands(page);await page.getByRole('button',{name:'Create portable workspace copy',exact:true}).click();const dialog=page.locator('#dialog');
   await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);await dialog.getByText('Use a recovery key',{exact:true}).click();await dialog.getByLabel('Recovery key',{exact:true}).fill(kit.recovery);
   await dialog.getByRole('button',{name:'Create verified portable copy',exact:true}).click();
   const progress=dialog.getByRole('region',{name:'Operation progress'});

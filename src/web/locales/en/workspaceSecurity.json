@@ -58,7 +58,6 @@
   "workspaceStorage": "Workspace storage",
   "storageDataHelp": "Records, module data, drafts, settings and evidence manifests are encrypted in PostgreSQL. Original evidence files, prepared media and access keys remain in the workspace folder. Use Copy workspace to include both in a verified backup.",
   "copyPath": "Copy path",
-  "openAnother": "Open another workspace",
   "filesLocations": "Files and locations",
   "readableExports": "Website previews stay in memory. Downloaded websites and result sheets are readable exports.",
   "encryptedDataHelp": "Records, history, laboratory data and private settings are encrypted in PostgreSQL; original attachments and prepared media are encrypted in the workspace folder.",

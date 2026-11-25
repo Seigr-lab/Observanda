@@ -617,7 +617,7 @@ const activity=activityUI({onChange:snapshot=>{
  if(snapshot.busy||workspaceLoadTask)return;
  if(state.waitingForOperation){state.waitingForOperation=false;void loadWorkspace().catch(report);}
  else if(state.storage?.contextId&&snapshot.contextId!==state.storage.contextId){if(!uploading&&!savePromise&&!pendingChanges('all').labels.length)void loadWorkspace().catch(report);}
- else if(state.storageBusy){state.storageBusy=false;if(state.page==='storage')void storageControls.action({dataset:{action:'storage'}}).catch(report);}
+ else if(state.storageBusy){state.storageBusy=false;if(state.page==='storage'||state.page==='workspaces'&&state.book)void storageControls.refreshStorage(state.page).catch(report);}
 }});
 const storageControls=storageUI({state,api,accessOwners:(operation,options)=>withProjectAccess(operation,options),activity,esc,field,save,render,showDialog,notify,reload:loadWorkspace,resetInterface:async()=>{savedBook=null;recordChanges.reset(null);await languageControls.load();await textControls.load();await dashboard.load();},isUploading:()=>uploading});
 const userProfile=userProfileUI({state,api,esc,field,render,notify});
@@ -851,7 +851,7 @@ function render() {
   userProfile.bind();configurationRecord?.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
 }
 
-function renderGeneralPreferences(){return storageControls.recoveryPanel()||structureUI.generalPreferences();}
+function renderGeneralPreferences(){return storageControls.recoveryPanel()||structureUI.generalPreferences()+storageControls.appPreferences();}
 
 function renderPage(){
  if(state.ownerOperation)return ownerOperation.view();
@@ -871,7 +871,7 @@ function renderPage(){
  case 'templates':content=dashboard.templates();break;
  // The workspace font library: fonts for PDFs and the app, kept with the workspace.
  case 'fonts':content=fontLibrary.view();break;
- case 'workspaces':content=storageControls.workspaces.view();break;
+ case 'workspaces':content=storageControls.workspacesView();break;
  case 'integrations':content=publishUI.view();break;
  case 'agents':content=storageControls.agents.view();break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;

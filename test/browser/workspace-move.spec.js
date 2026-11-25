@@ -6,7 +6,7 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {preferences} from './preferences-helper.js';
+import {workspaceCommands} from './preferences-helper.js';
 import {readPreferences} from '../../src/preferences.js';
 import {catalogueBinding} from '../../src/postgres-activation.js';
 import fs from 'node:fs/promises';
@@ -26,7 +26,7 @@ test('Move starts from one action, survives a lost completion response, and leav
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-move-browser-')),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'moved'),preferencesFile=path.join(directory,'preferences');
  const before=await catalogueBinding(f.workspace.root),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile});let transfers=0;
  try{
-  await page.goto(app.url);await preferences(page,'Storage & access');
+  await page.goto(app.url);await workspaceCommands(page);
   await expect(page.getByRole('button',{name:'Copy workspace to another folder',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Move workspace to another folder',exact:true}).click();
   const dialog=page.locator('#dialog');await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);
@@ -37,7 +37,7 @@ test('Move starts from one action, survives a lost completion response, and leav
   await expect(page.locator('.notice')).toContainText('Workspace moved and verified. The original folder has been removed.');
   expect(transfers).toBe(1);await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});expect(await catalogueBinding(destination)).toEqual(before);
   const remembered=await readPreferences(preferencesFile);expect(remembered.workspace).toBe(destination);expect(remembered.recent.some(item=>item.path===f.workspace.root)).toBe(false);
-  await preferences(page,'Storage & access');await expect(page.locator('.storage-path').first()).toHaveText(destination);await page.reload();await expect(page.locator('.workspace-name')).toHaveText('moved');
+  await workspaceCommands(page);await expect(page.locator('.storage-path').first()).toHaveText(destination);await page.reload();await expect(page.locator('.workspace-name')).toHaveText('moved');
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
@@ -49,7 +49,7 @@ test('across volumes, unfinished source cleanup is visible and retry completes w
  Workspace.prototype.outline=async function(...args){const result=await outline.apply(this,args);if(this.root===destination&&!changed){changed=true;await writeFile(original,'Changed source evidence');}return result;};
  try{
   page.on('request',request=>{if(new URL(request.url()).pathname==='/api/storage/move')transfers++;});
-  await page.goto(app.url);await preferences(page,'Storage & access');await page.getByRole('button',{name:'Move workspace to another folder',exact:true}).click();
+  await page.goto(app.url);await workspaceCommands(page);await page.getByRole('button',{name:'Move workspace to another folder',exact:true}).click();
   const dialog=page.locator('#dialog');await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);await dialog.getByRole('button',{name:'Move and use this folder',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Finish removing the original workspace',exact:true})).toBeVisible({timeout:45000});await expect(dialog).toContainText('The original changed after it was copied');
   expect(await readFile(original,'utf8')).toBe('Changed source evidence');await writeFile(original,'Reviewed evidence');

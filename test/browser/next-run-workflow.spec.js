@@ -12,7 +12,7 @@ import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {withRetainedFigure} from '../../src/retained-figures.js';
 import {Workspace} from '../../src/storage.js';
-import {preferences} from './preferences-helper.js';
+import {preferences,workspaceCommands} from './preferences-helper.js';
 import {recoverResearch} from './research-recovery-workflow.js';
 import {openEvidence,revealInEditor} from './record-editor-helper.js';
 
@@ -88,7 +88,7 @@ test('ordinary next run connects preparation, native evidence, measurements, res
   await openRecord(runId,'Apparatus run one');await page.getByRole('button',{name:'Edit website availability',exact:true}).click();await page.locator('dialog[open]').getByLabel('Available for websites',{exact:true}).selectOption('true');await saveChanges();
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();await page.getByRole('button',{name:'Create recovery key',exact:true}).click();await page.getByRole('button',{name:'Generate recovery key',exact:true}).click();
   const recovery=await page.getByLabel('Recovery key',{exact:true}).inputValue();await page.getByRole('button',{name:'Done',exact:true}).click();
-  const before=await f.workspace.read(),destination=path.join(directory,'restored');await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();await page.getByLabel('Workspace folder',{exact:true}).fill(destination);
+  const before=await f.workspace.read(),destination=path.join(directory,'restored');await workspaceCommands(page);await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();await page.getByLabel('Workspace folder',{exact:true}).fill(destination);
   const copying=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/storage/copy',{timeout:60000});await page.getByRole('button',{name:'Copy and use this folder',exact:true}).click();expect((await copying).ok()).toBe(true);await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
   const restored=new Workspace(destination,f.vault),retained=new ResearchMaterials(restored),copied=(await restored.read()).book;
   // A copied workspace is named after its new folder; everything else is unchanged.

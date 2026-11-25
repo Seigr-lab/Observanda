@@ -9,7 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {readPreferences,rememberLocation} from '../../src/preferences.js';
 import {updateWorkspaceAccess,workspaceAccess} from '../../src/security/workspace-access.js';
 import {CATALOGUE_ARCHIVE,CATALOGUE_FILE,openCatalogue} from '../../src/postgres.js';
-import {preferences} from './preferences-helper.js';
+import {workspaceCommands} from './preferences-helper.js';
 import {copyPlan,copyWorkspace} from '../../src/locations.js';
 import {TestDeviceStore} from '../device-fixture.js';
 import {WorkspaceProjectCopy} from '../../src/workspace-project-copy.js';
@@ -35,7 +35,7 @@ test('portable copy can be prepared and retried from the app without consuming t
     return response;
    };
   });
-  await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root),{timeout:30000});await preferences(page,'Storage & access');
+  await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root),{timeout:30000});await workspaceCommands(page);
   await page.getByRole('button',{name:'Create portable workspace copy',exact:true}).click();const dialog=page.locator('#dialog');
   await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);await dialog.getByRole('button',{name:'Create verified portable copy',exact:true}).click();
   await expect(page.locator('#notice')).toContainText('Enter the workspace password or recovery key');
@@ -105,7 +105,7 @@ test('first launch restores a detached backup with the separately retained recov
   await dialog.getByText('Use a recovery key',{exact:true}).click();await dialog.getByLabel('Recovery key',{exact:true}).fill(recovery);
   await button('Open workspace').click();
   await expect(page.locator('.workspace-name').first()).toHaveText(path.basename(destination),{timeout:45000});
-  await preferences(page,'Storage & access');await page.getByRole('button',{name:'Backup status',exact:true}).click();
+  await workspaceCommands(page);await page.getByRole('button',{name:'Backup status',exact:true}).click();
   await expect(dialog.getByText(/^Restored and checked /)).toBeVisible();
   await expect(dialog.locator('.storage-path')).toHaveText(destination);
  }finally{await app?.close();if(donor)await clearVault(donor.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

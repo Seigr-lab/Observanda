@@ -14,7 +14,7 @@ import {ResearchMaterials,EVIDENCE_CHUNK} from '../../src/research-materials.js'
 import {copyPlan,copyWorkspace,readPreference} from '../../src/locations.js';
 import {CATALOGUE_ARCHIVE} from '../../src/postgres.js';
 import {CATALOGUE_ACTIVATION} from '../../src/postgres-activation.js';
-import {preferences} from './preferences-helper.js';
+import {workspaceCommands} from './preferences-helper.js';
 import {openEvidence} from './record-editor-helper.js';
 
 test('the app reopens an interrupted restore, backs up a killed upload and resumes the original',async({page})=>{
@@ -38,7 +38,7 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
   await interruptWorkspace(backup,f.vault,'upload-stream',{upload:{id:session.id,index:1}});
   app=await startServer(options);await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(backup));
   const destination=path.join(directory,'continued'),dialog=page.locator('#dialog');
-  await preferences(page,'Storage & access');await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
+  await workspaceCommands(page);await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
   await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);
   // Copying verifies the database and files before switching, which takes a while.
   await dialog.getByRole('button',{name:'Copy and use this folder',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});

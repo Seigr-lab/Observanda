@@ -82,7 +82,7 @@ test('ordinary progress uses only populated rows and bounds long details without
 test('activity polling preserves cards, disclosure, focus and selection when only progress changes',async({page})=>{
  await fixture(page);
  await page.evaluate(async()=>{
-  location.hash='#/preferences/storage';
+  location.hash='#/workspaces';
   window.snapshot={contextId:'fixture',busy:true,readable:true,operations:[{id:'copy',kind:'/api/storage/copy',state:'running',startedAt:1,progress:{stage:'verify-snapshots',stages:['verify-copy','verify-snapshots'],completed:3,total:100,unit:'snapshots',elapsedMs:2000}}]};
   const fetchOriginal=window.fetch;window.fetch=(...args)=>args[0]==='/api/activity'?Promise.resolve(new Response(JSON.stringify(snapshot))):fetchOriginal(...args);
   const {activityUI}=await import('/activity-ui.js');window.activity=activityUI();await activity.refresh();
@@ -134,7 +134,7 @@ test('activity stays in the shell header without covering Save controls and hide
   document.body.innerHTML='<div id="app"></div>';document.documentElement.dataset.navigation='left';
   const {applicationShell}=await import('/application-shell.js'),{shellNavigation}=await import('/shell-navigation.js'),{activityUI}=await import('/activity-ui.js');
   window.i18n=await import('/i18n/index.js');const navigation=shellNavigation();
-  const content=()=>'<div class="page-heading"><h1>'+(location.hash==='#/preferences/storage'?'Storage':'Calculator')+'</h1></div><label>Calculation<input value="2 + 2"></label><div style="min-height:110vh"></div><div class="section-save"><span>Unsaved changes</span><button class="button primary" data-save>Save calculation</button></div>';
+  const content=()=>'<div class="page-heading"><h1>'+(location.hash==='#/workspaces'?'Workspaces':'Calculator')+'</h1></div><label>Calculation<input value="2 + 2"></label><div style="min-height:110vh"></div><div class="section-save"><span>Unsaved changes</span><button class="button primary" data-save>Save calculation</button></div>';
   window.shell=applicationShell({root:document.querySelector('#app'),mark:'',navigation:{update(sidebar,header){if(!header.querySelector('.workspace-heading')){const heading=document.createElement('div');heading.className='workspace-heading';heading.innerHTML='<button class="workspace-identity"><span class="workspace-name">A workspace with a long display name</span></button>';header.append(heading);}return false;},unmount(){}},applyLayout:()=>navigation.apply('module')});
   window.renderPage=()=>{shell.showWorkspace(content);activity.bind();};
   window.snapshot={contextId:'fixture',busy:false,readable:true,operations:[]};
@@ -168,7 +168,7 @@ test('activity stays in the shell header without covering Save controls and hide
  expect(await page.evaluate(()=>saveCount)).toBe(6);
  await page.evaluate(async()=>{await i18n.prepareLanguage('nb');i18n.activateLanguage('nb');});await expect(toggle).toContainText('[nb] Activity');
  await toggle.click();await expect(panel.locator('h2')).toHaveText('[nb] Activity');
- await panel.locator('[data-operation="copy"] [data-owner]').click();await expect(page).toHaveURL(/#\/preferences\/storage$/);await expect(panel).toBeHidden();
+ await panel.locator('[data-operation="copy"] [data-owner]').click();await expect(page).toHaveURL(/#\/workspaces$/);await expect(panel).toBeHidden();
  await expect(page.locator('#main [data-owned-activity] .operation-progress')).toHaveCount(1);
  expect(await page.evaluate(()=>activityHost===document.querySelector('.app-activity'))).toBe(true);
  await page.evaluate(async()=>{for(const entry of snapshot.operations)entry.state='completed';snapshot.busy=false;await activity.refresh();});

@@ -78,9 +78,9 @@ test('health review returns a waiting writer to its owner and keeps an uncertain
   const summary=dialog.locator('[data-health-summary]');
   for(const status of ['Outcome unconfirmed','Queued','Running','Completed','Cancelled'])await expect(summary).toContainText(status+' (1)');
   const row=summary.getByRole('listitem').filter({hasText:'Waiting for: Copying workspace'});
-  const owner=row.getByRole('link',{name:'Show progress',exact:true});await expect(owner).toHaveAttribute('href','#/preferences/storage');
+  const owner=row.getByRole('link',{name:'Show progress',exact:true});await expect(owner).toHaveAttribute('href','#/workspaces');
   await expect(summary.getByText('Inspect the saved operation before retrying.',{exact:false})).toBeVisible();
-  await owner.click();await expect(dialog).not.toBeVisible();await expect(page).toHaveURL(/#\/preferences\/storage$/);
+  await owner.click();await expect(dialog).not.toBeVisible();await expect(page).toHaveURL(/#\/workspaces$/);
   await preferences(page,'General');
   diagnostics.snapshot=async()=>{throw new AppError('IO');};
   await review.click();await dialog.getByText('Review report contents',{exact:true}).click();

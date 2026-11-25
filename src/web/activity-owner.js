@@ -3,7 +3,10 @@ export function activityOwner(kind, view){
  const bookDelete=/^\/api\/projects\/([a-f0-9-]{36})\/lab-books\/[a-f0-9-]{36}\/storage\/delete(?:\/resume)?$/.exec(kind);if(bookDelete)return '#/projects/'+bookDelete[1];
  if(/^\/api\/projects\/[a-f0-9-]{36}\/storage\/delete(?:\/resume)?$/.test(kind))return '#/projects';
  if(['/api/storage/rename','/api/storage/rename/resume'].includes(kind))return '#/preferences';
- if(kind.startsWith('/api/storage/')||['job:storage.move-cleanup','job:inventory.reconcile'].includes(kind)||kind.startsWith('/api/maintenance/inventory/'))return '#/preferences/storage';
+ // Copying, moving, deleting and checking a workspace happen on the Workspaces page;
+ // its access and encryption settings stay in Storage & access.
+ if(['/api/storage/copy','/api/storage/move','/api/storage/move/finish','/api/storage/delete','/api/storage/delete/finish','/api/storage/portable','job:storage.move-cleanup','job:inventory.reconcile'].includes(kind)||kind.startsWith('/api/maintenance/inventory/'))return '#/workspaces';
+ if(kind.startsWith('/api/storage/'))return '#/preferences/storage';
  return typeof view==='string'&&/^#\/[a-zA-Z0-9/_:-]*$/.test(view)?view:null;
 }
 

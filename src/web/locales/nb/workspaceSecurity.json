@@ -58,7 +58,6 @@
   "workspaceStorage": "Lagring av arbeidsområde",
   "storageDataHelp": "Oppføringer, moduldata, utkast, innstillinger og evidensmanifester er kryptert i PostgreSQL. Originale evidensfiler, klargjorte medier og tilgangsnøkler blir i arbeidsområdemappen. Bruk Kopier arbeidsområde for å ta med begge deler i en verifisert sikkerhetskopi.",
   "copyPath": "Kopier sti",
-  "openAnother": "Åpne et annet arbeidsområde",
   "filesLocations": "Filer og plasseringer",
   "readableExports": "Forhåndsvisninger av nettsteder blir i minnet. Nedlastede nettsteder og resultatark er lesbare eksporter.",
   "encryptedDataHelp": "Oppføringer, historikk, laboratoriedata og private innstillinger er kryptert i PostgreSQL. Originale vedlegg og klargjorte medier er kryptert i arbeidsområdemappen.",
