@@ -37,7 +37,8 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const titles=el('div',editing);titles.className='website-feed-titles';
   const list=field(titles,'feedOnPage','select');list.dataset.feedSelect='';list.add(new Option(t('feedNew'),''));
   for(const feed of data.feeds)list.add(new Option(feed.heading||t('feedEditor'),feed.id));
-  const heading=field(titles,'feedHeading','input');heading.dataset.feedHeading='';heading.maxLength=200;
+  // The heading titles the list on the page and its continuation pages.
+  const heading=field(titles,'feedHeading','input');heading.dataset.feedHeading='';heading.maxLength=200;heading.required=true;
   const capacity=el('p',editing);capacity.hidden=true;capacity.setAttribute('role','status');
   const scope=radios(editing,'feedScope',[['all','feedAll'],['filtered','feedFiltered']]);
   el('p',editing,t('feedScopeHelp')).className='muted';
@@ -79,12 +80,33 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const apply=el('button',actions,t('feedSave'));apply.type='submit';apply.className='button primary';apply.dataset.feedApply='';
   let selected='',selectedCriteria=null,filterName='',cursors=[],after=null,dirty=false,loading=false,saving=false,searchEpoch=0;
   dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get(),arrangement:item.draft(),cardFields:cardFields()}:null;
+  // A project or lab book is named, not shown by its identifier. Names come
+  // from the website library, which knows only owners that share records.
+  const ownerNames=new Map(),ownerKinds={projectId:'project',notebookId:'book'};
+  async function nameOwner(key,id){
+   ownerNames.set(id,null);
+   try{
+    // The library may answer over several pages while its index is built.
+    let after=null,row;
+    for(let step=0;step<50&&!row;step++){
+     const result=await request('library/facets',{siteId:site.id,kind:ownerKinds[key],search:id,limit:1,after});
+     row=result.items.find(item=>item.id===id);after=result.next;if(after==null)break;
+    }
+    if(row)ownerNames.set(id,key==='notebookId'&&row.projectTitle?row.projectTitle+' / '+row.title:row.title);
+   }catch{}
+   if(current===dialog&&selectedCriteria?.[key]===id)showCriteria();
+  }
   function showCriteria(){
    const labels={search:'pickerSearch',searchField:'pickerSearchField',filter:'pickerFilter',dateFrom:'pickerFromDate',dateTo:'pickerToDate',dateKnowledge:'pickerDate',recordType:'pickerType',status:'pickerStatus',tags:'pickerTags',projectId:'pickerProject',notebookId:'pickerBook',sort:'pickerSort',tagMode:'pickerTags'};
    summary.replaceChildren();
    for(const [key,value] of Object.entries(selectedCriteria??{})){
     if(!labels[key]||!value||value==='all'&&key!=='search'||key==='sort'&&value==='default'||Array.isArray(value)&&!value.length)continue;
-    el('dt',summary,t(labels[key]));el('dd',summary,Array.isArray(value)?value.join(', '):String(value));
+    let shown=Array.isArray(value)?value.join(', '):String(value);
+    if(ownerKinds[key]){
+     if(!ownerNames.has(value))void nameOwner(key,value);
+     shown=ownerNames.get(value)||t(key==='projectId'?'pickerProjectId':'pickerBookId',{id:value});
+    }
+    el('dt',summary,t(labels[key]));el('dd',summary,shown);
    }
    summary.hidden=!summary.children.length;
   }

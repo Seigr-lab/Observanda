@@ -48,11 +48,14 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   const captures=[];
   for(const entry of book.entries){
    const provenance={workspaceId:book.id,projectId:notebook.projectId,notebookId:notebook.id,recordId:entry.id},sourceId=websiteSourceId(provenance);
-   const capture={sourceId,provenance,title:entry.title,...await convertPublicationRecord(fixture.workspace,book,entry)};
+   // As the app's producer does, the source carries its project and lab book names.
+   const pickerContext={projectTitle:book.projects.find(p=>p.id===notebook.projectId).title,notebookTitle:notebook.title};
+   const capture={sourceId,provenance,title:entry.title,pickerContext,...await convertPublicationRecord(fixture.workspace,book,entry)};
    captures.push(capture);if(captures.length<5)await store.putSource(capture,{token:await store.beginSourceUpdate({sourceId})});
   }
   await store.create({id,name:'Transect atlas',html:'<!doctype html><html><head><title>Transect atlas</title></head><body><main><h1>Transect atlas</h1><p>Original introduction.</p></main></body></html>'});
   const rule=await savedWebsiteSearches(store,'save',{siteId:id,id:randomUUID(),name:'Western stations',criteria:{tags:['west'],sort:'title-asc'}});
+  const byBook=await savedWebsiteSearches(store,'save',{siteId:id,id:randomUUID(),name:'This lab book',criteria:{projectId:notebook.projectId,notebookId:notebook.id}});
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   await expect(fixture.workspace.catalogue(db=>db.head())).rejects.toMatchObject({code:'DATABASE_UNAVAILABLE'});
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
@@ -68,6 +71,8 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await add();await expect(dialog.getByRole('radio',{name:'All eligible records'})).toBeChecked();
   await expect(dialog.getByRole('radio',{name:'Full record'})).toBeChecked();
   await checkFeedDialogLayout(page,dialog);
+  // The heading is required; an empty one is pointed out before anything is sent.
+  await dialog.locator('[data-feed-apply]').click();await expect(dialog.locator('[data-feed-heading]')).toBeFocused();await expect(dialog).toBeVisible();
   await dialog.locator('[data-feed-heading]').fill('All stations');await dialog.locator('[data-feed-page-size]').fill('2');
   await dialog.getByRole('radio',{name:'Grid',exact:true}).check();await save();
   const all=feed.filter({hasText:'All stations'});
@@ -78,6 +83,9 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await add();await dialog.locator('[data-feed-heading]').fill('Western stations');
   await dialog.getByRole('radio',{name:'Matching search',exact:true}).check();
   await dialog.locator('[data-feed-presets] > summary').click();
+  // A search limited to a lab book names the lab book, never its identifier.
+  await dialog.locator('[data-feed-saved-search]').selectOption(byBook.id);const criteria=dialog.locator('.website-feed-criteria');
+  await expect(criteria).toContainText(notebook.title);await expect(criteria).not.toContainText(notebook.id);
   await dialog.locator('[data-feed-saved-search]').selectOption(rule.id);await dialog.getByRole('radio',{name:'Custom design',exact:true}).check();
   await dialog.getByText('Arrange fields',{exact:true}).click();await dialog.locator('[data-feed-field=tags]').check();
   await dialog.getByRole('button',{name:'Move up · Tags'}).click();
