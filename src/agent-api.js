@@ -155,7 +155,9 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
   return next;
  };
  const save=async(recordId,expectedRevision,record)=>{
-  await run(prefix+'/research/records/save',{workspaceId,changes:[{id:recordId,expectedRevision,record}]});
+  // A receipt, not the saved workspace: the record is read back on its own below,
+  // and a workspace of any size can be written.
+  await run(prefix+'/research/records/save',{workspaceId,changes:[{id:recordId,expectedRevision,record}],receipt:true});
   const saved=await read(recordId);return {id:recordId,revision:saved.revision,title:saved.record.title};
  };
  const at=now().toISOString();

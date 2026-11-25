@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {agentServerFixture,result} from './agent-server-fixture.js';
 import {AgentKeyStore} from '../src/security/agent-keys.js';
 import {validRichText} from '../src/web/rich-text-model.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
 
 // Keys are made by the owner in the app; here the test makes them in the same store.
 async function keys(f){
@@ -36,6 +37,10 @@ test('agents learn the API from the app and work only through their key, scope a
  assert.equal((await result(await f.agent('/api/v1/agent/lab-books/list',{key,data:{projectId:project.projectId,extra:true}}),422)).code,'INVALID');
  // A record written in Markdown is stored as the app's rich text and read back.
  const place={projectId:project.projectId,labBookId:book.labBookId};
+ // Agents write one record at a time; no write reads the whole workspace back,
+ // which a large workspace could not answer.
+ const wholeReads=[],wholeRead=ResearchCatalogue.prototype.read;ResearchCatalogue.prototype.read=function(...args){wholeReads.push(new Error().stack);return wholeRead.apply(this,args);};
+ t.after(()=>{ResearchCatalogue.prototype.read=wholeRead;});
  const created=await result(await f.agent('/api/v1/agent/records/create',{key,data:{...place,record:{type:'note',title:'Release 1.2',status:'completed',tags:['release'],occurredOn:'2026-11-24',text:'# Changes\n\nFixed **two** bugs in `parser`.\n\n- faster start\n- smaller files',sections:[{title:'Known issues',text:'None yet.'}]}}}));
  const read=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));
  assert.equal(read.revision,created.revision);assert.equal(read.title,'Release 1.2');assert.equal(read.occurredOn,'2026-11-24');assert.deepEqual(read.tags,['release']);
@@ -45,6 +50,7 @@ test('agents learn the API from the app and work only through their key, scope a
  const listed=await result(await f.agent('/api/v1/agent/records/list',{key,data:{...place,search:'Release'}}));assert.deepEqual(listed.records.map(item=>item.id),[created.id]);assert.deepEqual({title:listed.records[0].title,type:listed.records[0].type,status:listed.records[0].status},{title:'Release 1.2',type:'note',status:'completed'});assert.equal(listed.total,1);
  const updated=await result(await f.agent('/api/v1/agent/records/update',{key,data:{...place,recordId:created.id,expectedRevision:read.revision,changes:{status:'in progress',sections:[{id:read.sections[0].id,title:'Known issues',text:'One: slow export.'}]}}}));
  assert.notEqual(updated.revision,read.revision);
+ assert.deepEqual(wholeReads,[]);ResearchCatalogue.prototype.read=wholeRead;
  const again=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));assert.equal(again.status,'in progress');assert.equal(again.sections[0].id,read.sections[0].id);assert.equal(again.sections[0].text,'One: slow export.');
  assert.equal((await result(await f.agent('/api/v1/agent/records/update',{key,data:{...place,recordId:created.id,expectedRevision:read.revision,changes:{title:'Stale'}}}),409)).code,'RECORD_CHANGED');
  // The owner sees each agent change under the key's name, newest first.
