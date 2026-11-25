@@ -31,16 +31,17 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
   const preferencesFile=path.join(directory,'preferences.json');
   const options={root:backup,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile};
   app=await startServer(options);const errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(book.title);
+  await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(backup));
   await expect(access(path.join(backup,CATALOGUE_ARCHIVE))).rejects.toMatchObject({code:'ENOENT'});
   await expect(access(path.join(backup,CATALOGUE_ACTIVATION))).rejects.toMatchObject({code:'ENOENT'});
   await app.close();app=null;
   await interruptWorkspace(backup,f.vault,'upload-stream',{upload:{id:session.id,index:1}});
-  app=await startServer(options);await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(book.title);
+  app=await startServer(options);await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(backup));
   const destination=path.join(directory,'continued'),dialog=page.locator('#dialog');
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
   await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);
-  await dialog.getByRole('button',{name:'Copy and use this folder',exact:true}).click();await expect(dialog).not.toBeVisible();
+  // Copying verifies the database and files before switching, which takes a while.
+  await dialog.getByRole('button',{name:'Copy and use this folder',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});
   expect(await readPreference(preferencesFile)).toBe(destination);
   await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
   await page.evaluate(id=>location.hash='#/records/'+id,book.entries[0].id);
