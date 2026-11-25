@@ -512,7 +512,7 @@ test('storage settings copy a reviewed workspace, remember it and open existing 
   await expect(page.getByLabel('Workspace folder',{exact:true})).toHaveValue(root);
   await page.getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();await expect(page.locator('.workspace-name')).toHaveText('A closer look');
   await preferences(page,'Storage & access');await expect(page.locator('main')).toContainText(root);
-  await page.reload();await expect(page.getByRole('heading',{name:'Storage & access',exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole('navigation',{name:'Preferences sections',exact:true}).getByRole('button',{name:'Storage & access',exact:true})).toHaveAttribute('aria-current','page');
 });
 
 test('an unavailable remembered folder offers recovery instead of first-run creation',async({page})=>{
