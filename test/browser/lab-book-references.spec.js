@@ -44,7 +44,9 @@ test('links open the owning book and its retained revisions after authentication
   await new ResearchRecords(b.storage,new MediaStore(b.storage)).save({workspaceId:b.namespaceId,changes:[{id:b.record.id,expectedRevision:recordRevision(b.record),record:{...b.record,body:'A later observation'}}]});
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   const url=book=>app.origin+'/#/owners/'+id+'/books/'+book.labBookId+'/records/'+book.record.id+'/read';
-  await page.goto(url(a));await expect(page.locator('main h1')).toHaveText('Book A observation');await page.getByRole('button',{name:'Book B current',exact:true}).click();
+  await page.goto(url(a));await expect(page.locator('main h1')).toHaveText('Book A observation');
+  // The breadcrumb names the record being read, also when it lives in its lab book's own store.
+  await expect(page.locator('main .breadcrumb [aria-current=page]')).toHaveText('Book A observation');await page.getByRole('button',{name:'Book B current',exact:true}).click();
   const unlock=page.locator('#project-unlock-form');await expect(unlock.getByRole('heading',{name:'Unlock lab book'})).toBeVisible();await unlock.getByLabel('Lab book password',{exact:true}).fill('Independent book password');
   const reading=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/projects/'+id+'/lab-books/'+b.labBookId+'/workspace/read/record-content'&&response.status()===200&&response.request().postDataJSON()?.recordId===b.record.id);
   await unlock.getByRole('button',{name:'Unlock',exact:true}).click();await reading;

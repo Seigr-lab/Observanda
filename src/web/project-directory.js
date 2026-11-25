@@ -40,7 +40,8 @@ export function projectDirectory({state,api,esc,changed}){
   return '<nav class="location-trail breadcrumb" aria-label="'+esc(text('location'))+'" data-project-trail="'+projectId+'"'+(projectCurrent?' data-trail-current="project"':'')+'><ol>'+
    '<li><button class="text-button" data-action="projects">'+esc(text('projects'))+'</button></li>'+links+
    (labBook&&current!==null?'<li><button class="text-button" data-action="filter-notebook" data-id="'+esc(labBook.id)+'">'+esc(labBook.title)+'</button></li>':'')+
-   '<li aria-current="page">'+esc(labBook&&current===null?labBook.title:name)+'</li></ol></nav>';
+   // A record still loading has no name yet; the trail then ends at its lab book.
+   (labBook&&current===null||name?'<li aria-current="page">'+esc(labBook&&current===null?labBook.title:name)+'</li>':'')+'</ol></nav>';
  }
  function paint(value){
   const document=globalThis.document;if(!document||!state.book||state.access?.locked||state.storageUnavailable)return;
