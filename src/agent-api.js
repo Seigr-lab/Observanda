@@ -215,7 +215,7 @@ export function agentOpenApi(origin){
   }};
  }
  return {openapi:'3.1.0',
-  info:{title:'Observanda agent API',version:AGENT_API_VERSION,description:'Use Observanda from programs on this computer. The workspace owner creates a key in Observanda (Preferences, Storage & access, Manage workspace access, Agent keys); send it as a bearer token. A key works only while its workspace, and the project or lab book it reaches, is unlocked in the app. Every change goes through the same checks as a change made in the app.'},
+  info:{title:'Observanda agent API',version:AGENT_API_VERSION,description:'Use Observanda from programs on this computer. The workspace owner creates a key in Observanda (Preferences, Agents); send it as a bearer token. A key works only while its workspace, and the project or lab book it reaches, is unlocked in the app. Every change goes through the same checks as a change made in the app.'},
   servers:[{url:origin}],
   components:{securitySchemes:{agentKey:{type:'http',scheme:'bearer',description:'An Observanda agent key (obsk_...).'}}},
   paths};
