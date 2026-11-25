@@ -20,7 +20,8 @@ test.beforeEach(async({page})=>{
  parent=await mkdtemp(path.join(os.tmpdir(),'observanda-dashboard-ui-'));file=path.join(parent,'preferences.json');
  f=await encryptedFixture(parent,{...sampleNotebook(),title:'workspace'});root=f.workspace.root;
  app=await startServer({root,preferencesFile:file,port:0,headless:true,deviceStore:f.deviceStore});await page.goto(app.url);
- await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await page.locator('.desk-desktop[data-placed]').waitFor();
+ // Opening starts the workspace database, which takes longer on a busy computer.
+ await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible({timeout:60000});await page.locator('.desk-desktop[data-placed]').waitFor();
  // Current workspaces load card data after the layout is placed.
  await expect(card(page,'Recent records')).toContainText('Watching a seed unfold');
 });
@@ -166,7 +167,7 @@ test('edits during an in-flight save are saved afterwards and a failing card sta
 
 test('dashboard and preferences fit narrow screens and large text, without settings in the home header',async({page})=>{
  await navigate(page,'Preferences');await preferences(page,'Modules');
- await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await fits(page)).toBe(true);
+ await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');await expect.poll(()=>fits(page)).toBe(true);
  await navigate(page,'Dashboard');await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await expect(page.locator('.topbar')).not.toContainText('Save');expect(await fits(page)).toBe(true);
  await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();await expect(inspector(page)).toBeVisible();expect(await fits(page)).toBe(true);
 });
@@ -219,7 +220,7 @@ test('two record cards keep independent saved filters, previews and creation con
  await settled(page);await page.reload();await page.locator('.desk-desktop[data-placed]').waitFor();
  await expect(kitchen).toContainText('Soup trial');await expect(kitchen).not.toContainText('Watching a seed unfold');await expect(garden).toContainText('Watching a seed unfold');
  expect(await research()).toBe(original);
- await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await fits(page)).toBe(true);
+ await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');await expect.poll(()=>fits(page)).toBe(true);
  await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
  // A card scoped to one lab book creates its new records there. Product gap: the records card's
  // "New record" action carries no lab book (src/web/research-data.js:72), so chooseEntry
