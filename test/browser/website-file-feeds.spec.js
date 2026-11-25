@@ -56,7 +56,10 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   await expect(fixture.workspace.catalogue(db=>db.head())).rejects.toMatchObject({code:'DATABASE_UNAVAILABLE'});
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
-  const unexpected=[];page.on('request',r=>{const p=new URL(r.url()).pathname;if(p.startsWith('/api/')&&!p.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/interface','/api/language'].includes(p))unexpected.push(p);});
+  // The editor works from the website's own files. Only the two pre-publication reviews
+  // (changed placed records, analyses behind placed research) consult the lab book; with
+  // research storage offline they fail on their own and never block publishing.
+  const unexpected=[];page.on('request',r=>{const p=new URL(r.url()).pathname;if(p.startsWith('/api/')&&!p.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/interface','/api/language','/api/website-record-updates/check','/api/website-analysis/check'].includes(p))unexpected.push(p);});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(id);
   const canvas=page.frameLocator('#website-files-canvas'),feed=canvas.locator('section[data-website-feed]'),dialog=page.locator('dialog[data-website-feed-dialog]');
   const add=async()=>{await page.getByRole('button',{name:/^Lab book records/}).click();await expect(dialog).toBeVisible();};
