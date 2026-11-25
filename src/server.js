@@ -157,6 +157,7 @@ import {Workspace,workspaceFile,assertRegular} from './storage.js';
 import {createNotebook,upgradeNotebook,MAX_BYTES} from './model.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
 import {agentRoute,runAgentOperation,agentOpenApi,AGENT_API_VERSION} from './agent-api.js';
+import {sandboxPreviewPath,serveSandboxPreview} from './website-sandbox-previews.js';
 import {AgentKeyStore} from './security/agent-keys.js';
 import {admitResearchBytes} from './research-capacity.js';
 import {AppError,safeError} from './errors.js';
@@ -419,6 +420,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(agent?.description)return json(agentOpenApi(origin));
       if(agent)return await agentHttp(req,agent.operation,json);
       if(url.pathname.startsWith('/api/v1/agent/')||url.pathname==='/api/v1/openapi.json')throw new AppError('NOT_FOUND');
+      if(url.pathname.startsWith(sandboxPreviewPath))return await serveSandboxPreview(req,res,{pathname:url.pathname,contextId:context.id});
       if (req.method === 'POST' && url.pathname === '/api/session') {
         const data = await body(req);
         const claim=launches.claim(data?.token,data?.binding);

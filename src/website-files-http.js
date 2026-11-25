@@ -23,6 +23,7 @@ import {savedWebsiteSearches} from './website-saved-searches.js';
 import {LocalExport} from './local-export.js';
 import {LocalExportManifest} from './local-export-manifest.js';
 import {serveContent,contentHash,contentSize} from './file-content.js';
+import {sandboxPreviewStore as sandbox,sandboxPreviewPath} from './website-sandbox-previews.js';
 import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
 import {jobSummary} from './jobs.js';
@@ -229,9 +230,15 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(Object.keys(data).some(key=>!['name','directory'].includes(key))||typeof data.name!=='string'||typeof data.directory!=='string')throw new AppError('INVALID');
    json(await importStaticWebsite(store,{name:data.name,source:'folder',read:()=>readWebsiteFolder(data.directory,{signal}),signal}));return true;
   }
+  // A page that exists only in the browser (a new page's layout) is shown the same way.
+  if(operation==='sandbox-preview'){
+   if(Object.keys(data).some(key=>key!=='html'))throw new AppError('INVALID');
+   json({url:sandboxPreviewPath+sandbox.keep(contextId,data.html)});return true;
+  }
   if(operation==='starters/preview'){
    if(Object.keys(data).some(key=>!['starter','name','language'].includes(key))||!STARTER_IDS.includes(data.starter)||typeof data.name!=='string'||data.name.length>160||typeof data.language!=='string'||data.language.length>64)throw new AppError('INVALID');
-   json({html:starterPreview(data.starter,{name:data.name,language:data.language,text:await starterText(data.language)})});return true;
+   const html=starterPreview(data.starter,{name:data.name,language:data.language,text:await starterText(data.language)});
+   json({html,url:sandboxPreviewPath+sandbox.keep(contextId,html)});return true;
   }
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,language:data.language,starter:data.starter,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}

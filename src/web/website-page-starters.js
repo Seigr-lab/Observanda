@@ -24,13 +24,17 @@ export function websitePageStarters({t,esc}){
  // The page as it will be created: its title and sections, in the site's stylesheet.
  function preview(id,{title,css}){
   const doc=document.implementation.createHTMLDocument(title);
-  const style=doc.createElement('style');style.textContent=css+'\n'+sectionsCSS();doc.head.append(style);
   const main=doc.createElement('main'),heading=doc.createElement('h1');heading.textContent=title;main.append(heading);
   for(const type of PAGE_STARTERS[id]??[])main.append(createSection(doc,type,t));
-  doc.body.append(main);return '<!doctype html>'+doc.documentElement.outerHTML;
+  doc.body.append(main);
+  // The stylesheet joins as text: a style element built inside the app would fall under
+  // the app's own style policy. A closing tag inside the text cannot end it early.
+  const style='<style>'+(css+'\n'+sectionsCSS()).replace(/<\/(style)/gi,'<\\/$1')+'</style>';
+  return '<!doctype html>'+doc.documentElement.outerHTML.replace('</head>',style+'</head>');
  }
- function paint(root,{title,css}){
-  for(const frame of root.querySelectorAll('[data-page-starter-preview]')){const html=preview(frame.dataset.pageStarterPreview,{title,css});if(frame.srcdoc!==html)frame.srcdoc=html;}
+ // `show` puts the page in its frame; the editor serves it so the page's own styles apply.
+ function paint(root,{title,css,show}){
+  for(const frame of root.querySelectorAll('[data-page-starter-preview]'))show(frame,preview(frame.dataset.pageStarterPreview,{title,css}));
  }
  // Adds the starter's sections to a new page; returns whether the site's
  // stylesheet needs the shared section and button styles.

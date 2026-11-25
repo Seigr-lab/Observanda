@@ -33,6 +33,8 @@ test('an author starts a course website and gets linked lessons, a lesson sideba
   await expect(coursePreview.locator('[data-starter-preview-menu]')).toContainText('Resources');
   const labPreview=starters.locator('label').filter({has:page.getByRole('radio',{name:/^Laboratory/})}).frameLocator('iframe');
   await expect(labPreview.locator('.starter-preview-records h2')).toBeVisible();
+  // The previews' own stylesheets apply: a frame written from the app would lose them.
+  await expect(labPreview.locator('body')).not.toHaveCSS('background-color','rgba(0, 0, 0, 0)');
   await form.getByLabel('Website name',{exact:true}).fill('Beekeeping basics');
   await expect(coursePreview.locator('h1')).toHaveText('Beekeeping basics');
   await starters.getByRole('radio',{name:/^Course/}).check();
@@ -50,6 +52,7 @@ test('an author starts a course website and gets linked lessons, a lesson sideba
   await pageForm.getByLabel('Page title',{exact:true}).fill('Visit the apiary');await pageForm.getByLabel('Page file name',{exact:true}).fill('visit.html');
   const contactPreview=layouts.locator('label').filter({has:page.getByRole('radio',{name:/^Contact page/})}).frameLocator('iframe');
   await expect(contactPreview.locator('h1')).toHaveText('Visit the apiary');await expect(contactPreview.locator('section.ow-contact dl')).toBeVisible();
+  await expect(contactPreview.locator('section.ow-hero')).not.toHaveCSS('background-color','rgba(0, 0, 0, 0)');
   await layouts.getByRole('radio',{name:/^Contact page/}).check();
   await pageForm.getByRole('button',{name:'Add page',exact:true}).click();
   await expect(canvas.locator('section.ow-contact')).toBeVisible();await expect(canvas.locator('section.ow-hero')).toHaveCount(1);

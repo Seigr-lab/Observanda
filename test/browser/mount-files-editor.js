@@ -1,5 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
+import {sandboxPreviewStore,sandboxPreviewPath,sandboxPreviewPolicy} from '../../src/website-sandbox-previews.js';
 const web=path.resolve('src/web');
 
 export async function mountFilesEditor(page,{resource=()=>'',hash='',httpOrigin}={}){
@@ -15,6 +16,8 @@ export async function mountFilesEditor(page,{resource=()=>'',hash='',httpOrigin}
    ${httpOrigin?"import {readProgressStream} from '/progress-stream.js';":''}
    const files=websiteFilesUI({api:${api},esc,render(){root.innerHTML=files.view();files.bind();}});root.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)files.action(b);});root.addEventListener('input',e=>files.input(e.target));root.addEventListener('submit',e=>{e.preventDefault();files.submit(e.target);});await files.load();</script>`});
   if(httpOrigin&&url.pathname.startsWith('/api/'))return route.continue();
+  // Previews of pages that do not exist yet come from the same store the website routes keep them in.
+  if(url.pathname.startsWith(sandboxPreviewPath)){try{return await route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':sandboxPreviewPolicy},body:sandboxPreviewStore.read(undefined,url.pathname.slice(sandboxPreviewPath.length))});}catch{return route.fulfill({status:404,body:''});}}
   if(/^\/api\/website-files\/(?:preview|edition)\//.test(url.pathname))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':resource(url)});
   const file=path.resolve(web,'.'+url.pathname);if(!file.startsWith(web+path.sep))return route.abort();try{return await route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/css',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
  });

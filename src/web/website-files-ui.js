@@ -746,18 +746,29 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const preview=id=>'<span class="website-starter-preview" aria-hidden="true"><iframe sandbox="" tabindex="-1" title="" data-starter-preview="'+id+'"></iframe></span>';
   return '<fieldset class="website-starters"><legend>'+esc(tr('starterChoose'))+'</legend>'+starters.map(id=>'<label class="website-starter">'+preview(id)+'<span class="website-starter-choice"><input type="radio" name="website-starter" data-website-file-field="starter" value="'+id+'"'+(id==='blank'?' checked':'')+'><span><strong>'+esc(tr(key(id)))+'</strong><span class="hint">'+esc(tr(key(id)+'Text'))+'</span></span></span></label>').join('')+'</fieldset>';
  }
- const starterPreviews=new Map();let starterTimer=null;
+ let starterTimer=null;
+ // Starter and page layout previews are pages that do not exist yet. Each is kept briefly by
+ // the server and shown from there, so its own styles apply in the frame (a frame written
+ // from the app would inherit the app's style policy and lose them). Addresses are reused
+ // for five minutes, well within the server's ten.
+ const previewAddresses=new Map(),framePreviews=new WeakMap();
+ function previewAddress(key,load){
+  const hit=previewAddresses.get(key);if(hit&&Date.now()-hit.at<5*60*1000)return hit.address;
+  if(previewAddresses.size>60)previewAddresses.clear();
+  const address=load().catch(()=>{previewAddresses.delete(key);return null;});previewAddresses.set(key,{at:Date.now(),address});return address;
+ }
+ function showPreview(frame,key,load){
+  const epoch=generation;framePreviews.set(frame,key);
+  void previewAddress(key,load).then(url=>{if(url&&frame.isConnected&&epoch===generation&&framePreviews.get(frame)===key&&frame.getAttribute('src')!==url)frame.src=url;});
+ }
  // Page layouts preview the new page in this website's own stylesheet.
- function paintPageStarters(){if(form?.type!=='page'||!opened)return;pageStarters.paint(document,{title:document.querySelector('[data-website-files-form] [data-website-file-field="pageTitle"]')?.value.trim()||tr('pageTitle'),css});}
+ function paintPageStarters(){if(form?.type!=='page'||!opened)return;pageStarters.paint(document,{title:document.querySelector('[data-website-files-form] [data-website-file-field="pageTitle"]')?.value.trim()||tr('pageTitle'),css,show:(frame,html)=>showPreview(frame,'page:'+html,()=>request('sandbox-preview',{html}).then(result=>result.url))});}
  function paintStarterPreviews(){
   const frames=[...document.querySelectorAll('[data-starter-preview]')];if(!frames.length)return;
-  const language=document.documentElement.lang||'en',name=document.querySelector('[data-website-files-form] [data-website-file-field="name"]')?.value.trim()||tr('site'),epoch=generation;
-  if(starterPreviews.size>60)starterPreviews.clear();
+  const language=document.documentElement.lang||'en',name=document.querySelector('[data-website-files-form] [data-website-file-field="name"]')?.value.trim()||tr('site');
   for(const frame of frames){
-   const key=[frame.dataset.starterPreview,language,name].join('\n');
-   const show=html=>{if(frame.isConnected&&epoch===generation)frame.srcdoc=html;};
-   if(!starterPreviews.has(key))starterPreviews.set(key,request('starters/preview',{starter:frame.dataset.starterPreview,name,language}).then(result=>result.html).catch(()=>{starterPreviews.delete(key);return null;}));
-   void starterPreviews.get(key).then(html=>{if(html)show(html);});
+   const starter=frame.dataset.starterPreview;
+   showPreview(frame,JSON.stringify(['starter',starter,language,name]),()=>request('starters/preview',{starter,name,language}).then(result=>result.url));
   }
  }
  function pageDesignChoice(){
