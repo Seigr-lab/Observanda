@@ -21,7 +21,7 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
  test.setTimeout(90000);page.setDefaultTimeout(15000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-crash-ui-')),book=upgradeNotebook(sampleNotebook());
  const f=await encryptedFixture(directory,book),bytes=Buffer.alloc(EVIDENCE_CHUNK+8192,0x5a),materials=new ResearchMaterials(f.workspace);
- let app;
+ let app,restoreAppend=()=>{};
  try{
   const session=await materials.startImport({recordId:book.entries[0].id,name:'returned-capture.bin',size:bytes.length});
   await materials.appendImport(session.id,0,[bytes.subarray(0,EVIDENCE_CHUNK)]);
@@ -48,16 +48,18 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
   await openEvidence(page);
   await dialog.getByRole('button',{name:'Resume upload',exact:true}).click();
   await dialog.getByLabel('Select the same original file',{exact:true}).setInputFiles({name:session.name,mimeType:'application/octet-stream',buffer:bytes});
-  const uploads=[];page.on('request',request=>{if(request.url().includes('/api/research/materials/chunk/'))uploads.push(new URL(request.url()).pathname);});
+  // The app server runs in this process: record each chunk it is given, whatever the request carrying it.
+  const uploads=[],appendImport=ResearchMaterials.prototype.appendImport;restoreAppend=()=>{ResearchMaterials.prototype.appendImport=appendImport;};
+  ResearchMaterials.prototype.appendImport=function(id,index,...rest){uploads.push(id+'/'+index);return appendImport.call(this,id,index,...rest);};
   await dialog.getByRole('button',{name:'Resume import',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();
   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download '+session.name,exact:true}).click();
   expect(await readFile(await (await downloadEvent).path())).toEqual(bytes);
-  expect(uploads).toEqual(['/api/research/materials/chunk/'+session.id+'/1']);
+  expect(uploads).toEqual([session.id+'/1']);
   const restored=new ResearchMaterials(new Workspace(destination,f.vault));expect((await restored.heads()).filter(h=>h.kind==='artifact')).toHaveLength(1);
   expect(materials.uploads.count(await materials.importState(session.id))).toBe(1);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
   await setRecordTitle(page,'Work continues after recovery');await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Work continues after recovery');
   expect((await f.workspace.read()).book.entries[0].title).toBe(book.entries[0].title);expect(errors).toEqual([]);
- }finally{await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{restoreAppend();await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
