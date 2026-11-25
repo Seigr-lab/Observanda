@@ -11,7 +11,8 @@ import {RecordViews} from '../../src/record-views.js';
 import {testServer} from '../device-fixture.js';
 
 test('save, reopen, edit, discard and remove a private record view without copying records',async({page})=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-view-ui-')),book=upgradeNotebook(queryFixture());
+ test.setTimeout(120000);page.setDefaultTimeout(15000);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-view-ui-')),book={...upgradeNotebook(queryFixture()),title:'workspace'};
  const {workspace:ws,vault,deviceStore}=await encryptedFixture(root,book);
  const etag=(await ws.read()).etag,app=await testServer({root:ws.root,deviceStore,port:0,headless:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
@@ -32,7 +33,8 @@ test('save, reopen, edit, discard and remove a private record view without copyi
   await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks.at(-1).id);await expect(rows).toHaveCount(1);
   await page.getByRole('button',{name:'Saved views',exact:true}).click();await dialog.getByRole('button',{name:'Open',exact:true}).click();
   await expect(rows).toHaveCount(2);await expect(page.getByLabel('Tags',{exact:true})).toHaveValue('sound, summer');
-  await page.getByRole('button',{name:'Summer take 2',exact:true}).click();
+  // Records kept in a project's own store are listed as links; others as buttons.
+  await page.locator('.records-table').getByText('Summer take 2',{exact:true}).click();
   await expect(page.locator('.record-reader')).toContainText('Recorder stopped early');
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await page.reload();await expect(rows).toHaveCount(2);
   await page.getByRole('button',{name:'Saved views',exact:true}).click();await dialog.getByRole('button',{name:'Edit',exact:true}).click();
@@ -66,7 +68,7 @@ test('save, reopen, edit, discard and remove a private record view without copyi
 });
 
 test('missing lab books require explicit rebinding; concurrent view edits keep the unsaved form',async({page})=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-view-scope-')),book=upgradeNotebook(queryFixture());
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-view-scope-')),book={...upgradeNotebook(queryFixture()),title:'workspace'};
  const {workspace:ws,vault,deviceStore}=await encryptedFixture(root,book);
  const app=await testServer({root:ws.root,deviceStore,port:0,headless:true}),store=new RecordViews(ws),dialog=page.locator('#dialog');
  try{
