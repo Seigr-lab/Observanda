@@ -102,7 +102,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   outline.className='outline';actions.className='actions';grip.className='grip';
   // The selection marks are app chrome: they take the author's app theme, not the website's.
   const accent=uiTheme('accent'),onAccent=uiTheme('on-accent'),surface=uiTheme('surface'),ink=uiTheme('text'),font=uiTheme('font'),radius=uiTheme('control-radius')||'4px';
-  overlayStyle.textContent='.outline{position:fixed;box-sizing:border-box;border:2px solid '+accent+';pointer-events:none}.actions{display:flex;position:fixed;gap:2px}.actions button{pointer-events:auto;border:1px solid '+accent+';border-radius:'+radius+';background:'+surface+';color:'+ink+';font:600 13px/1.4 '+font+';padding:4px 8px;white-space:nowrap;cursor:pointer}.actions button:hover{background:'+accent+';color:'+onAccent+'}.actions .grip{cursor:grab}.actions .grip:active{cursor:grabbing}button:focus-visible{outline:3px solid '+accent+';outline-offset:1px}[hidden]{display:none!important}';
+  // The canvas is shown shrunk or enlarged to fit; --unzoom undoes that so these marks keep
+  // one readable size on screen at any zoom (set in position()).
+  overlayStyle.textContent='.outline{position:fixed;box-sizing:border-box;border:calc(2px * var(--unzoom,1)) solid '+accent+';pointer-events:none}.actions{display:flex;position:fixed;gap:calc(4px * var(--unzoom,1))}.actions button{pointer-events:auto;border:calc(1px * var(--unzoom,1)) solid '+accent+';border-radius:calc('+radius+' * var(--unzoom,1));background:'+surface+';color:'+ink+';font:600 calc(15px * var(--unzoom,1))/1.4 '+font+';padding:calc(6px * var(--unzoom,1)) calc(12px * var(--unzoom,1));white-space:nowrap;cursor:pointer}.actions button:hover{background:'+accent+';color:'+onAccent+'}.actions .grip{cursor:grab}.actions .grip:active{cursor:grabbing}button:focus-visible{outline:3px solid '+accent+';outline-offset:1px}[hidden]{display:none!important}';
   action.type='button'; action.textContent=t('sectionEdit');
   grip.type='button';grip.style.touchAction='none';grip.textContent='⠿ '+t('layerDrag');grip.hidden=true;
   overlayStyle.textContent+='.actions.moving button{pointer-events:none}';
@@ -215,6 +217,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     grip.hidden=!layerDrag?.canMove(node);
     grip.title=t('layerDragHint',{name:node.getAttribute('aria-label')||node.localName});
     action.textContent=t(openMenu&&menuTarget?.(node)?'menuEdit':'sectionEdit');
+    const host=win.frameElement,shown=host?.offsetWidth?host.getBoundingClientRect().width/host.offsetWidth:1;
+    frame.style.setProperty('--unzoom',String(shown>0?1/shown:1));
     Object.assign(outline.style,{left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',height:rect.height+'px'});
     // Prefer the area outside the section. A floating action over the first
     // line would eat its clicks in narrow canvases and small text sections.
