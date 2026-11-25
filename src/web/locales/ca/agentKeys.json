@@ -39,5 +39,9 @@
   "activityUnlink": "{key} ha tret un enllaç de «{title}»",
   "activityAttach": "{key} ha adjuntat fitxers a «{title}»",
   "endpointFile": "Fitxer d'adreça",
-  "endpointFileHelp": "L'adreça d'Observanda canvia cada vegada que s'inicia. Els programes d'aquest ordinador llegeixen l'adreça i la descripció actuals d'aquest fitxer."
+  "endpointFileHelp": "L'adreça d'Observanda canvia cada vegada que s'inicia. Els programes d'aquest ordinador llegeixen l'adreça i la descripció actuals d'aquest fitxer.",
+  "connectTitle": "Com s'hi connecten els programes",
+  "retry": "Torna-ho a provar",
+  "loading": "S'estan carregant les claus d'agent…",
+  "revokeNamed": "Revoca la clau {name}"
 }

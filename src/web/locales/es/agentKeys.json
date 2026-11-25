@@ -39,5 +39,9 @@
   "activityUnlink": "{key} quitó un enlace de «{title}»",
   "activityAttach": "{key} adjuntó archivos a «{title}»",
   "endpointFile": "Archivo de dirección",
-  "endpointFileHelp": "La dirección de Observanda cambia cada vez que se inicia. Los programas de este equipo leen la dirección y la descripción actuales de este archivo."
+  "endpointFileHelp": "La dirección de Observanda cambia cada vez que se inicia. Los programas de este equipo leen la dirección y la descripción actuales de este archivo.",
+  "connectTitle": "Cómo se conectan los programas",
+  "retry": "Reintentar",
+  "loading": "Cargando las claves de agente…",
+  "revokeNamed": "Revocar la clave {name}"
 }

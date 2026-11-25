@@ -36,5 +36,6 @@
   "diagnosticsUnavailable": "Noe diagnostikk kunne ikke skrives. Den tilgjengelige rapporten kan være ufullstendig.",
   "diagnosticsContents": "Se rapportinnholdet",
   "diagnosticsDownload": "Last ned denne rapporten",
-  "diagnosticsClose": "Lukk"
+  "diagnosticsClose": "Lukk",
+  "agents": "Agenter"
 }

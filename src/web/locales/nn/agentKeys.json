@@ -39,5 +39,9 @@
   "activityUnlink": "{key} fjerna ei lenkje frå «{title}»",
   "activityAttach": "{key} la ved filer i «{title}»",
   "endpointFile": "Adressefil",
-  "endpointFileHelp": "Adressa til Observanda endrar seg kvar gong han startar. Program på denne datamaskina les gjeldande adresse og skildring frå denne fila."
+  "endpointFileHelp": "Adressa til Observanda endrar seg kvar gong han startar. Program på denne datamaskina les gjeldande adresse og skildring frå denne fila.",
+  "connectTitle": "Slik koplar program seg til",
+  "retry": "Prøv igjen",
+  "loading": "Lastar agentnøklar …",
+  "revokeNamed": "Tilbakekall nøkkelen {name}"
 }

@@ -39,5 +39,9 @@
   "activityUnlink": "{key} removed a link from “{title}”",
   "activityAttach": "{key} attached files to “{title}”",
   "endpointFile": "Address file",
-  "endpointFileHelp": "Observanda's address changes each time it starts. Programs on this computer read the current address and description from this file."
+  "endpointFileHelp": "Observanda's address changes each time it starts. Programs on this computer read the current address and description from this file.",
+  "connectTitle": "How programs connect",
+  "retry": "Try again",
+  "loading": "Loading agent keys…",
+  "revokeNamed": "Revoke the key {name}"
 }

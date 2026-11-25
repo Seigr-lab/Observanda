@@ -36,5 +36,6 @@
   "diagnosticsUnavailable": "No s’ha pogut escriure part del diagnòstic. L’informe disponible pot ser incomplet.",
   "diagnosticsContents": "Revisa el contingut de l’informe",
   "diagnosticsDownload": "Descarrega aquest informe",
-  "diagnosticsClose": "Tanca"
+  "diagnosticsClose": "Tanca",
+  "agents": "Agents"
 }

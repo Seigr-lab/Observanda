@@ -4,7 +4,7 @@ import {aboutView} from './about-ui.js';
 import {ux} from './experience-ui.js';
 const tabs=[
  ['preferences','general'],['interface','appAppearance'],['user-profile',null],['dashboard-settings','modules'],['templates','templates'],['fonts','fonts'],
- ['integrations','integrations'],['storage','storage'],['help','help']
+ ['integrations','integrations'],['agents','agents'],['storage','storage'],['help','help']
 ];
 // Labels are obtained at render time so mounted navigation can change language.
 export const preferencePage=page=>tabs.some(([id])=>id===page);

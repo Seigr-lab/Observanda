@@ -36,5 +36,6 @@
   "diagnosticsUnavailable": "Some diagnostics could not be written. The available report may be incomplete.",
   "diagnosticsContents": "Review report contents",
   "diagnosticsDownload": "Download this report",
-  "diagnosticsClose": "Close"
+  "diagnosticsClose": "Close",
+  "agents": "Agents"
 }

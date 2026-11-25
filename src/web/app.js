@@ -780,7 +780,7 @@ $('#dialog').addEventListener('cancel',event=>{event.preventDefault();action({da
 function renderAccess(content){help.stop();appShell.showStandalone(content);accessHelp.fromRoute();}
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
-const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','interface','tools','dashboard-settings','templates','workspaces','appearance','laboratory','website','publishing','integrations','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
+const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','interface','tools','dashboard-settings','templates','workspaces','appearance','laboratory','website','publishing','integrations','agents','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true,origin=null){
  const returnOrigin=origin??(!['editor','record-reader'].includes(state.page)?await captureResearchReturn():null);
  const sameRecord=state.page==='record-reader'&&state.selected===id;
@@ -873,6 +873,7 @@ function renderPage(){
  case 'fonts':content=fontLibrary.view();break;
  case 'workspaces':content=storageControls.workspaces.view();break;
  case 'integrations':content=publishUI.view();break;
+ case 'agents':content=storageControls.agents.view();break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
  case 'project':content=structureUI.projectView();break;
  case 'laboratory':content=labUI.view();break;
@@ -1076,7 +1077,7 @@ async function rawAction(button) {
   // Account controls operate on credentials and destination state, never on
   // research records. Keep them on the same bounded path as publishing.
   const publicationAction=name?.startsWith('github-')||['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||name?.startsWith('publish-')||name?.startsWith('publication-links-')||name?.startsWith('research-target-')&&Boolean(document.querySelector('#dialog[open] #publication-links'))||name?.startsWith('publication-jobs-')||name?.startsWith('publication-review-')||name?.startsWith('analysis-review-')||name?.startsWith('local-export-');
-  const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
+  const administrationAction=name==='templates'||name==='storage'||name==='agents'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
   if(module&&!enabledModule(state.dashboardSettings,module.id)){notify(appText('enableModule',{module:moduleLabel(module)}));return;}
@@ -1084,6 +1085,7 @@ async function rawAction(button) {
   if(name==='preferences'){state.page='preferences';render();return;}
   if(name==='storage')return storageControls.action(button);
   if(name==='integrations'){await publishUI.load();state.page='integrations';render();return;}
+  if(name==='agents'){document.querySelector('#dialog[open]')?.close();await storageControls.agents.load();state.page='agents';render();return;}
   if(await structureUI.notebooks.action(button)){returnToProjectAfterBookSettings(name);return;}
   if(name==='module-open'&&moduleDestination(button.dataset.moduleId)){state.page=moduleDestination(button.dataset.moduleId);state.project=null;state.notebook='all';render();return;}
   if(name==='module-open')document.querySelector('#dialog').close();
@@ -1446,6 +1448,7 @@ async function restoreRoute(){
       if(moduleForPage(state.page)&&!enabledModule(state.dashboardSettings,moduleForPage(state.page).id)){render();return;}
       if(state.page==='laboratory'){if(state.labSampleRoute){await labUI.action({dataset:{action:'laboratory-samples'}});return;}state.page=moduleDestination('laboratory');history.replaceState(history.state,'',routeFor(state));}
       if(state.page==='integrations')await publishUI.load();
+      if(state.page==='agents')await storageControls.agents.load();
     }
     render();
   }finally{if(request===routeRestoreVersion){restoringRoute=false;if(state.book&&!location.hash.startsWith('#/'))history.replaceState(null,'',routeFor(state));markHistory();}}

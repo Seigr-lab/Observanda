@@ -36,5 +36,6 @@
   "diagnosticsUnavailable": "No se ha podido escribir parte del diagnóstico. El informe disponible puede estar incompleto.",
   "diagnosticsContents": "Revisar el contenido del informe",
   "diagnosticsDownload": "Descargar este informe",
-  "diagnosticsClose": "Cerrar"
+  "diagnosticsClose": "Cerrar",
+  "agents": "Agentes"
 }

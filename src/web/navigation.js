@@ -1,7 +1,7 @@
 import {resolveHelpRoute} from './help/model.js';
 import {researchId} from './research-reference.js';
 import {bookSelectors,selectorAnchor} from './book-selectors.js';
-const preferenceRoutes={interface:'interface',preferences:'general','user-profile':'user','dashboard-settings':'dashboard',templates:'templates',fonts:'fonts',integrations:'integrations',storage:'storage'};
+const preferenceRoutes={interface:'interface',preferences:'general','user-profile':'user','dashboard-settings':'dashboard',templates:'templates',fonts:'fonts',integrations:'integrations',agents:'agents',storage:'storage'};
 // URLs identify locations by stable IDs, never by titles or filesystem paths.
 export function routeFor(state) {
   if((state.websiteId||state.websiteDefaultRoute)&&['website','publishing'].includes(state.page))return '#/websites/'+(state.websiteId??'default')+'/'+(state.page==='website'?'editor':state.page);
