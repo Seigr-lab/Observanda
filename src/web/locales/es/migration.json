@@ -6,7 +6,6 @@
   "selector-boundary": "El destino HTML {value} en {path} no tiene un límite inequívoco de elemento de origen.",
   "qualification": "Se han comprobado la identidad de bytes, la cobertura declarada y los destinos de origen. Las anclas HTML seleccionan su elemento, no un capítulo inferido ni la sección siguiente. Las correspondencias, fechas y significado científico aún requieren conciliación de la importación. No se ha importado ni publicado ningún registro.",
   "title": "Inspeccionar un cuaderno externo",
-  "back": "Volver a los espacios de trabajo",
   "intro": "Inspecciona una exportación declarada de cuaderno antes de planificar una migración. La vista previa permanece en esta sesión privada. Los archivos de origen son de solo lectura.",
   "sourceTitle": "Exportación de origen",
   "sourceFolder": "Carpeta de origen",

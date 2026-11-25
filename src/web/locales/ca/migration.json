@@ -6,7 +6,6 @@
   "selector-boundary": "La destinació HTML {value} a {path} no té cap límit d'element d'origen inequívoc.",
   "qualification": "S'han comprovat la identitat dels bytes, la cobertura declarada i les destinacions d'origen. Les àncores HTML seleccionen el seu element, no un capítol deduït ni la secció següent. Les assignacions, les dates i el significat científic encara necessiten conciliació d'importació. No s'ha importat ni publicat cap registre.",
   "title": "Inspecciona un quadern extern",
-  "back": "Torna als espais de treball",
   "intro": "Inspecciona una exportació declarada de quadern abans de planificar una migració. La previsualització es queda en aquesta sessió privada. Els fitxers d'origen només es llegeixen.",
   "sourceTitle": "Exportació d'origen",
   "sourceFolder": "Carpeta d'origen",

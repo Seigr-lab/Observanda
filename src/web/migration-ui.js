@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {breadcrumb} from './breadcrumb.js';
 import {migrationImportUI} from './migration-import-ui.js';
 // A private, read-only inspection. Opening this view never starts a scan.
 export function migrationUI({state,api,esc,field,render,showDialog}){
@@ -49,7 +50,7 @@ export function migrationUI({state,api,esc,field,render,showDialog}){
  function view(){
   bind();
   if(importer.active())return importer.view();
-  return '<div class="page-heading"><h1>'+text('title')+'</h1><button class="button" data-action="storage-workspaces">'+text('back')+'</button></div>'+
+  return breadcrumb(esc,[{label:t('navigation','workspaces'),action:'storage-workspaces'}],t('migration','title'))+'<div class="page-heading"><h1>'+text('title')+'</h1></div>'+
    '<p>'+text('intro')+'</p>'+
    '<form id="inventory-form" class="panel" data-no-draft><h2>'+text('sourceTitle')+'</h2>'+
    field(messageText('sourceFolder'),'<input id="inventory-source" name="source" required autocomplete="off" spellcheck="false" value="'+esc(source)+'" '+(pending?'disabled':'')+'>')+

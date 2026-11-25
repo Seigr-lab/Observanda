@@ -6,7 +6,6 @@
   "selector-boundary": "The HTML target {value} in {path} has no unambiguous source element boundary.",
   "qualification": "Byte identity, declared coverage and source targets checked. HTML anchors select their element, not an inferred chapter or following section. Mappings, dates and scientific meaning still need import reconciliation. No records were imported or published.",
   "title": "Inspect external logbook",
-  "back": "Back to workspaces",
   "intro": "Inspect a declared logbook export before planning a migration. The preview stays in this private session. Source files are read only.",
   "sourceTitle": "Source export",
   "sourceFolder": "Source folder",

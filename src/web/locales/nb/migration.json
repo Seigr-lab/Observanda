@@ -6,7 +6,6 @@
   "selector-boundary": "HTML-målet {value} i {path} har ingen entydig grense for kildeelementet.",
   "qualification": "Byteidentitet, erklært dekning og kildemål er kontrollert. HTML-ankre velger sitt eget element, ikke et utledet kapittel eller en etterfølgende del. Tilordninger, datoer og vitenskapelig betydning må fortsatt avstemmes ved import. Ingen oppføringer ble importert eller publisert.",
   "title": "Undersøk ekstern loggbok",
-  "back": "Tilbake til arbeidsområder",
   "intro": "Undersøk en erklært loggbokeksport før du planlegger en overføring. Forhåndsvisningen forblir i denne private økten. Kildefiler blir bare lest.",
   "sourceTitle": "Kildeeksport",
   "sourceFolder": "Kildemappe",

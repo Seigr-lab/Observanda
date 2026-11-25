@@ -28,7 +28,7 @@ for(const count of [65,650])test('storage, access and source inspection retain n
   await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspace access',exact:true})).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();
   await navigate(page,'Workspaces');await page.getByRole('button',{name:'Inspect external logbook',exact:true}).click();
   await page.getByLabel('Source folder',{exact:true}).fill(source);await page.getByRole('button',{name:'Inspect source',exact:true}).click();await expect(page.getByRole('heading',{name:'Inventory fully accounted for',exact:true})).toBeVisible();await measure();
-  await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();
+  await page.locator('main .breadcrumb').getByRole('button',{name:'Workspaces',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();
   await workspaceCommands(page);await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
   expect(requests.filter(p=>p==='/api/notebook'||p==='/api/workspace/read/page'||p==='/api/workspace/read/selection')).toEqual([]);expect(errors).toEqual([]);expect(await f.workspace.catalogue(s=>s.head())).toBe(before);expect(heap).toBeLessThan(96*1024*1024);
   console.log(JSON.stringify({records:count,sampledBrowserHeapMiB:Math.round(heap/1024**2),originalReads:0}));

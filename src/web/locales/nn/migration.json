@@ -6,7 +6,6 @@
   "selector-boundary": "HTML-målet {value} i {path} har ingen eintydig grense for kjeldeelementet.",
   "qualification": "Byteidentitet, erklært dekning og kjeldemål er kontrollerte. HTML-anker vel sitt eige element, ikkje eit utleidd kapittel eller ein etterfølgjande del. Tilordningar, datoar og vitskapleg tyding må framleis avstemmast ved import. Ingen oppføringar vart importerte eller publiserte.",
   "title": "Sjå gjennom ekstern loggbok",
-  "back": "Tilbake til arbeidsområde",
   "intro": "Undersøk ein erklært loggbokeksport før du planlegg ei overføring. Førehandsvisinga blir verande i denne private økta. Kjeldefiler blir berre lesne.",
   "sourceTitle": "Kjeldeeksport",
   "sourceFolder": "Kjeldemappe",
