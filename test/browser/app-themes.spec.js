@@ -36,9 +36,9 @@ test('an author creates their own app theme and it recolours every part of the a
   // After a reload the theme still applies, including dialogs and the website editor.
   await page.reload();await expect(page.locator('.sidebar')).toHaveCSS('background-color',rgb(night.surface));
   await page.getByRole('button',{name:'Website editor',exact:true}).first().click();
-  await expect(page.locator('#main[data-website-files-app]')).toBeVisible();
+  await expect(page.locator('[data-website-files-app]')).toBeVisible();
   await expect(page.locator('.website-files-app')).toHaveCSS('color',rgb(night.text));
-  await page.locator('[data-action="website-files-back"]').click();
+  await page.getByRole('button',{name:'Back',exact:true}).click();
   await preferences(page,'App appearance');
   await page.getByRole('button',{name:'Delete this theme',exact:true}).click();await answerConfirmation(page,'Delete');
   await expect(page.getByRole('button',{name:/Night lab/})).toHaveCount(0);

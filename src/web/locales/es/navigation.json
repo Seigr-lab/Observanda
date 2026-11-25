@@ -12,5 +12,6 @@
   "menu": "Menú",
   "openMenu": "Abrir el menú de la aplicación",
   "closeMenu": "Cerrar el menú de la aplicación",
-  "resize": "Cambiar el ancho de la navegación"
+  "resize": "Cambiar el ancho de la navegación",
+  "back": "Atrás"
 }

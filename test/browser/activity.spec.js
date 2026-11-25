@@ -67,10 +67,10 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
    // offers Retry and a way back, and leaves no activity of its own.
    await page.getByRole('button',{name:'Menu',exact:true}).waitFor({state:'visible'});const websiteEditor=page.locator('#main-navigation').getByRole('button',{name:'Website editor',exact:true});
    if(!await websiteEditor.isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click();await websiteEditor.click();
-   const files=page.locator('#main[data-website-files-app]');await expect(files.getByRole('alert')).toHaveText('Another operation is currently using this writer.');await expect(files.getByRole('button',{name:'Retry',exact:true})).toBeVisible();
+   const files=page.locator('[data-website-files-app]');await expect(files.getByRole('alert')).toHaveText('Another operation is currently using this writer.');await expect(files.getByRole('button',{name:'Retry',exact:true})).toBeVisible();
    const activity=await page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations);
    expect(activity.map(entry=>entry.kind)).toEqual(['/api/storage/copy']);
-   await files.getByRole('button',{name:/^Back to (workspace|where you were)$/}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
+   await page.getByRole('button',{name:'Back',exact:true}).click();await expect(files).toHaveCount(0);
   }
   await preferences(page,kind==='copy'?'Storage & access':'General');
   const panel=page.locator('#app-activity-panel'),owned=page.locator('#main [data-owned-activity]');

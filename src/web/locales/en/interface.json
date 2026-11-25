@@ -3,8 +3,6 @@
   "projects": "Projects & notebooks",
   "website": "Website",
   "workspace": "Workspace",
-  "showMenu": "Show menu",
-  "hideMenu": "Hide menu",
   "pixels": "{width} pixels",
   "widthFailed": "Could not save the menu width.",
   "unsaved": "Unsaved app settings. Save to keep them, or discard to undo.",

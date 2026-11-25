@@ -107,13 +107,13 @@ test('create, edit, persist, customize, review, and download an independent note
   page.off('request',trackOwnerRead);expect(ownerReads).toHaveLength(1);
   // Lab book records reach a website through a records list placed on its page.
   await navigate(page,'Website editor');
-  const files=page.locator('#main[data-website-files-app]'),siteCanvas=page.frameLocator('#website-files-canvas'),feedDialog=page.locator('dialog[data-website-feed-dialog]');
+  const files=page.locator('[data-website-files-app]'),siteCanvas=page.frameLocator('#website-files-canvas'),feedDialog=page.locator('dialog[data-website-feed-dialog]');
   await files.getByRole('button',{name:/^Lab book records/}).click();await expect(feedDialog).toBeVisible();
   await feedDialog.locator('[data-feed-heading]').fill('Garden notes');await feedDialog.locator('[data-feed-apply]').click();await expect(feedDialog).not.toBeVisible({timeout:30000});
   await expect(siteCanvas.locator('section[data-website-feed]')).toContainText('First green leaves');
   // Applying the list saves the page; a remaining edit is saved here.
   const saveSite=files.getByRole('button',{name:'Save website',exact:true});if(await saveSite.isEnabled())await saveSite.click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  await files.locator('[data-action="website-files-back"]').click();
+  await navigate(page,'Dashboard');
   await navigate(page,'Website editor');
   const downloadEvent=page.waitForEvent('download');await (await siteMenu(page)).getByRole('button',{name:'Download website ZIP',exact:true}).click();
   const download=await downloadEvent;
@@ -129,7 +129,7 @@ test('private-path detection blocks website export and names no private path', a
   await encryptedSample(sampleNotebook());
   await page.goto(app.url);
   await navigate(page,'Website editor');
-  const files=page.locator('#main[data-website-files-app]');
+  const files=page.locator('[data-website-files-app]');
   // A private folder path typed into a page is saved, but the website is never exported with it.
   await files.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
   await html.fill((await html.inputValue()).replace('</body>','<p>/home/imaginary-person/private-log</p></body>'));
@@ -239,7 +239,7 @@ test('build a project with structured research and playable media, place it on a
   await page.screenshot({ path:test.info().outputPath('research-editor.png'), fullPage: true });
   // The website places the record through a records list and has a page of its own.
   await navigate(page,'Website editor');
-  const files=page.locator('#main[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas'),feedDialog=page.locator('dialog[data-website-feed-dialog]');
+  const files=page.locator('[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas'),feedDialog=page.locator('dialog[data-website-feed-dialog]');
   await files.getByRole('button',{name:/^Lab book records/}).click();await expect(feedDialog).toBeVisible();
   await feedDialog.locator('[data-feed-heading]').fill('Acoustic studies');await feedDialog.locator('[data-feed-apply]').click();await expect(feedDialog).not.toBeVisible({timeout:30000});
   await expect(canvas.locator('section[data-website-feed]')).toContainText('Comparing two room positions');
@@ -265,7 +265,7 @@ test('build a project with structured research and playable media, place it on a
   for (const value of ['Comparing two room positions', 'A place for scientific and artistic investigation.']) expect(text).toContain(value);
   for (const extension of ['.mp4', '.wav', '.png']) expect(names).toContain(extension);
   expect(zip.toString()).not.toContain('PRIVATE_MEDIA_SOURCE'); expect(zip.toString()).not.toContain(root);
-  await files.locator('[data-action="website-files-back"]').click();
+  await navigate(page,'Dashboard');
   const workspace=new Workspace(root,workspaceVault),saved=await workspace.read(),registered=(await new ProjectRegistry(workspace,saved.book.id).read()).value.projects;
   expect(saved.book.projects.length+registered.length).toBe(2);
   const owned=registered.find(project=>project.summary.title==='Acoustic studies'),projectKey=await verifyAccess(await readAccess(owned.root),'','',{deviceStore});
@@ -343,7 +343,7 @@ test('website logos set in page settings reach a Logos block, published from the
   const fixtures=await mediaFixtures(await mkdtemp(path.join(parent,'site-logos-')));
   await encryptedSample();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(app.url);await navigate(page,'Website editor');const id=await openDefaultWebsite(page);
-  const files=page.locator('#main[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas');
+  const files=page.locator('[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas');
   await files.locator('.element-card[data-block="logos"]').click();
   const dialog=page.locator('dialog.website-author-dialog');await expect(dialog.getByRole('heading',{name:'Logos',exact:true})).toBeVisible();
   await expect(dialog.getByRole('combobox',{name:'Show the logos of',exact:true}).locator('option')).toHaveText(['This page (automatic)','The website']);

@@ -3,8 +3,6 @@
   "projects": "Proyectos y cuadernos",
   "website": "Sitio web",
   "workspace": "Espacio de trabajo",
-  "showMenu": "Mostrar el menú",
-  "hideMenu": "Ocultar el menú",
   "pixels": "{width} píxeles",
   "widthFailed": "No se ha podido guardar el ancho del menú.",
   "unsaved": "Configuración de la aplicación sin guardar. Guarda para conservarla o descarta para deshacer.",

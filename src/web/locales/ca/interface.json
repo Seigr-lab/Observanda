@@ -3,8 +3,6 @@
   "projects": "Projectes i quaderns",
   "website": "Lloc web",
   "workspace": "Espai de treball",
-  "showMenu": "Mostra el menú",
-  "hideMenu": "Amaga el menú",
   "pixels": "{width} píxels",
   "widthFailed": "No s'ha pogut guardar l'amplada del menú.",
   "unsaved": "Configuració de l'aplicació sense guardar. Guarda per conservar-la o descarta per desfer-la.",

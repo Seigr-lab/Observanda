@@ -3,8 +3,6 @@
   "projects": "Prosjekt og notatbøker",
   "website": "Nettstad",
   "workspace": "Arbeidsområde",
-  "showMenu": "Vis meny",
-  "hideMenu": "Skjul meny",
   "pixels": "{width} pikslar",
   "widthFailed": "Kunne ikkje lagre menybreidda.",
   "unsaved": "Ulagra programinnstillingar. Lagre for å behalde dei, eller forkast for å angre.",

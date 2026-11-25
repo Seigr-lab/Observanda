@@ -23,7 +23,7 @@ async function openAppLayout(page){
 // The website editor is the website files editor, a screen of its own. Leaving it
 // with unsaved changes asks to save them; Cancel keeps the editor open, and its own
 // Discard changes command removes a draft. Saved pages are read from the file store.
-const files=page=>page.locator('#main[data-website-files-app]');
+const files=page=>page.locator('[data-website-files-app]');
 const canvas=page=>page.frameLocator('#website-files-canvas');
 const filesStatus=page=>page.locator('[data-website-files-status]');
 const leaveQuestion=page=>page.getByRole('dialog',{name:'Save website changes before leaving? Cancel keeps the editor open.',exact:true});
@@ -38,13 +38,13 @@ async function write(page,text){
 }
 async function saveWebsite(page){await files(page).getByRole('button',{name:'Save website',exact:true}).click();await expect(filesStatus(page)).toHaveText('Website saved.');}
 async function editWebsite(page){const id=await openWebsite(page);await write(page,'Navigation page');await saveWebsite(page);expect(await savedPage(id)).toContain('Navigation page');return id;}
-async function backToWorkspace(page){await files(page).getByRole('button',{name:/^Back to (workspace|where you were)$/}).click();}
+async function backToWorkspace(page){await page.getByRole('button',{name:'Back',exact:true}).click();}
 async function discardEdits(page){
  await files(page).locator('.website-authoring-tools').getByRole('button',{name:'Discard changes',exact:true}).click();
  await page.getByRole('dialog',{name:'Discard your unsaved website changes?',exact:true}).getByRole('button',{name:'Discard changes',exact:true}).click();
  await expect(filesStatus(page)).toHaveText('Website saved.');
 }
-const inWorkspace=page=>expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
+const inWorkspace=page=>expect(files(page)).toHaveCount(0);
 
 test('leaving the website editor asks to save, keeps the draft on Cancel and carries no discarded edit into other sections',async({page})=>{
   const id=await editWebsite(page);
@@ -137,18 +137,22 @@ test('failed website saves keep the draft; a delayed save completes once and Dis
 });
 
 
-test('website previews and appearance previews do not add browser history entries',async({page})=>{
+test('the website preview is one history step and its frames and the appearance preview add none',async({page})=>{
   await openWebsite(page);
   const editorURL=page.url(),historyLength=await page.evaluate(()=>history.length);
   await files(page).getByRole('button',{name:'Preview saved website',exact:true}).click();
   const preview=page.locator('#website-files-preview');await expect(preview).toBeVisible();
   await expect.poll(()=>preview.evaluate(el=>el.contentWindow.location.pathname)).toContain('/api/website-files/');
-  expect(await page.evaluate(()=>history.length)).toBe(historyLength);await expect(page).toHaveURL(editorURL);
+  // The preview screen is one step of its own; the pages loading inside it add none.
+  const previewIndex=await page.evaluate(()=>history.state.observandaIndex);
+  expect(await page.evaluate(()=>history.length)).toBe(historyLength+1);await expect(page).toHaveURL(editorURL);
   await files(page).getByRole('button',{name:'Return to editing',exact:true}).click();await expect(page.locator('#website-files-canvas')).toBeVisible();
+  // Returning to editing goes back to the editor's own step instead of adding another.
+  await expect.poll(()=>page.evaluate(()=>history.state.observandaIndex)).toBe(previewIndex-1);
   await files(page).getByRole('button',{name:'Site appearance',exact:true}).click();const appearance=page.getByRole('dialog',{name:'Site appearance',exact:true});
   await expect(appearance.locator('iframe')).toBeVisible();await expect.poll(()=>appearance.locator('iframe').evaluate(el=>el.contentWindow.location.pathname)).toContain('/api/website-files/');
-  expect(await page.evaluate(()=>history.length)).toBe(historyLength);
+  expect(await page.evaluate(()=>history.length)).toBe(historyLength+1);
   await appearance.getByRole('button',{name:'Cancel',exact:true}).click();await expect(appearance).toHaveCount(0);
-  expect(await page.evaluate(()=>history.length)).toBe(historyLength);await expect(page).toHaveURL(editorURL);
+  expect(await page.evaluate(()=>history.length)).toBe(historyLength+1);await expect(page).toHaveURL(editorURL);
   await page.evaluate(()=>history.back());await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
 });

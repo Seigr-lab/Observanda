@@ -78,7 +78,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await menu.getByRole('button',{name:'New website',exact:true}).click();const form=page.locator('[data-website-files-form]');
   await form.getByLabel('Website name',{exact:true}).fill('Desktop project website');await form.getByRole('button',{name:'New website',exact:true}).click();
   await expect(siteHeading).toBeVisible();await expect(page).not.toHaveURL(/\/owners\//);const siteRoute=new URL(page.url()).hash;
-  await page.locator('[data-action="website-files-back"]').click();
+  await navigate(page,'Dashboard');
   // Exercise the desktop service's record-block upgrade through its ordinary
   // authenticated authoring API, then amend the record in the actual editor.
   const retained=await page.evaluate(async({notebook,projectId})=>{

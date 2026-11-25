@@ -70,7 +70,7 @@ function preparationMessage(preparation){
  return completed?tr('stageCompleted',{stage,completed}):stage;
 }
 
-export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSite=()=>{},onSession=()=>{},state=null,field:formField=null,access=operation=>operation()}){
+export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSite=()=>{},onSession=()=>{},state=null,field:formField=null,access=operation=>operation(),address=hash=>history.replaceState(history.state,'',hash)}){
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let remoteEdition='website';
@@ -89,7 +89,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const remoteRequest=(operation,data,options={})=>remoteProgressRequest(request,operation,data,{signal:controller?.signal,t,tr,...options});
  const draftPage=()=>opened?.site.pages.find(page=>page.path===opened.path)?.draft===true;
  let nextSite=null,preparationTimer=null,missingSite=false;
- let requestedSite=null,openPublishing=false;
+ let requestedSite=null,openPublishing=false,running=null;
  const connectionState={get storage(){return session?{contextId:session.contextId}:null;},publishing:{}};
  const github=githubConnectionUI({state:connectionState,api:(route,data)=>api(route,data,{owner:null,adopt:false,signal:controller?.signal}),endpoint:'/api/website-files/connection/',esc,field:(label,control)=>'<label>'+esc(label)+' '+control+'</label>',notify,temporaryCredentials:false,onConnectionChange:()=>{plan=null;document.querySelector('[data-website-files-review]')?.remove();}});
  async function showDestination(){await save();remoteEdition='website';destination=await request('destination',{siteId:siteId()});destinationDirty=false;form=null;mode='destination';render();if(destination.config.kind==='github'){await github.refresh();await repository.refresh();render();}}
@@ -157,8 +157,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(value.archived){
    sites=sites.filter(s=>s.id!==value.siteId);opened=null;requestedSite=null;recovery.reset();onDirty(false);
    if(!sites.length&&nextSite){const list=await request('list',{after:nextSite,limit:100});sites=list.items;nextSite=list.next;}
-   if(sites.length)await open(sites[0].id);else{history.replaceState(history.state,'','#/websites');render();}
-  }else{adoptRelated(value);history.replaceState(history.state,'',fileRoute(value.site.id));render();}
+   if(sites.length)await open(sites[0].id);else{address('#/websites');render();}
+  }else{adoptRelated(value);address(fileRoute(value.site.id));render();}
  }});
  const releases=websiteFilesReleases({request,site:()=>opened,esc,tr,t,signal:()=>controller?.signal});
  const review=websiteFilesReview({request,site:()=>opened,esc,tr,signal:()=>controller?.signal,document:()=>websiteHTML(html),selection:()=>selected,
@@ -225,7 +225,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     const owner=site.feedPages?.find(p=>p.path===path)?.ownerPage;
     const page=await request('open',{siteId:site.id,path:owner??(path===site.cssPath?'index.html':path)},{signal:controller.signal});
     if(page.site.revision!==site.revision)throw Object.assign(Error(tr('changed')),{code:'CONFLICT'});
-    adopt(page);history.replaceState(history.state,'',fileRoute(site.id));mode='visual';
+    adopt(page);address(fileRoute(site.id));mode='visual';
     if(repair){
      documentChange(doc=>{
       const node=websiteLayerAt(doc,issue.elementPath);
@@ -281,7 +281,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     const feed=websiteHTML(page.html).querySelector('section[data-website-feed="'+CSS.escape(feedId)+'"]');
     const onPage=path===ownerPage?feed?.querySelector('[data-website-feed-source="'+CSS.escape(sourceId)+'"]'):page.site.feedPages?.some(p=>p.path===path&&p.ownerPage===ownerPage);
     if(!feed||!onPage)throw Error(tr('changed'));
-    adopt(page);selected=null;resetPreview();mode='preview';history.replaceState(history.state,'',fileRoute(targetSite));
+    adopt(page);selected=null;resetPreview();mode='preview';address(fileRoute(targetSite));
     navigatePreview({path,hash:'#website-feed-'+feedId,feedId,sourceId});return true;
    }
    if(blockPath!==null){
@@ -289,7 +289,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     if(!node||node.dataset.observandaSource!==sourceId&&node.dataset.observandaLink!==sourceId)throw Error(tr('changed'));
    }
    adopt(page);mode='visual';selected=null;locatedPlacement=blockPath;
-   history.replaceState(history.state,'',fileRoute(targetSite));render();
+   address(fileRoute(targetSite));render();
    if(blockPath===null)notify(tr('pickerHeadUse',{page:page.path}));
   }
  });
@@ -408,7 +408,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  async function run(operation,progress='working'){
   if(busy)return;
   const epoch=generation;busy=progress;error='';paintStatus();
-  try{return await operation();}
+  const task=(async()=>operation())();running=task;
+  try{return await task;}
   catch(reason){
    if(reason.name==='AbortError'||epoch!==generation)return;
    if(reason.code==='ACCESS_LOCKED'||reason.code==='AUTH'){if(opened)hideUnverifiedPage(true);throw reason;}
@@ -419,12 +420,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    error=stale?tr('changed'):reason.message||tr('failed');
    if(stale||reason.code==='PUBLISH_STALE')render();
   }
-  finally{if(epoch===generation){busy=false;paintStatus();}}
+  finally{if(running===task)running=null;if(epoch===generation){busy=false;paintStatus();}}
  }
  async function open(id,path='index.html'){
   const epoch=generation,value=await request('open',{siteId:id,path},{signal:controller?.signal});
   if(epoch!==generation)return;
-  missingSite=false;adopt(value);history.replaceState(history.state,'',fileRoute(value.site.id));render();
+  missingSite=false;adopt(value);address(fileRoute(value.site.id));render();
  }
  async function initialPage(){
   const epoch=generation;
@@ -778,6 +779,26 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  // while a tool is open, because tools such as the menu and pages write into it.
  const DOCKED=new Set(['menu','regions','exchange','pages','versions','releases','discovery','review','media','gallery']);
  function docked(){return DOCKED.has(mode)&&!!opened&&!form&&!stale;}
+ // The editor's screens, for history: the editor itself, each docked tool and each full screen.
+ // Switching between visual, HTML and CSS editing is a view of the same screen.
+ const SCREENS=new Set([...DOCKED,'destination','folder','publish-review','publish-choose','lifecycle','preview','source-gallery']);
+ const SCREEN_OPENERS={destination:'destination',versions:'versions',releases:'releases',review:'review',discovery:'discovery',preview:'preview',pages:'pages',regions:'regions',exchange:'exchange',menu:'menu'};
+ function screen(){if(!session||stale)return null;if(form)return 'form';if(!opened)return mode==='lifecycle'?'lifecycle':'sites';return SCREENS.has(mode)?mode:'editor';}
+ const command=operation=>action({dataset:{action:'website-files-'+operation}});
+ // Back and Forward within one website: close the current screen, then open the requested one.
+ // A screen that needs a choice made on another screen (a publishing step) is not reopened.
+ async function showScreen(target){
+  if(target===screen())return true;
+  // Back is never dropped: a screen still loading finishes first, then the editor moves.
+  while(busy&&running)await running.catch(()=>{});
+  if(!opened||busy)return false;
+  if(mode==='destination'&&destinationDirty){if(!await confirmAction(tr('saveBeforeLeave'),{action:'save'}))return false;await saveDestination();}
+  if(form){form=null;render();}
+  if(screen()!=='editor')await command('visual');
+  if(target==='editor'||screen()!=='editor')return screen()===target;
+  const opener=SCREEN_OPENERS[target];if(!opener)return false;
+  await command(opener);return screen()===target;
+ }
  function panelView(){
   if(mode==='menu')return menu.view();
   else if(mode==='regions')return regions.view();
@@ -1308,7 +1329,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else{result=await request('page/create',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,language,inclusion});starter=element.querySelector('[data-website-file-field="pageStarter"]:checked')?.value;}
   }
   else return;
-  form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();
+  form=null;mode='visual';adopt(result);address(fileRoute(result.site.id));render();
   // A page layout adds its sections to the new page, which is then saved.
   if(starter&&starter!=='blank'){
    documentChange(doc=>{if(pageStarters.apply(starter,doc,main(doc))){if(!css.includes('.ow-hero,')){ensureStyle(doc);css+=sectionCSS;}if(!css.includes('.website-button{')){ensureStyle(doc);css+=buttonCSS;}}});
@@ -1321,5 +1342,5 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(siteId()!==row.owner.websiteId||opened?.path!==row.documentKey)await open(row.owner.websiteId,row.documentKey);
   await recovery.select(row.owner.websiteId,row.documentKey,row.id);
  }
- return {load,clear,view,bind,openRecovery,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
+ return {load,clear,view,bind,screen,showScreen,route:()=>opened?fileRoute(opened.site.id):null,openRecovery,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
 }

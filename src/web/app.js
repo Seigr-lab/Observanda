@@ -78,7 +78,6 @@ import {ux} from './experience-ui.js';
 import {toolDirectoryView,filterToolDirectory,discoverableTools} from './tool-directory-ui.js';
 import {recoveryCenter} from './recovery-center.js';
 import {workspaceNavigation} from './workspace-navigation.js';
-import {websiteFilesDrawer} from './website-files-drawer.js';
 import {websiteContext,websiteRequest} from './website-context.js';
 import {applyAppTheme} from './app-theme-apply.js';
 import {moduleLinks} from './module-links.js';
@@ -146,7 +145,7 @@ const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 const fileEditorHash=hash=>/^#\/(?:website|websites|publishing)$/.test(hash)||/^#\/websites\/(?:default|[a-f0-9-]{36})\/(?:editor|website|publishing)$/.test(projectRoute(hash).hash);
 // Where the author was when the website editor opened, so Back returns there.
-let websiteFiles=null,fileEditorEpoch=0,websiteReturn=null;
+let websiteFiles=null,fileEditorEpoch=0,replaceNextRoute=false,websiteAddress=null,websiteLeaving=null,websiteEntries=0,websiteScreenTrail=new Map(),restoringWebsiteScreen=false;
 let ownerSwitch=null;
 const recoveryHub=recoveryCenter({state,api,esc,notify,
  showRecords:()=>recordDrafts.show(),
@@ -213,7 +212,7 @@ const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 const mark = applicationMark;
 
 const navigationOptions={state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():state.book)):target[key]}),icon,pinnedTools:()=>textControls.pinnedTools()};
-const navigation=workspaceNavigation(navigationOptions),websiteDrawer=websiteFilesDrawer({navigation:workspaceNavigation(navigationOptions),esc});
+const navigation=workspaceNavigation(navigationOptions);
 
 function adoptSnapshot(result){
   if(result.websitePin&&(!validWebsitePin(result.websitePin)||result.websitePin.researchSnapshotId!==result.etag)||result.site&&(!result.websitePin||result.websitePin.websiteId!==result.site.id))throw {code:'WORKSPACE_READ_INVALID',message:t('workspaceRead','invalid')};
@@ -625,7 +624,7 @@ const userProfile=userProfileUI({state,api,esc,field,render,notify});
 const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify});
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:()=>{applyAppTheme(textControls);updateSaveStatus();}});
 const shellMenu=shellNavigation();
-const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,pageKey:()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.page,...(['editor','record-reader'].includes(state.page)?[state.selected,state.recordReading]:state.page==='module'?[state.moduleId,state.modulePath]:state.page==='help'?[state.helpTopic,state.helpSection]:[state.project,state.notebook,state.websiteId])])});
+const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,canGoBack:()=>routeIndex>0,pageKey:()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.page,...(['editor','record-reader'].includes(state.page)?[state.selected,state.recordReading]:state.page==='module'?[state.moduleId,state.modulePath]:state.page==='help'?[state.helpTopic,state.helpSection]:[state.project,state.notebook,state.websiteId])])});
 const connectedWork=moduleLinks({state,api,esc});
 const bookStorage=labBookStorageUI({state,api,esc,field,showDialog,access:operation=>withProjectAccess(operation),moved:async(result,view,entry)=>{await labBookDirectoryUI.refresh(entry.projectId);await labBookDirectoryUI.refresh(result.projectId);if(location.hash===view)location.hash=ownedRoute('#/notebooks/'+result.book.labBookId,{projectId:result.projectId,labBookId:result.book.labBookId});}});
 const bookAccessSettings=labBookAccessSettingsUI({state,api,esc,field,enterProject:id=>projectOwners.enter(id),render});
@@ -742,18 +741,22 @@ function invalidateResearchReturn(){returnNavigation.invalidate();projectOwners.
 async function action(button){
   if(removingRecord)return;
   const fileAction=button.dataset.action;
+  if(fileAction==='shell-back'){if(routeIndex>0)history.back();return;}
   if(state.filesMode){
     if(fileAction==='context-help'&&button.hasAttribute('data-saved-website-guide')){await taskHelp.open('publishing',button,['project-websites','design','appearance','local-export','release']);return;}
-    if(fileAction==='website-files-drawer'){websiteDrawer.open(button);return;}
-    // A place chosen in the drawer leaves the editor, after its unsaved work is settled.
-    if(websiteDrawer.contains(button)){websiteDrawer.close();if(fileAction!=='website'&&await websiteFiles?.beforeLeave()){await leaveWebsiteFiles();await action(button);}return;}
+    // A place chosen in the navigation leaves the editor, after its unsaved work is settled.
+    // The place takes the editor's history step, so Back from it returns to the editor.
+    if(button.closest('#main-navigation')&&!['website','publishing','site-list','site-open','site-view'].includes(fileAction)){shellMenu.beforeAction(button);const entries=websiteEntries,leaving=(async()=>await websiteFiles?.beforeLeave()&&(await leaveWebsiteFiles(),true))();
+      websiteLeaving=leaving;let left=false;try{left=await leaving;}finally{if(websiteLeaving===leaving)websiteLeaving=null;}
+      if(!left||state.filesMode||websiteEntries!==entries)return;
+      replaceNextRoute=true;try{await action(button);}finally{replaceNextRoute=false;}return;}
     if(fileAction==='website-files-back'){if(await websiteFiles?.beforeLeave())await leaveWebsiteFiles();return;}
     if(fileAction==='website-files-retry'){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
     if(fileAction?.startsWith('website-files-')||fileAction?.startsWith('github-')){await websiteFiles?.action(button);return;}
   }
   if(!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&(fileAction==='website'||fileAction==='publishing'||fileAction==='site-list'||fileAction==='site-open'||fileAction==='site-view'&&['website','publishing'].includes(button.dataset.page))){
     const id=fileAction==='site-open'?button.dataset.id:button.closest?.('#main-navigation')?null:state.websiteId;
-    const publishing=fileAction==='publishing'||button.dataset.page==='publishing';
+    const publishing=fileAction==='publishing'||button.dataset.page==='publishing';shellMenu.beforeAction(button);
     await leave.run(()=>enterWebsiteFiles({hash:id?'#/websites/'+id+'/'+(publishing?'publishing':'editor'):publishing?'#/publishing':'#/website'}),{scope:'navigation'});return;
   }
   if(accessHelp.action(button))return;
@@ -1289,26 +1292,61 @@ function renderWebsiteFiles(){
   workspaceLive.bind();
   const text=(key,fallback)=>websiteFiles?t('websiteFiles',key):fallback;
   const view=state.fileError?'<p role="alert">'+esc(state.fileError)+'</p><button type="button" class="button" data-action="website-files-retry">'+esc(text('retry',appText('workspace')))+'</button>':websiteFiles?.view()??'<p role="status">'+esc(text('loading',t('supportEditors','moduleOpening')))+'</p>';
-  appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav>'+(state.book?websiteDrawer.toggle():'')+'<button type="button" class="button subtle" data-action="website-files-back">'+esc(websiteReturn?text('backToPrevious',appText('workspace')):text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
+  // The editor is a page of the application frame: the same navigation, menu button and Back.
+  // Before a workspace is open there is no navigation, so the editor stands alone with a way to it.
+  // While the editor is open it is the current page, even if a workspace load that began
+  // before it finishes later.
+  state.page='website';
+  if(state.book){appShell.showWorkspace(()=>'<div class="website-files-app" data-website-files-app>'+view+'</div>');shellMenu.apply('website');}
+  else appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
   document.documentElement.dataset.appMode='website';document.title=text('title',appText('saveWebsite'))+' · Observanda';if(!state.fileError)websiteFiles?.bind();
+  recordWebsiteScreen();
+}
+// Every screen of the editor is a history entry with the editor's address, so Back and
+// Forward move one screen at a time. A screen closed from inside the editor returns
+// through history when the entry before it is the screen it goes back to.
+function recordWebsiteScreen(){
+  const screen=websiteFiles?.screen();
+  if(restoringWebsiteScreen||!screen||!state.filesMode)return;
+  // The editor names a new address when it opens another website; that is a new screen too.
+  const hash=websiteAddress??location.hash;websiteAddress=null;
+  if(!fileEditorHash(hash))return;
+  const recorded=history.state?.websiteScreen;
+  if(recorded===screen&&hash===location.hash)return;
+  const before=websiteScreenTrail.get(routeIndex-1);
+  if(recorded&&before?.screen===screen&&before.hash===hash){
+    restoringWebsiteScreen=true;
+    void travelHistory(-1).then(()=>{routeIndex--;history.replaceState({...history.state,observandaIndex:routeIndex,websiteScreen:screen},'',location.href);appShell.paintBack();}).finally(()=>{restoringWebsiteScreen=false;});
+    return;
+  }
+  // The first screen takes the current entry, and so does the screen after a form or after
+  // the empty website list: a submitted form, or a list that only exists until a website
+  // does, is not a place to return to.
+  const push=Boolean(recorded)&&!['form','sites'].includes(recorded);
+  if(push)routeIndex++;
+  history[push?'pushState':'replaceState']({...history.state,observandaIndex:routeIndex,websiteScreen:screen},'',hash);
+  websiteScreenTrail.set(routeIndex,{hash,screen});appShell.paintBack();
 }
 async function enterWebsiteFiles({hash='#/website',replace=false}={}){
-  if(!state.filesMode&&location.hash.startsWith('#/')&&!fileEditorHash(location.hash))websiteReturn={hash:location.hash,context:state.storage?.contextId};
+  // Opening the editor while it is still closing waits for that to finish, and a place
+  // chosen before this newer request is then not shown.
+  websiteEntries++;if(websiteLeaving)await websiteLeaving.catch(()=>{});
   activity.pause();
-  const epoch=++fileEditorEpoch;state.filesMode=true;state.fileError=null;state.page='website';state.dirty=false;
-  if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
+  const epoch=++fileEditorEpoch;state.filesMode=true;state.fileError=null;state.page='website';state.dirty=false;websiteScreenTrail.clear();
+  if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex,websiteScreen:null},'',hash);}
+  else history.replaceState({...history.state,websiteScreen:null},'',hash);
   const id=/^#\/websites\/([a-f0-9-]{36})\//.exec(projectRoute(hash).hash)?.[1]??null;
   document.querySelector('#dialog')?.close();workspaceLive.bind();recordList.stop();recordDrafts.pause();recordActivity.stop();workflow.stop();dashboard.bind();operationsLive.bind();
-  if(!websiteFiles){const {websiteFilesUI}=await import('./website-files-ui.js');if(epoch!==fileEditorEpoch)return;websiteFiles=websiteFilesUI({api,esc,state,field,access:operation=>withProjectAccess(operation),render:()=>{if(state.filesMode)renderWebsiteFiles();},notify,onSession:session=>{if(!state.filesMode)return;if(!session.contextId)throw Error(t('websiteFiles','failed'));state.storage={...state.storage,contextId:session.contextId};},onDirty:value=>{if(state.filesMode)state.dirty=value;}});}
+  if(!websiteFiles){const {websiteFilesUI}=await import('./website-files-ui.js');if(epoch!==fileEditorEpoch)return;websiteFiles=websiteFilesUI({api,esc,state,field,address:hash=>{websiteAddress=hash;},access:operation=>withProjectAccess(operation),render:()=>{if(state.filesMode)renderWebsiteFiles();},notify,onSession:session=>{if(!state.filesMode)return;if(!session.contextId)throw Error(t('websiteFiles','failed'));state.storage={...state.storage,contextId:session.contextId};},onDirty:value=>{if(state.filesMode)state.dirty=value;}});}
   websiteFiles.clear();renderWebsiteFiles();
   try{await websiteFiles.load({id,publishing:hash.endsWith('/publishing')});if(epoch!==fileEditorEpoch)return;const session=websiteFiles.session();if(!state.storage&&session?.contextId)state.storage={contextId:session.contextId};}
   catch(error){if(epoch!==fileEditorEpoch||error.name==='AbortError')return;if(error.code==='ACCESS_LOCKED'){state.filesMode=false;state.access={...state.access,locked:true};render();return;}state.fileError=error.message??t('websiteFiles','failed');renderWebsiteFiles();}
 }
-async function leaveWebsiteFiles({hash=null,replace=false}={}){
-  hash??=websiteReturn?.context===state.storage?.contextId?websiteReturn.hash:'#/workspace';websiteReturn=null;
-  fileEditorEpoch++;websiteDrawer.remove();websiteFiles?.clear();state.filesMode=false;state.fileError=null;state.dirty=false;
-  if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
-  await loadWorkspace();
+async function leaveWebsiteFiles({hash='#/workspace',replace=false}={}){
+  fileEditorEpoch++;websiteFiles?.clear();websiteScreenTrail.clear();state.filesMode=false;state.fileError=null;state.dirty=false;
+  if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex,websiteScreen:null},'',hash);}
+  const leaving=loadWorkspace();websiteLeaving=leaving;
+  try{await leaving;}finally{if(websiteLeaving===leaving)websiteLeaving=null;}
 }
 function loadWorkspace(){
  return workspaceLoadTask??=loadWorkspaceOwned().then(loaded=>{workspaceLoadTask=null;if(loaded)syncRoute();},error=>{workspaceLoadTask=null;throw error;});
@@ -1360,7 +1398,7 @@ await startApplication({api,esc,show:content=>appShell.showStandalone(content),l
 
 
 
-function markHistory(){history.replaceState({...history.state,observandaIndex:routeIndex},'',location.href);}
+function markHistory(){history.replaceState({...history.state,observandaIndex:routeIndex},'',location.href);appShell.paintBack();}
 function refreshRecordResults(){
  rememberFilters();$('#entry-results').innerHTML=renderEntryResults();$('#record-count').textContent=recordList.count();recordList.bind({delay:150});
  const count=browseActive(recordBrowse(state.recordBrowse));$('#record-filter-summary').textContent=ux('filters')+(count?' ('+count+')':'');
@@ -1371,7 +1409,7 @@ function syncRoute(){
   if(state.filesMode)return;
   if(!state.book&&state.page!=='workspaces'||state.ownerOperation||restoringRoute||workspaceLoadTask||projectOwners.pending())return;
   const next=routeFor(state);
-  if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);}
+  if(location.hash!==next){const push=location.hash.startsWith('#/')&&!replaceNextRoute;replaceNextRoute=false;if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);appShell.paintBack();}
   else markHistory();
 }
 // One busy mark while another project or lab book opens. A newer navigation or a
@@ -1418,7 +1456,14 @@ window.addEventListener('popstate',event=>{
   if(travel){const done=travel;travel=null;done();return;}
   (async()=>{
     const targetIndex=Number.isInteger(event.state?.observandaIndex)?event.state.observandaIndex:routeIndex+1;
-    if(state.filesMode){const hash=location.hash;if(!await websiteFiles?.beforeLeave()){const current=websiteFiles?.current();history.replaceState({...event.state,observandaIndex:routeIndex},'',current?'#/websites/'+current.site.id+'/editor':'#/website');return;}routeIndex=targetIndex;if(fileEditorHash(hash))await enterWebsiteFiles({hash,replace:true});else await leaveWebsiteFiles({hash,replace:true});return;}
+    // Within one website, Back and Forward change the editor's screen without reopening it.
+    if(state.filesMode&&event.state?.websiteScreen&&websiteFiles?.route()===projectRoute(location.hash).hash){
+      const hash=location.hash;routeIndex=targetIndex;restoringWebsiteScreen=true;
+      try{await websiteFiles.showScreen(event.state.websiteScreen);}finally{restoringWebsiteScreen=false;}
+      const screen=websiteFiles.screen();history.replaceState({...history.state,observandaIndex:routeIndex,websiteScreen:screen},'',location.href);
+      websiteScreenTrail.set(routeIndex,{hash,screen});appShell.paintBack();return;
+    }
+    if(state.filesMode){const hash=location.hash;let leaving=false;try{leaving=await websiteFiles?.beforeLeave();}finally{if(!leaving)await travelHistory(routeIndex-targetIndex);}if(!leaving)return;routeIndex=targetIndex;if(fileEditorHash(hash))await enterWebsiteFiles({hash,replace:true});else await leaveWebsiteFiles({hash,replace:true});return;}
     if(!Number.isInteger(event.state?.observandaIndex))history.replaceState({...history.state,observandaIndex:targetIndex},'',location.href);
     const delta=targetIndex-routeIndex,targetHash=location.hash;
     if(!delta)return;

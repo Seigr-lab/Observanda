@@ -26,7 +26,7 @@ test('the author updates a placed record from the lab book before writing the we
   const store=new WebsiteFileStore(f.workspace),conversion=new PublicationConversion(f.workspace,{store}),identity={workspaceId:book.id,recordId:record.id,field:'title'};
   const command=(name,data)=>executeResearchRequest(f.workspace,'/api/research/records/'+name,data,{publicationConversion:conversion});
   const title=await command('values/read',identity);await command('values/save',{...identity,expectedRevision:title.revision,value:{value:'Seeds unfold overnight'}});
-  await navigate(page,'Publishing');const files=page.locator('#main[data-website-files-app]');
+  await navigate(page,'Publishing');const files=page.locator('[data-website-files-app]');
   await files.getByRole('button',{name:'Return to editing',exact:true}).click({timeout:60000});
   await files.getByRole('button',{name:'Publish to folder',exact:true}).click({timeout:60000});
   const panel=files.locator('[data-folder-review-panel]');

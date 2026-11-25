@@ -12,5 +12,6 @@
   "menu": "Menu",
   "openMenu": "Open app menu",
   "closeMenu": "Close app menu",
-  "resize": "Resize navigation"
+  "resize": "Resize navigation",
+  "back": "Back"
 }

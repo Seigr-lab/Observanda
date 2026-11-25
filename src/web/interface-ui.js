@@ -52,7 +52,6 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
       const children=[...nav.children],order=navigationOrder();
       orderNavigationNodes(nav,children.filter(node=>!node.dataset.navSection).concat(order.flatMap(id=>children.filter(node=>node.dataset.navSection===id))));
     }
-    for(const button of document.querySelectorAll('[data-action="interface-toggle-menu"]')){button.textContent=settings.navigationCollapsed?message('showMenu'):message('hideMenu');button.setAttribute('aria-expanded',String(!settings.navigationCollapsed));}
   }
   function bindResizer(){
     const handle=document.querySelector('.navigation-resizer');if(!handle)return;
@@ -107,7 +106,6 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
     if(await themeEditor.action(button,settings)){changed();rerenderThemes();return true;}
     if(button.dataset.action==='interface-reset'){settings.fontSize=DEFAULT_INTERFACE.fontSize;settings.lineHeight=DEFAULT_INTERFACE.lineHeight;changed();return true;}
     if(button.dataset.action==='interface-layout'){showDialog(`<h2 id="dialog-title">${text('layout')}</h2>${layoutControls()}`);return true;}
-    if(button.dataset.action==='interface-toggle-menu'){settings.navigationCollapsed=!settings.navigationCollapsed;changed();return true;}
     if(button.dataset.action==='interface-layout-reset'){for(const key of ['navigationPosition','navigationWidth','navigationCollapsed','navigationOrder'])settings[key]=structuredClone(DEFAULT_INTERFACE[key]);changed();document.querySelector('[data-navigation-order]').innerHTML=orderControls();return true;}
     if(button.dataset.action==='interface-order'){settings.navigationOrder=navigationOrder();const from=settings.navigationOrder.indexOf(button.dataset.id),to=from+Number(button.dataset.direction);if(from>=0&&to>=0&&to<settings.navigationOrder.length){[settings.navigationOrder[from],settings.navigationOrder[to]]=[settings.navigationOrder[to],settings.navigationOrder[from]];changed();document.querySelector('[data-navigation-order]').innerHTML=orderControls();document.querySelector(`[data-action="interface-order"][data-id="${button.dataset.id}"][data-direction="${button.dataset.direction}"]:not(:disabled)`)?.focus();}return true;}
     if(button.dataset.action==='interface-save'){await save();notify(message('savedNotice'));return true;}

@@ -3,8 +3,6 @@
   "projects": "Prosjekter og notatbøker",
   "website": "Nettsted",
   "workspace": "Arbeidsområde",
-  "showMenu": "Vis meny",
-  "hideMenu": "Skjul meny",
   "pixels": "{width} piksler",
   "widthFailed": "Kunne ikke lagre menybredden.",
   "unsaved": "Ulagrede programinnstillinger. Lagre for å beholde dem, eller forkast for å angre.",

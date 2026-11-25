@@ -32,7 +32,7 @@ test('a placed result whose analysis inputs changed must be reviewed before the 
   await websiteWithRecords(f.workspace,book,[record]);
   // The dataset moves on after the result was written.
   await m.dataset({recordId:record.id,title:'Run observations',id:dataset.id,expectedRevision:dataset.revision,artifact,baseDataset:dataset,columnChanges:[{index:0,column:{...columns[0],unit:'count'}}]});
-  await navigate(page,'Publishing');const files=page.locator('#main[data-website-files-app]');
+  await navigate(page,'Publishing');const files=page.locator('[data-website-files-app]');
   await files.getByRole('button',{name:'Return to editing',exact:true}).click({timeout:60000});
   await files.getByRole('button',{name:'Publish to folder',exact:true}).click({timeout:60000});
   const panel=files.locator('[data-folder-review-panel]'),write=panel.getByRole('button',{name:'Write reviewed files',exact:true});

@@ -35,8 +35,9 @@ test('scrolling the outline, page or inspector keeps the other desktop panes in 
    await page.setViewportSize({width,height});await expect.poll(async()=>(await state()).outerRange).toBeLessThanOrEqual(1);
    expect(await list.evaluate(el=>getComputedStyle(el).overflowY)).toBe('visible');
   }
-  await list.getByRole('button',{name:'Sampling station 1',exact:true}).hover();await page.mouse.wheel(0,320);
-  await expect.poll(async()=>(await state()).outline).toBeGreaterThan(0);
+  // Hovering may first scroll the entry into view; the wheel is measured from there.
+  await list.getByRole('button',{name:'Sampling station 1',exact:true}).hover();const hovered=(await state()).outline;await page.mouse.wheel(0,320);
+  await expect.poll(async()=>(await state()).outline).toBeGreaterThan(hovered);
   const left=await state();expect([left.outer,left.list,left.inspector,left.canvas]).toEqual([0,0,0,0]);
   await inspector.focus();await page.keyboard.press('PageDown');await expect.poll(async()=>(await state()).inspector).toBeGreaterThan(0);
   await canvas.getByRole('heading',{name:'Sampling station 2',exact:true}).hover();await page.mouse.wheel(0,310);

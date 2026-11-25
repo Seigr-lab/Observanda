@@ -19,7 +19,7 @@ async function signedIn(page,app,f,{website=true}={}){
  if(!website)return null;const {book}=await f.workspace.read();return websiteWithRecords(f.workspace,book,book.entries.filter(entry=>entry.share));
 }
 async function folderExport(page){
- await navigate(page,'Publishing');const files=page.locator('#main[data-website-files-app]');
+ await navigate(page,'Publishing');const files=page.locator('[data-website-files-app]');
  await files.getByRole('button',{name:'Return to editing',exact:true}).click({timeout:60000});
  await files.getByRole('button',{name:'Publish to folder',exact:true}).click({timeout:60000});
  const panel=files.locator('[data-folder-review-panel]');await expect(panel).toBeVisible();return panel;
