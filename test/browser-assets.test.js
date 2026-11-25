@@ -12,7 +12,7 @@ async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observ
 const directoryURL=directory=>pathToFileURL(directory+path.sep);
 // The catalogue registry includes shell controls as well as deferred editors.
 // Keep shell membership explicit so a new eager catalogue still fails this check.
-const shellCatalogues=new Set(['figureDisplay','figureDiagnostics','dashboardEditors','applicationTexts','workspaceSecurity','supportEditors','materialEditors','projectEditors','editorControls','moduleEditors','recordEditors','workspaceViews','labBookData']);
+const shellCatalogues=new Set(['figureDisplay','figureDiagnostics','dashboardEditors','applicationTexts','workspaceSecurity','agentKeys','supportEditors','materialEditors','projectEditors','editorControls','moduleEditors','recordEditors','workspaceViews','labBookData']);
 
 test('browser assets load on demand, coalesce reads and bound retained bytes',async t=>{
  const root=await fixture(t),source=path.join(root,'web');await mkdir(source);
