@@ -51,6 +51,9 @@ test('agents learn the API from the app and work only through their key, scope a
  const updated=await result(await f.agent('/api/v1/agent/records/update',{key,data:{...place,recordId:created.id,expectedRevision:read.revision,changes:{status:'in progress',sections:[{id:read.sections[0].id,title:'Known issues',text:'One: slow export.'}]}}}));
  assert.notEqual(updated.revision,read.revision);
  assert.deepEqual(wholeReads,[]);ResearchCatalogue.prototype.read=wholeRead;
+ // The owner opening the website editor keeps the workspace unlocked; agents keep working.
+ await result(await f.owner('/api/website-files/session',{}));
+ assert.equal((await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}))).id,created.id);
  const again=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));assert.equal(again.status,'in progress');assert.equal(again.sections[0].id,read.sections[0].id);assert.equal(again.sections[0].text,'One: slow export.');
  assert.equal((await result(await f.agent('/api/v1/agent/records/update',{key,data:{...place,recordId:created.id,expectedRevision:read.revision,changes:{title:'Stale'}}}),409)).code,'RECORD_CHANGED');
  // The owner sees each agent change under the key's name, newest first.

@@ -322,7 +322,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   // or lab book it addresses, unlocked. A key never unlocks anything itself.
   const agentKeys=typeof deviceStore?.file==='string'?new AgentKeyStore(deviceStore.file+'.agents'):null;
   const agentOwner=async()=>{
-   for(const id of [...sessions.keys()].reverse()){const client=liveSession(id);if(client?.access&&!client.filesOnly&&!(await status(client)).locked)return {id,client};}
+   let editor=null;
+   for(const id of [...sessions.keys()].reverse()){
+    const client=liveSession(id);if(!client?.access||(await status(client)).locked)continue;
+    if(!client.filesOnly)return {id,client};editor??={id,client};
+   }
+   // The owner may be working in the website editor, whose session keeps the
+   // workspace unlocked with research closed. An agent's research request
+   // reopens it there, exactly as the owner's own next research request would.
+   if(editor){await ensureWorkspaceIdentity(context);editor.client.filesOnly=false;startJobs(context);return editor;}
    throw new AppError('ACCESS_LOCKED');
   };
   const agentHttp=async(req,operation,json)=>{
