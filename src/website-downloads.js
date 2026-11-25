@@ -47,8 +47,10 @@ export function saveWebsiteDownload(store,id,{expectedRevision,path:page,html,cs
  if(typeof html!=='string'||typeof css!=='string'||!html.includes(folder+pendingDownloadName))throw new AppError('INVALID');
  const manifest=await store.current(id,expectedRevision),file=downloadFileName(name,new Set(manifest.files.map(item=>item.name.toLowerCase())));
  const descriptor={...await store.siteFile(id,file,bytes,{signal}),download:true};
- const added=await store.commit({...manifest,files:[...manifest.files,descriptor]},{signal});
- const linked=html.replaceAll(folder+pendingDownloadName,file);
+ const linked=html.replaceAll(folder+pendingDownloadName,file),candidate={...manifest,files:[...manifest.files,descriptor]};
+ // A page that cannot be saved is refused before the upload changes the site.
+ await store.inspectPageSource(candidate,page,linked,css,signal);
+ const added=await store.commit(candidate,{signal});
  try{return {...await store.save(id,{expectedRevision:added.revision,path:page,html:linked,css,historyKey,signal}),download:file};}
  catch(error){
   // A page that cannot be saved leaves no unreferenced upload behind.
