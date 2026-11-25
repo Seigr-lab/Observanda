@@ -30,7 +30,7 @@ test('Workspaces opens a private inventory preview, accounts for blocked items a
 
 test('source target problems are reviewable in the app and correcting the declaration clears them',async({page})=>{
  test.setTimeout(90000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-target-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook());
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-target-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),{...sampleNotebook(),title:'workspace'});
  const fixture=await migrationFixture(source,{creative:true}),record=fixture.manifest.objects[1];
  const html='<!doctype html><section id="observation"><h2>Dawn calls</h2></section><script>throw Error("source executed")</script>';
  await writeFile(path.join(source,'field/one.json'),html);
@@ -59,7 +59,7 @@ test('source target problems are reviewable in the app and correcting the declar
 
 test('leaving an inspection ignores its late result and cancellation permits a fresh scan',async({page})=>{
  test.setTimeout(90000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inspection-lifecycle-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook());
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inspection-lifecycle-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),{...sampleNotebook(),title:'workspace'});
  await migrationFixture(source,{creative:true});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
  let release,entered;const blocked=new Promise(resolve=>release=resolve),started=new Promise(resolve=>entered=resolve);let first=true,calls=0,releaseCancelled,enteredCancelled;const cancelledRequest=new Promise(resolve=>enteredCancelled=resolve),cancelledReply=new Promise(resolve=>releaseCancelled=resolve);
@@ -82,7 +82,7 @@ test('leaving an inspection ignores its late result and cancellation permits a f
 
 test('tenfold physical inventory is usable through the app with bounded result pages',async({page})=>{
  test.setTimeout(180000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-growth-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook());
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-growth-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),{...sampleNotebook(),title:'workspace'});
  const expected=await migrationGrowthFixture(source);
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));

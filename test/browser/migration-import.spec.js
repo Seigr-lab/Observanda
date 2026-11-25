@@ -15,7 +15,7 @@ import {openEvidence} from './record-editor-helper.js';
 
 test('app stages, maps, resumes, applies and reverses a private external logbook',async({page})=>{
  test.setTimeout(150000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook());
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),{...sampleNotebook(),title:'workspace'});
  const fixture=await migrationFixture(source,{creative:true}),table=Buffer.from('{"rows":[{"value":900719925474099312345},{"value":null},{"value":""},{}]}');await writeFile(path.join(source,'table.json'),table);
  fixture.manifest.objects[1].attributes={privateMetadata:'Retain privately',facts:portableResearch()};
  fixture.manifest.objects.push({...fixture.manifest.objects[0],id:'table',title:'Observations table',kind:'dataset',mapping:{kind:'dataset'},files:[{path:'table.json',sha256:createHash('sha256').update(table).digest('hex'),bytes:table.length,selector:{kind:'json-pointer',value:'/rows'}}],attributes:{declaredRows:4}});
