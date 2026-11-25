@@ -85,3 +85,15 @@ test('source placement uses the editable page blocks without changing surroundin
  assert.equal(insertWebsiteSources(page,[fragment],'end'),page.replace('<p>two</p>','<p>two</p>'+marker));
  assert.throws(()=>insertWebsiteSources(page,[fragment],{before:2}),{code:'INVALID'});
 });
+
+test('a record excerpt is the record\'s own writing, not its title, type, date, status or tags',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-picker-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();assert.equal(path.dirname(root),path.resolve(os.tmpdir()));await rm(root,{recursive:true,maxRetries:8});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace);
+ const provenance={workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()},sourceId=websiteSourceId({...provenance,target:'website'});
+ // The parts of a converted record copy, as the publication renderer writes them.
+ const html='<section data-observanda-part="title"><h2>Senary</h2></section><article><p data-observanda-part="metadata"><span>Concept / definition</span> <span>Date unknown</span> <span>Completed</span></p>'+
+  '<ul class="tags" data-observanda-part="tags"><li>concept</li></ul><div data-observanda-part="body"><p>Base six is the default numerical notation.</p></div></article>';
+ await store.putSource({sourceId,provenance,target:'website',visible:true,title:'Senary',html},{token:await store.beginSourceUpdate({sourceId,target:'website'})});
+ assert.equal((await store.searchLibrary({})).items[0].preview,'Base six is the default numerical notation.');
+});
