@@ -637,6 +637,10 @@ export class WebsiteFileStore{
   const placed=placeSiteRegions(manifest,html,{path:page,draft,instances:designInstances??former?.instances}),pageInstances=placed.instances;
   if(placed.instances?.some(row=>row.region))scripts.add(REGION_SCRIPT);
   if(!former||placed.html!==html){html=placed.html;validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});}
+  // A page with its own stylesheet always links it. Page code written by hand may
+  // leave the link out; the styles edited for this page must still reach it.
+  const ownStyle=creation?.stylePath??former?.stylePath;
+  if(ownStyle&&ownStyle===cssPath&&/<\/head\s*>/i.test(html)){const linked=addPageStyle(html,page,ownStyle);if(linked!==html){html=linked;validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});}}
   const historyFiles=editHistory(manifest,historyKey,page);
   const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);
   for(const file of historyFiles)if(htmlPictures.has(file.name)||cssPictures.has(file.name)||recordingNames.has(file.name))files.push(file);

@@ -195,3 +195,17 @@ test('stored HTML admits only site-local resources and vetted scripts, even on n
  assert.throws(()=>validateWebsiteHTML('<button onclick="alert(1)">Open</button>'),{code:'INVALID'});assert.throws(()=>validateWebsiteHTML(html,{file:'entries/entry.html'}),{code:'INVALID'});
  for(const css of ['@import "https://remote.invalid/style"','body{background:url(/api/asset)}','body{background:image-set("https://remote.invalid/pixel" 1x)}'])assert.throws(()=>validateWebsiteCSS(css),{code:'INVALID'});
 });
+
+test('a page with its own stylesheet keeps linking it when its page code leaves the link out',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'website-page-style-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const store=new WebsiteFileStore(new Workspace(root,{id:randomUUID(),key:randomBytes(32)})),id=randomUUID();
+ const created=await store.create({id,name:'Lab'});
+ const added=await store.createPage(id,{expectedRevision:created.site.revision,path:'lab.html',title:'Lab',inclusion:'included'});
+ const stylePath=added.site.cssPath;assert.notEqual(stylePath,'style.css');
+ // Page code written by hand links only the site stylesheet.
+ const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Lab</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Lab</h1></main></body></html>';
+ const saved=await store.save(id,{expectedRevision:added.site.revision,path:'lab.html',html,css:'h1{color:#b5442c}'});
+ assert.match(saved.html,new RegExp('<link rel="stylesheet" href="'+stylePath.replace('.','\.')+'">'));
+ assert.equal(saved.css,'h1{color:#b5442c}');
+});
