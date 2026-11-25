@@ -18,5 +18,6 @@
   "templateUnavailable": "Denne prosjektmalen er utilgjengelig. Velg en annen mal, eller aktiver labboktypene under Innstillinger.",
   "placementFailed": "Prosjektet kunne ikke plasseres der.",
   "creating": "Oppretter prosjekt…",
-  "hierarchy": "Prosjekthierarki"
+  "location": "Plassering",
+  "projects": "Prosjekter"
 }

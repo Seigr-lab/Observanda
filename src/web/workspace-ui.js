@@ -9,7 +9,7 @@ import {projectCreationRecoveryUI} from './project-creation-recovery-ui.js';
 import {projectStorageUI} from './project-storage-ui.js';
 import {locationToolsView,locationTools} from './modules/location-tools.js';
 import {locationToolCounts} from './modules/location-tool-counts.js';
-import {ancestors,childrenOf,locationName} from './workspace-structure.js';
+import {childrenOf} from './workspace-structure.js';
 import {projectNotebooksUI} from './project-notebooks.js';
 import {bookConversionEntry} from './book-conversion-offer.js';
 import {createDataSession,workspaceData} from './data-registry.js';
@@ -44,13 +44,13 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
     if(result.status!=='ready')return '<p role="alert">'+esc(result.error?.message||t('workspaceViews','recentFailed'))+`</p><button class="button" data-action="project-recent-retry">${text('recentRetry')}</button>`;
     return recordsTable(result.items.map(item=>item.data));
   }
-  function recordContext() {
-    const project=state.book.projects.find(p=>p.id===state.project),notebook=state.book.notebooks.find(n=>n.id===state.notebook),parts=[];
-    if(project)parts.push(`<span><small>${esc(projectKindLabel(project.kind))}</small> <button data-action="open-project" data-id="${project.id}" data-project-location="${project.id}">${esc(locationName(projectDirectory.navigation(state.book),project.id))}</button></span>`);
-    if(notebook&&['editor','record-reader'].includes(state.page)){
-      parts.push(`<span><small>${text('labBook')}</small> <button data-action="filter-notebook" data-id="${notebook.id}">${esc(notebook.title)}</button></span>`);
-    }
-    return parts.length?`<nav class="location-trail record-context research-location" aria-label="${text('hierarchy')}">${parts.join('<span aria-hidden="true">/</span>')}</nav>`:'';
+  // The breadcrumb above a lab book, a project's records or a record: where it sits in the workspace.
+  function recordContext(current=null) {
+    const notebook=state.book.notebooks.find(n=>n.id===(state.projectOwner?.labBookId??state.notebook)),projectId=notebook?.projectId??state.project;
+    if(!projectId)return '';
+    if(state.page==='entries'&&!notebook)return projectDirectory.trail(projectId,{current:text('allRecords')});
+    if(state.page==='entries')return projectDirectory.trail(projectId,{labBook:notebook,current:null});
+    return projectDirectory.trail(projectId,{labBook:notebook,current:current??''});
   }
 
   function projectCard(p) {
@@ -70,11 +70,11 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   function bookStoresOnly(id){return workspaceAvailable(state)&&!(state.projectOwner&&(state.projectOwner.projectId===id||projectDirectory.entries().some(entry=>entry.projectId===id)));}
   function projectView() {
     const p=state.book.projects.find(p=>p.id===state.project);if(!p)return overview();
-    const ns=labNotebooks.directory(p.id),hierarchy=projectDirectory.navigation(state.book);
+    const ns=labNotebooks.directory(p.id);
     // In catalogue storage a new lab book gets its own store inside a project's store. A project held in the
     // workspace itself, such as a shared project in a collaboration copy, keeps its lab books but takes no new ones.
     const workspaceBooksOnly=bookStoresOnly(p.id);
-    return `${state.projectOwner?projectDirectory.trail(p.id,rootBook().title):`<nav class="location-trail" aria-label="${text('hierarchy')}"><button class="text-button" data-action="projects">${esc(rootBook().title)}</button>${ancestors(hierarchy,p.id).slice(0,-1).map(parent=>` / <button class="text-button" data-action="open-project" data-id="${parent.id}">${esc(parent.title)}</button>`).join('')}</nav>`}<div class="page-heading"><div><span class="scope-kicker">${esc(projectKindLabel(p.kind))}</span><h1>${esc(p.title)}</h1>${p.description?'<p class="subtitle">'+esc(p.description)+'</p>':''}</div><button class="button" data-action="edit-project" data-id="${p.id}">${text('settings')}</button></div>
+    return `${projectDirectory.trail(p.id,{current:null})}<div class="page-heading"><div><span class="scope-kicker">${esc(projectKindLabel(p.kind))}</span><h1>${esc(p.title)}</h1>${p.description?'<p class="subtitle">'+esc(p.description)+'</p>':''}</div><button class="button" data-action="edit-project" data-id="${p.id}">${text('settings')}</button></div>
      <div class="section-bar"><h2>${text('labBooks')}${state.projectOwner?'':' <span class="badge">'+ns.length+'</span>'}</h2><div class="inline-actions"><button class="button" data-action="edit-project-template" data-id="${p.id}">${text('bookTemplate')}</button><button class="button primary" data-action="new-notebook" data-id="${p.id}" ${workspaceBooksOnly?'disabled aria-describedby="workspace-books-only"':''}>${icon('plus')}${text('newBook')}</button></div></div>${workspaceBooksOnly?`<p class="muted" id="workspace-books-only">${text('workspaceBooksOnly')}</p>`:''}
      ${state.projectOwner?labBookDirectory.view(p.id):'<div class="notebook-grid">'+(ns.map(labNotebooks.card).join('')||`<p class="muted">${text('createBookHelp')}</p>`)+'</div>'}
      <div class="section-bar"><h2>${text('recentRecords')}</h2><button class="button" data-action="project-records" data-id="${p.id}">${text('allRecords')}</button></div><div id="project-recent-records" aria-live="polite">${recentRecords(p.id)}</div>

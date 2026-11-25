@@ -18,5 +18,6 @@
   "templateUnavailable": "This project template is unavailable. Choose another template or enable its lab-book types in Preferences.",
   "placementFailed": "The project could not be placed there.",
   "creating": "Creating project…",
-  "hierarchy": "Project hierarchy"
+  "location": "Location",
+  "projects": "Projects"
 }

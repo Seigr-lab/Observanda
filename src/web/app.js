@@ -881,7 +881,7 @@ function renderPage(){
  case 'editor':content=renderEditor();break;
  default:content=renderEntries();
  }
- if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext()+content;
+ if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext(['editor','record-reader'].includes(state.page)?entry()?.title||appText('newRecord'):null)+content;
  if(state.page==='project'||state.page==='entries'&&state.notebook!=='all')content+='<button class="button" data-action="research-copy-context">'+esc(appText(state.page==='project'?'copyProject':'copyBook'))+'</button>';
  if(['workspace','entries','editor','record-reader'].includes(state.page))content=recordDrafts.banner()+content;
  const helpTopic=({workspace:'getting-started',tools:'getting-started',entries:'records',editor:'records','record-reader':'records',website:'publishing',websites:'publishing',appearance:'publishing',publishing:'publishing',review:'publishing',storage:'storage',project:'getting-started',projects:'getting-started',module:({inventory:'inventory',timeline:'timeline',collaboration:'reviews',organizations:'reviews','pdf-editor':'publishing'})[state.moduleId]??'evidence'})[state.page];

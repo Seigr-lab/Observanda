@@ -21,3 +21,11 @@
 
 /* Titles take focus only so screen readers announce the new page. */
 .page-frame h1[tabindex="-1"]:focus,#main:focus{outline:none}
+
+/* One breadcrumb above the title of every place inside a project (WAI-ARIA breadcrumb
+   pattern): links to each level, then the current page by name. */
+.page-frame .breadcrumb{max-width:none}
+.breadcrumb ol{display:flex;flex-wrap:wrap;align-items:center;gap:var(--ui-space-1) var(--ui-space-2);margin:0;padding:0;list-style:none}
+.breadcrumb li{display:flex;align-items:center;gap:var(--ui-space-2);min-width:0}
+.breadcrumb li+li::before{content:"\203A" / "";color:var(--ui-muted)}
+.breadcrumb [aria-current]{color:var(--ui-text);font-weight:600;overflow-wrap:anywhere}

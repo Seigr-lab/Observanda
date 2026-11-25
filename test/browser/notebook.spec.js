@@ -436,11 +436,11 @@ test('workspace correction preserves research and gives projects, lab books and 
   expect(moved.notebooks.find(n=>n.id===notebook.id).projectId).toBe(second.id);
   expect(moved.entries.filter(e=>e.notebookId===notebook.id).every(e=>!e.share)).toBeTruthy();
   expect(moved.entries.map(e=>e.id)).toEqual(book.entries.map(e=>e.id));
-  await expect(page.getByRole('navigation',{name:'Project hierarchy',exact:true})).toContainText('Test lab book 2');
+  await expect(page.getByRole('navigation',{name:'Location',exact:true})).toContainText('Test lab book 2');
   await page.getByLabel('Search records',{exact:true}).fill('seed');
   await page.getByLabel('Filter by record type',{exact:true}).selectOption('observation');
   await page.getByRole('button',{name:'Watching a seed unfold',exact:true}).click();
-  await expect(page.getByRole('navigation',{name:'Project hierarchy',exact:true})).toContainText('Field journal');
+  await expect(page.getByRole('navigation',{name:'Location',exact:true})).toContainText('Field journal');
   await page.goBack(); await expect(page.getByRole('heading',{name:'Field journal',exact:true})).toBeVisible();
   await expect(page.getByLabel('Search records',{exact:true})).toHaveValue('seed');
   await expect(page.getByLabel('Filter by record type',{exact:true})).toHaveValue('observation');

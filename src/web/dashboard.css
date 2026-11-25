@@ -21,7 +21,6 @@
   }
 
 .main-area,.desk-workspace{min-width:0}.desk-workspace{container-type:inline-size}
-.record-context{max-width:none;margin-bottom:1rem}
 .desk-workspace svg{width:20px;height:20px;flex:none}
 .desk-heading,.desk-heading>div{display:flex;align-items:center;justify-content:space-between;gap:1rem}
 .desk-heading{margin-bottom:0}.desk-heading h1{margin:0}

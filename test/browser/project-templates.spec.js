@@ -65,7 +65,7 @@ test('project creation selects a complete template; only the dedicated editor ch
   await page.reload();await main.getByRole('button',{name:'Settings',exact:true}).click();await noTemplateEditor(dialog);await expect(dialog.locator('.project-template-summary strong')).toHaveText(researchTypes,{timeout:30000});await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).not.toBeVisible();
   await main.getByRole('button',{name:'New lab book',exact:true}).click();await dialog.getByLabel('Lab book name',{exact:true}).fill('First investigation');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});
   const before=(await f.readProject()).book,beforeBooks=await f.readLabBooks();expect(beforeBooks).toHaveLength(1);
-  await main.getByRole('navigation',{name:'Project hierarchy',exact:true}).getByRole('button',{name:project.title,exact:true}).click();
+  await main.getByRole('navigation',{name:'Location',exact:true}).getByRole('button',{name:project.title,exact:true}).click();
   await openTemplate();await expect(dialog.getByRole('heading',{name:'Lab-book template',exact:true})).toBeVisible();await expect(dialog.getByLabel('Name',{exact:true})).toHaveCount(0);
   // The template editor lists record types and the selected type's fields; each is chosen from its list with the keyboard.
   const types=dialog.getByRole('complementary',{name:'Record types',exact:true}),typeChoices=types.locator('[data-command="section-select"]');await expect(typeChoices).toHaveText(researchTypes,{timeout:30000});
@@ -119,7 +119,7 @@ test('new lab books select all enabled templates from one dropdown and keep inde
  const f=await fixture(),main=page.locator('main'),dialog=page.locator('#dialog');
  const picker=()=>dialog.getByLabel('Lab-book template',{exact:true}),save=async()=>{await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});};
  // A saved lab book opens itself; new lab books are created from its project's page.
- const open=async()=>{const back=main.getByRole('navigation',{name:'Project hierarchy',exact:true}).getByRole('button',{name:'Research studio',exact:true});if(await back.isVisible())await back.click();await main.getByRole('button',{name:'New lab book',exact:true}).click();};
+ const open=async()=>{const back=main.getByRole('navigation',{name:'Location',exact:true}).getByRole('button',{name:'Research studio',exact:true});if(await back.isVisible())await back.click();await main.getByRole('button',{name:'New lab book',exact:true}).click();};
  // Projects and their templates are created through the app, each project with its own store.
  const projectCount=async()=>(await f.registry.read()).value.projects.length;
  const projectBy=async title=>{for(let index=0;index<await projectCount();index++){const book=(await f.readProject(index)).book;if(book.projects[0].title===title)return book.projects[0];}throw Error('Missing project '+title);};

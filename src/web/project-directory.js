@@ -29,9 +29,19 @@ export function projectDirectory({state,api,esc,changed}){
  }
  function card(entry){const p=summary(entry);return '<article class="project-card" data-directory-project="'+p.id+'"><span class="scope-kicker">'+esc(p.kind)+'</span><h2><button class="card-title" data-action="open-project" data-id="'+p.id+'">'+esc(p.title)+'</button></h2><p class="subtitle" '+(p.description?'':'hidden')+'>'+esc(p.description)+'</p><div class="inline-actions"><button class="button" data-action="edit-project" data-id="'+p.id+'">'+esc(text('settings'))+'</button></div></article>';}
  function navigation(book){const combined=new Map(book.projects.map(p=>[p.id,p]));for(const entry of entries()){const selected=!state.projectOwner?.labBookId&&state.projectOwner?.projectId===entry.projectId?state.book.projects.find(p=>p.id===entry.projectId):null;combined.set(entry.projectId,{...summary(entry),...selected,parentId:entry.parentId});}return {...book,projects:[...combined.values()]};}
- const parents=id=>ancestors(navigation(state.book),id).slice(0,-1);
- const ancestor=p=>'<span data-project-ancestor="'+p.id+'"> / <button class="text-button" data-action="open-project" data-id="'+p.id+'">'+esc(p.title)+'</button></span>';
- function trail(projectId,workspaceTitle){return '<nav class="location-trail" aria-label="'+esc(text('hierarchy'))+'" data-project-trail="'+projectId+'"><button class="text-button" data-action="projects">'+esc(workspaceTitle)+'</button>'+parents(projectId).map(ancestor).join('')+'</nav>';}
+ // One breadcrumb for every place inside a project: Projects, each enclosing project, the
+ // project, the lab book, then the current page by name. Project names follow the live tree.
+ const crumbs=node=>{const chain=ancestors(navigation(state.book),node.dataset.projectTrail);return node.dataset.trailCurrent==='project'?chain.slice(0,-1):chain;};
+ const ancestor=p=>'<li data-project-ancestor="'+p.id+'"><button class="text-button" data-action="open-project" data-id="'+p.id+'">'+esc(p.title)+'</button></li>';
+ function trail(projectId,{labBook=null,current}){
+  const chain=ancestors(navigation(state.book),projectId),projectCurrent=!labBook&&current===null;
+  const links=(projectCurrent?chain.slice(0,-1):chain).map(ancestor).join('');
+  const name=projectCurrent?chain.at(-1)?.title??'':current;
+  return '<nav class="location-trail breadcrumb" aria-label="'+esc(text('location'))+'" data-project-trail="'+projectId+'"'+(projectCurrent?' data-trail-current="project"':'')+'><ol>'+
+   '<li><button class="text-button" data-action="projects">'+esc(text('projects'))+'</button></li>'+links+
+   (labBook&&current!==null?'<li><button class="text-button" data-action="filter-notebook" data-id="'+esc(labBook.id)+'">'+esc(labBook.title)+'</button></li>':'')+
+   '<li aria-current="page">'+esc(labBook&&current===null?labBook.title:name)+'</li></ol></nav>';
+ }
  function paint(value){
   const document=globalThis.document;if(!document||!state.book||state.access?.locked||state.storageUnavailable)return;
   const focused=document.activeElement,host=document.querySelector('[data-project-directory="'+(value.parentId??'root')+'"]');
@@ -46,9 +56,10 @@ export function projectDirectory({state,api,esc,changed}){
    const more=host.querySelector('[data-action="project-directory-more"]');updateProperty(more,'hidden',!value.loaded||value.items.length>=value.total);updateProperty(more,'disabled',value.loading);
   }
   for(const node of document.querySelectorAll('[data-project-trail]')){
-   const rows=parents(node.dataset.projectTrail),ids=new Set(rows.map(parent=>parent.id));
-   for(const child of [...node.querySelectorAll('[data-project-ancestor]')])if(!ids.has(child.dataset.projectAncestor))child.remove();
-   rows.forEach((parent,index)=>{let child=node.querySelector('[data-project-ancestor="'+parent.id+'"]');if(!child){const template=document.createElement('template');template.innerHTML=ancestor(parent);child=template.content.firstElementChild;}else updateText(child.querySelector('button'),parent.title);placeAt(node,child,index+1);});
+   const list=node.querySelector('ol'),rows=crumbs(node),ids=new Set(rows.map(parent=>parent.id));
+   for(const child of [...list.querySelectorAll('[data-project-ancestor]')])if(!ids.has(child.dataset.projectAncestor))child.remove();
+   rows.forEach((parent,index)=>{let child=list.querySelector('[data-project-ancestor="'+parent.id+'"]');if(!child){const template=document.createElement('template');template.innerHTML=ancestor(parent);child=template.content.firstElementChild;}else updateText(child.querySelector('button'),parent.title);placeAt(list,child,index+1);});
+   if(node.dataset.trailCurrent==='project'){const self=ancestors(navigation(state.book),node.dataset.projectTrail).at(-1);if(self)updateText(list.querySelector('[aria-current]'),self.title);}
   }
   if(focused?.isConnected&&document.activeElement!==focused&&!focused.disabled)focused.focus({preventScroll:true});
  }

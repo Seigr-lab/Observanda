@@ -1,7 +1,5 @@
 /* Text is part of the document, never an independently scrolling viewport. */
 textarea{resize:none!important;overflow:hidden!important;max-height:none!important;box-sizing:border-box}
-.research-location{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
-.research-location span{display:flex;gap:.4rem;align-items:center}.research-location small{color:var(--ui-muted)}
 .record-section .section-controls{margin-bottom:.4rem}.record-section .section-controls .field{margin-bottom:0}
 .record-section .section-controls input{font-weight:650}.record-section textarea{font-weight:400}
 .record-section-navigation{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem 1rem;margin-block:.8rem 1.2rem}
@@ -50,7 +48,6 @@ dialog:has(> [data-research-picker])>h2,dialog:has(> [data-research-picker])>.di
 .record-toolbar{flex-wrap:wrap;gap:.5rem}
 @media print{.record-toolbar,.record-reader button,.record-reader .record-workflow .inline-actions{display:none}.record-reader{max-width:none}.run-comparison .table-scroll{overflow:visible}}
 
-.research-location small{flex-shrink:0;white-space:nowrap}
 .record-outcome{display:block;color:var(--ui-muted);overflow-wrap:anywhere}
 .optional-workflow{margin-block:1rem}
 
