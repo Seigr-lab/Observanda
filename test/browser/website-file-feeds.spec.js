@@ -79,6 +79,10 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await expect(all).toContainText('Paired water samples.');await expect(all).not.toContainText('private-landowner-canary');
   expect(await all.locator('h2').first().evaluate(node=>node.isContentEditable)).toBe(false);
   await expect(all.locator('a[rel=next]')).toHaveCount(1);
+  // Choosing a list to edit opens it at once; nothing has changed, so nothing is asked.
+  await add();await dialog.locator('[data-feed-select]').selectOption({label:'All stations'});
+  await expect(dialog.locator('[data-feed-heading]')).toHaveValue('All stations');await expect(page.locator('dialog.confirm-action[open]')).toHaveCount(0);
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toBeHidden();
   const customHTML='<article class="tide-plate">\n  <h3 data-feed-field="title"></h3>\n  <p data-feed-field="tags"></p>\n  <div data-feed-field="content"></div>\n</article>';
   await add();await dialog.locator('[data-feed-heading]').fill('Western stations');
   await dialog.getByRole('radio',{name:'Matching search',exact:true}).check();

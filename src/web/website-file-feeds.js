@@ -175,7 +175,8 @@ export function websiteFileFeeds({t,request,refresh,report}){
    }catch(error){fail(error);}finally{progress?.close();saving=false;editing.disabled=list.disabled=false;paint();}
   }
   form.onsubmit=e=>{e.preventDefault();void write(false).catch(fail);};
-  form.oninput=e=>{if(e.target!==find)dirty=true;};form.onchange=paint;
+  // Choosing which list to edit, or searching saved searches, changes nothing yet.
+  form.oninput=e=>{if(e.target!==find&&e.target!==list)dirty=true;};form.onchange=paint;
   list.onchange=async()=>{
    if(dirty&&!await confirmAction(t('discardConfirm'),{action:'discard'})){list.value=selected;return;}
    loading=true;editing.disabled=list.disabled=true;paint();try{await choose(list.value);}catch(error){list.value=selected;fail(error);}finally{loading=false;editing.disabled=list.disabled=false;paint();}
