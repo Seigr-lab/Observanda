@@ -573,7 +573,7 @@
           "id": "backup",
           "title": "Verificar las copias de seguridad",
           "paragraphs": [
-            "Utiliza Almacenamiento y acceso para gestionar el almacenamiento y las operaciones de copia de seguridad. Guarda las copias separadas del almacenamiento de trabajo. Deja que termine la verificación e inspecciona el resultado informado; la mera presencia de un archivo copiado no demuestra que todos los originales conservados sean recuperables.",
+            "Utiliza Espacios de trabajo para copiar, mover y hacer copias de seguridad de este espacio de trabajo, y Almacenamiento y acceso para su configuración de acceso. Guarda las copias separadas del almacenamiento de trabajo. Deja que termine la verificación e inspecciona el resultado informado; la mera presencia de un archivo copiado no demuestra que todos los originales conservados sean recuperables.",
             "Prueba la restauración en una ubicación de prueba separada y recupera registros representativos, revisiones históricas y evidencias originales. Comprueba que sus identidades y bytes coincidan. Una copia de seguridad debe seguir siendo utilizable sin depender de rutas del puesto de trabajo original."
           ]
         },

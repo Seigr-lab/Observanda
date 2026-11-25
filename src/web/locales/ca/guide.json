@@ -573,7 +573,7 @@
           "id": "backup",
           "title": "Verifica les còpies de seguretat",
           "paragraphs": [
-            "Utilitza Emmagatzematge i accés per gestionar les operacions d'emmagatzematge i còpia de seguretat. Mantén les còpies separades de l'emmagatzematge de treball. Deixa que acabi la verificació i inspecciona el resultat informat; la simple presència d'un fitxer copiat no demostra que tots els originals conservats siguin recuperables.",
+            "Utilitza Espais de treball per copiar, moure i fer còpies de seguretat d'aquest espai de treball, i Emmagatzematge i accés per a la seva configuració d'accés. Mantén les còpies separades de l'emmagatzematge de treball. Deixa que acabi la verificació i inspecciona el resultat informat; la simple presència d'un fitxer copiat no demostra que tots els originals conservats siguin recuperables.",
             "Prova la restauració en una ubicació de prova separada i recupera registres representatius, revisions històriques i evidències originals. Comprova que les identitats i els bytes coincideixin. Una còpia de seguretat ha de continuar sent utilitzable sense dependre dels camins de l'estació de treball original."
           ]
         },

@@ -118,7 +118,7 @@
   "unfinishedHeading": "Colecciones y análisis pendientes",
   "moreHeading": "Análisis, colecciones y verificación",
   "importsHeading": "Importaciones en curso",
-  "hashHelp": "Un hash identifica bytes; no establece la exactitud ni la autoría. Usa Almacenamiento y acceso para crear una copia de seguridad verificada y después verifica las evidencias tras la restauración.",
+  "hashHelp": "Un hash identifica bytes; no establece la exactitud ni la autoría. Usa Espacios de trabajo para crear una copia de seguridad verificada y después verifica las evidencias tras la restauración.",
   "datasetHelp": "El original se mantiene intacto. Elige cómo se convierten los valores en columnas; el significado numérico se puede declarar en el conjunto de datos conservado.",
   "rootArrayHelp": "Déjalo vacío si la matriz está en la raíz del archivo.",
   "jsonMappingHelp": "Asigna columnas mediante rutas JSON Pointer relativas a cada fila, como /counter o /measurement/value. Deja la ruta del campo vacía para una fila escalar. Los números conservan su escritura exacta. Los campos no asignados se mantienen en el original.",

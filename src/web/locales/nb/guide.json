@@ -573,7 +573,7 @@
           "id": "backup",
           "title": "Verifiser sikkerhetskopier",
           "paragraphs": [
-            "Bruk Lagring og tilgang til å administrere lagrings- og sikkerhetskopieringsoperasjoner. Hold sikkerhetskopier adskilt fra arbeidslagringen. La verifiseringen fullføres og inspiser det rapporterte resultatet; en kopiert fil alene beviser ikke at hver bevart original kan gjenopprettes.",
+            "Bruk Arbeidsområder til å kopiere, flytte og sikkerhetskopiere dette arbeidsområdet, og Lagring og tilgang til tilgangsinnstillingene. Hold sikkerhetskopier adskilt fra arbeidslagringen. La verifiseringen fullføres og inspiser det rapporterte resultatet; en kopiert fil alene beviser ikke at hver bevart original kan gjenopprettes.",
             "Test gjenoppretting til et separat teststed og hent representative oppføringer, historiske revisjoner og originaldokumentasjon. Kontroller at identitetene og bytene samsvarer. En sikkerhetskopi må forbli brukbar uten å være avhengig av stier på den opprinnelige arbeidsstasjonen."
           ]
         },

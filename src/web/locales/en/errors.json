@@ -223,7 +223,7 @@
   "STORAGE_PORTABLE_ACCESS": "Enter the workspace password or recovery key to verify access on another computer. If you use only device unlock, configure a password or recovery key in Storage & access first.",
   "STORAGE_LINKED_COPY": "Another remembered folder still uses this research database. To create an independent workspace, use Copy workspace or Create portable workspace copy from the original folder. For a move, close Observanda and move the entire original folder instead of duplicating it.",
   "STORAGE_UPGRADE_REQUIRED": "This workspace uses outdated file storage. Upgrade it to dedicated database storage before editing or publishing. Its files have not been changed.",
-  "CATALOGUE_UNAVAILABLE": "This folder refers to a research database that is unavailable on this installation. On the original computer, use Create portable workspace copy in Storage & access, then open that complete copy here.",
+  "CATALOGUE_UNAVAILABLE": "This folder refers to a research database that is unavailable on this installation. On the original computer, use Create portable workspace copy in Workspaces, then open that complete copy here.",
   "STORAGE_UNAVAILABLE": "The saved workspace location is unavailable. Reconnect its drive or network share, or choose an existing workspace. No replacement has been created.",
   "WORKSPACE_CHANGED": "The active workspace changed in another tab. Reload this tab before continuing; keep a copy of any unsaved draft first.",
   "ACCESS_INVALID": "Use a username up to 80 characters and a password of 12 to 1024 characters, or leave it blank to use secure device access.",

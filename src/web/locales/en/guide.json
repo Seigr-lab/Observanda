@@ -497,7 +497,7 @@
           "id": "backup",
           "title": "Verify backups",
           "paragraphs": [
-            "Use Storage & access to manage storage and backup operations. Keep backups separately from the working storage. Let verification finish and inspect the reported result; the presence of a copied file alone does not prove that every retained original is recoverable.",
+            "Use Workspaces to copy, move and back up this workspace, and Storage & access for its access settings. Keep backups separately from the working storage. Let verification finish and inspect the reported result; the presence of a copied file alone does not prove that every retained original is recoverable.",
             "Test restoration into a separate test location and retrieve representative records, historical revisions and original evidence. Check that their identities and bytes match. A backup must remain usable without depending on paths on the original workstation."
           ]
         },

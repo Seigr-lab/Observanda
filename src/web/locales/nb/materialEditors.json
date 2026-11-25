@@ -118,7 +118,7 @@
   "unfinishedHeading": "Uferdige samlinger og analyser",
   "moreHeading": "Analyse, samlinger og verifisering",
   "importsHeading": "Pågående importer",
-  "hashHelp": "En hash identifiserer byte; den fastslår ikke nøyaktighet eller forfatterskap. Bruk Lagring og tilgang for å opprette en verifisert sikkerhetskopi, og verifiser deretter dokumentasjonen etter gjenoppretting.",
+  "hashHelp": "En hash identifiserer byte; den fastslår ikke nøyaktighet eller forfatterskap. Bruk Arbeidsområder for å opprette en verifisert sikkerhetskopi, og verifiser deretter dokumentasjonen etter gjenoppretting.",
   "datasetHelp": "Originalen beholdes intakt. Velg hvordan verdiene blir kolonner; numerisk betydning kan erklæres i det bevarte datasettet.",
   "rootArrayHelp": "La feltet stå tomt hvis matrisen ligger i roten av filen.",
   "jsonMappingHelp": "Tilordne kolonner med JSON Pointer-stier relativt til hver rad, som /counter eller /measurement/value. La en feltsti stå tom for en skalar rad. Tall beholder den eksakte skrivemåten. Felt som ikke tilordnes, forblir i originalen.",

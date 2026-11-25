@@ -118,7 +118,7 @@
   "unfinishedHeading": "Col·leccions i anàlisis pendents",
   "moreHeading": "Anàlisi, col·leccions i verificació",
   "importsHeading": "Importacions en curs",
-  "hashHelp": "Un hash identifica bytes; no estableix l’exactitud ni l’autoria. Utilitza Emmagatzematge i accés per crear una còpia de seguretat verificada i després verifica les evidències un cop restaurades.",
+  "hashHelp": "Un hash identifica bytes; no estableix l’exactitud ni l’autoria. Utilitza Espais de treball per crear una còpia de seguretat verificada i després verifica les evidències un cop restaurades.",
   "datasetHelp": "L’original es manté intacte. Tria com es converteixen els valors en columnes; el significat numèric es pot declarar al conjunt de dades conservat.",
   "rootArrayHelp": "Deixa-ho buit si la matriu és a l’arrel del fitxer.",
   "jsonMappingHelp": "Assigna columnes mitjançant camins JSON Pointer relatius a cada fila, com ara /counter o /measurement/value. Deixa el camí del camp buit per a una fila escalar. Els nombres conserven l’escriptura exacta. Els camps no assignats es mantenen a l’original.",

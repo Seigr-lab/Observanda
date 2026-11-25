@@ -573,7 +573,7 @@
           "id": "backup",
           "title": "Verifiser tryggingskopiar",
           "paragraphs": [
-            "Bruk Lagring og tilgang til å administrere lagring og tryggingskopiering. Oppbevar tryggingskopiar åtskilt frå arbeidslagringa. Lat verifiseringa bli ferdig og inspiser det rapporterte resultatet; ei kopiert fil åleine beviser ikkje at alle bevarte originalar kan gjenopprettast.",
+            "Bruk Arbeidsområde til å kopiere, flytte og tryggingskopiere dette arbeidsområdet, og Lagring og tilgang til tilgangsinnstillingane. Oppbevar tryggingskopiar åtskilt frå arbeidslagringa. Lat verifiseringa bli ferdig og inspiser det rapporterte resultatet; ei kopiert fil åleine beviser ikkje at alle bevarte originalar kan gjenopprettast.",
             "Prøv gjenoppretting til ein separat teststad og hent representative oppføringar, historiske revisjonar og originaldokumentasjon. Kontroller at identitetane og byta deira samsvarar. Ein tryggingskopi må vere brukbar utan å vere avhengig av stiar på den opphavlege arbeidsstasjonen."
           ]
         },

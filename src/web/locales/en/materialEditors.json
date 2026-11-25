@@ -118,7 +118,7 @@
   "unfinishedHeading": "Unfinished collections & analyses",
   "moreHeading": "Analysis, collections & verification",
   "importsHeading": "Imports in progress",
-  "hashHelp": "A hash identifies bytes; it does not establish accuracy or authorship. Use Storage & access to create a verified backup, then verify evidence after restoration.",
+  "hashHelp": "A hash identifies bytes; it does not establish accuracy or authorship. Use Workspaces to create a verified backup, then verify evidence after restoration.",
   "datasetHelp": "The original stays intact. Choose how its values become columns; numerical meaning can be declared in the retained dataset.",
   "rootArrayHelp": "Leave blank for an array at the root of the file.",
   "jsonMappingHelp": "Map columns using JSON Pointer paths relative to each row, such as /counter or /measurement/value. Leave a field path blank for a scalar row. Numbers retain their exact spelling. Unmapped fields remain in the original.",
