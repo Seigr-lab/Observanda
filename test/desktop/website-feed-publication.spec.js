@@ -96,7 +96,8 @@ test('an authored feed republishes new lab grants, changed writing and section w
   const sentinels=await disableWebsiteResearch(fixture.directory,[path.join(fixture.directory,name)]);
   app=await fixture.start(undefined,{website:true});page=await app.firstWindow();
   const unexpected=[];
-  const checkURL=url=>{const pathname=new URL(url).pathname;if(pathname.startsWith('/api/')&&!pathname.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/language','/api/interface'].includes(pathname))unexpected.push(pathname);};
+  // The publish review's two placed-research checks may ask the database; they report when it cannot answer.
+  const checkURL=url=>{const pathname=new URL(url).pathname;if(pathname.startsWith('/api/')&&!pathname.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/language','/api/interface','/api/website-analysis/check','/api/website-record-updates/check'].includes(pathname))unexpected.push(pathname);};
   app.context().on('request',r=>checkURL(r.url()));
   await expect(canvas().locator('[data-website-feed]')).toContainText('Released instrument observations',{timeout:60000});
   await page.evaluate(()=>{
@@ -127,6 +128,8 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(canvas().locator('[data-website-feed]')).toBeVisible();
   await addInstrumentPlates(page);
   await publish();await expect(page.getByLabel('Destination folder',{exact:true})).toHaveValue(output);
+  // Both checks finish and say what they found, or that they could not run; publishing goes ahead either way.
+  await expect(page.getByRole('heading',{name:'Lab book changes',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Analyses behind placed research',exact:true})).toBeVisible();await expect(page.getByText(/^Checking the (analyses|lab book records)/)).toHaveCount(0,{timeout:30000});
   await confirm();
   browser=await chromium.launch();const reader=await browser.newPage({javaScriptEnabled:false});
   await reader.goto(pathToFileURL(path.join(output,'index.html')).href);

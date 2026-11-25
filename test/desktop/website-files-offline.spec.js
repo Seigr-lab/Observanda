@@ -76,6 +76,8 @@ test('desktop website editing, persistence, preview and folder publication with 
   const previewStart=performance.now();await page.getByRole('button',{name:'Preview saved website',exact:true}).click();const saved=page.frameLocator('.website-files-canvas');await expect(saved.locator('main > p')).toHaveCSS('color','rgb(21, 43, 65)');const previewMs=Math.round(performance.now()-previewStart);await saved.getByRole('img',{name:'Test photograph'}).click();await expect(saved.getByRole('dialog')).toBeVisible();await saved.getByRole('button',{name:'Close gallery'}).click();
   const previewUrl=await page.locator('iframe.website-files-canvas').getAttribute('src');const previewBytes=await page.evaluate(async url=>{const response=await fetch(url);if(!response.ok)throw Error('Preview unavailable');return response.text();},previewUrl);
   await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(output);await page.getByRole('button',{name:'Review file changes',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Lab book changes',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Analyses behind placed research',exact:true})).toBeVisible();await expect(page.getByText(/^Checking the (analyses|lab book records)/)).toHaveCount(0,{timeout:30000});
+  
   await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files',exact:true}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:60000});
   expect(await readFile(path.join(output,'index.html'),'utf8')).toBe(previewBytes);expect(previewBytes).toContain('release-this-result');expect(previewBytes).not.toMatch(/withdraw-this-result|never-export-this-canary|Private appendix/);
   const mediaTypes={'.css':'text/css','.js':'application/javascript','.png':'image/png','.html':'text/html; charset=utf-8','.wav':'audio/wav'};
@@ -90,7 +92,8 @@ test('desktop website editing, persistence, preview and folder publication with 
   await expect(publicPage.locator('body')).toHaveCSS('background-color','rgb(24, 35, 44)');await expect(publicPage.locator('#instrument-note')).toContainText('Detection limit at 526 nm.');
   // Fail on any newly introduced API dependency, including a background poll
   // whose failed database read was swallowed by the application.
-  const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/language','/api/interface'].includes(route);
+  // The publish review's two placed-research checks may ask the database; they report when it cannot answer.
+  const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/language','/api/interface','/api/website-analysis/check','/api/website-record-updates/check'].includes(route);
   expect([...new Set(requests.filter(route=>!allowed(route)))]).toEqual([]);expect(errors).toEqual([]);for(const database of databases)expect((await stat(database)).isFile()).toBe(true);
   console.log(JSON.stringify({packaged:Boolean(fixture.packaged),coldOpenMs,previewMs,databasesUnavailable:databases.length,publishedMatchesPreview:true,privateCanaryAbsent:true}));
  }catch(error){failure=error;const screen=await page?.locator('body').innerText({timeout:3000}).catch(()=>'');console.error('Website qualification failed during '+phase+': '+error.message+'\n'+errors.join('\n')+'\n'+screen?.slice(0,1800));throw error;}
