@@ -13,5 +13,22 @@
   "openMenu": "Obre el menú de l’aplicació",
   "closeMenu": "Tanca el menú de l’aplicació",
   "resize": "Canvia l’amplada del menú de navegació",
-  "back": "Enrere"
+  "back": "Enrere",
+  "find": "Cerca qualsevol cosa",
+  "findButton": "Cerca",
+  "findPlaceholder": "Llocs, configuració, eines i registres",
+  "findHint": "Escriu per cercar llocs, configuració, eines i registres.",
+  "findSearching": "S'estan cercant registres…",
+  "findRecordsFailed": "Ara no es poden cercar els registres.",
+  "findCount": {
+    "one": "{count} resultat",
+    "other": "{count} resultats"
+  },
+  "findNone": "Res no coincideix amb «{query}».",
+  "findUntitled": "Registre sense títol",
+  "findGroup_places": "Llocs",
+  "findGroup_settings": "Configuració",
+  "findGroup_tools": "Eines",
+  "findGroup_records": "Registres",
+  "findToolOff": "Activa-la a Eines"
 }

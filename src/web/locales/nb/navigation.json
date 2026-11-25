@@ -13,5 +13,22 @@
   "openMenu": "Åpne appmenyen",
   "closeMenu": "Lukk appmenyen",
   "resize": "Endre bredden på navigasjonen",
-  "back": "Tilbake"
+  "back": "Tilbake",
+  "find": "Finn hva som helst",
+  "findButton": "Finn",
+  "findPlaceholder": "Steder, innstillinger, verktøy og oppføringer",
+  "findHint": "Skriv for å søke i steder, innstillinger, verktøy og oppføringer.",
+  "findSearching": "Søker i oppføringer …",
+  "findRecordsFailed": "Oppføringene kan ikke søkes i nå.",
+  "findCount": {
+    "one": "{count} treff",
+    "other": "{count} treff"
+  },
+  "findNone": "Ingenting samsvarer med «{query}».",
+  "findUntitled": "Oppføring uten tittel",
+  "findGroup_places": "Steder",
+  "findGroup_settings": "Innstillinger",
+  "findGroup_tools": "Verktøy",
+  "findGroup_records": "Oppføringer",
+  "findToolOff": "Aktiver det i Verktøy"
 }

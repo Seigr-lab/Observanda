@@ -74,6 +74,7 @@ import {figureEditor} from './figure-editor-loader.js';
 import {researchReference,parseResearchReference} from './record-model.js';
 import {researchTargets} from './research-target-presentation.js';
 import {applicationShell} from './application-shell.js';
+import {findAnything} from './find-anything.js';
 import {ux} from './experience-ui.js';
 import {toolDirectoryView,filterToolDirectory,discoverableTools} from './tool-directory-ui.js';
 import {recoveryCenter} from './recovery-center.js';
@@ -738,18 +739,29 @@ window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
 const navigationActions=new Set(['tool-return','tools','tool-launch','interface','fonts','module-reference-open','laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 function invalidatesResearchReturn(button){const name=button.dataset.action;return navigationActions.has(name)||name==='user-profile'||name==='module-command'||name?.startsWith('site-')||name?.startsWith('starter-');}
 function invalidateResearchReturn(){returnNavigation.invalidate();projectOwners.cancelPending();}
+// Places that stay in the website editor; any other place leaves it first.
+const editorPlace=name=>['website','publishing','site-list','site-open','site-view'].includes(name);
+// Leaving the editor for a place settles its unsaved work first. The place takes the
+// editor's history step, so Back from it returns to the editor; a newer request to
+// open the editor meanwhile wins.
+async function leaveEditorFor(button){
+  const entries=websiteEntries,leaving=(async()=>await websiteFiles?.beforeLeave()&&(await leaveWebsiteFiles(),true))();
+  websiteLeaving=leaving;let left=false;try{left=await leaving;}finally{if(websiteLeaving===leaving)websiteLeaving=null;}
+  if(!left||state.filesMode||websiteEntries!==entries)return;
+  replaceNextRoute=true;try{await action(button);}finally{replaceNextRoute=false;}
+}
+// Find anything runs the same action as the control an entry names.
+const finder=findAnything({state,api,esc,run:async control=>{if(control.dataset.toolQuery!==undefined)state.toolQuery=control.dataset.toolQuery;if(state.filesMode&&!editorPlace(control.dataset.action)&&!control.dataset.action?.startsWith('website-files-'))return leaveEditorFor(control);return action(control);}});
 async function action(button){
   if(removingRecord)return;
   const fileAction=button.dataset.action;
   if(fileAction==='shell-back'){if(routeIndex>0)history.back();return;}
+  if(fileAction==='find-anything'){finder.open(button);return;}
   if(state.filesMode){
     if(fileAction==='context-help'&&button.hasAttribute('data-saved-website-guide')){await taskHelp.open('publishing',button,['project-websites','design','appearance','local-export','release']);return;}
     // A place chosen in the navigation leaves the editor, after its unsaved work is settled.
     // The place takes the editor's history step, so Back from it returns to the editor.
-    if(button.closest('#main-navigation')&&!['website','publishing','site-list','site-open','site-view'].includes(fileAction)){shellMenu.beforeAction(button);const entries=websiteEntries,leaving=(async()=>await websiteFiles?.beforeLeave()&&(await leaveWebsiteFiles(),true))();
-      websiteLeaving=leaving;let left=false;try{left=await leaving;}finally{if(websiteLeaving===leaving)websiteLeaving=null;}
-      if(!left||state.filesMode||websiteEntries!==entries)return;
-      replaceNextRoute=true;try{await action(button);}finally{replaceNextRoute=false;}return;}
+    if(button.closest('#main-navigation')&&!editorPlace(fileAction)){shellMenu.beforeAction(button);await leaveEditorFor(button);return;}
     if(fileAction==='website-files-back'){if(await websiteFiles?.beforeLeave())await leaveWebsiteFiles();return;}
     if(fileAction==='website-files-retry'){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
     if(fileAction?.startsWith('website-files-')||fileAction?.startsWith('github-')){await websiteFiles?.action(button);return;}
@@ -1215,6 +1227,14 @@ async function submitForm(form){
 }
 document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;if(state.filesMode&&form.matches('[data-website-files-form]')){websiteFiles?.submit(form).catch(report);return;}submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??appText('workspaceCreateFailed'));else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??appText('formSaveFailed'),true);else report(error);});});
 window.addEventListener('beforeunload', event => { if (pendingChanges().labels.length || uploading || figures.isBusy() || materials.isBusy()) { event.preventDefault(); event.returnValue = ''; } });
+// Ctrl+K (Command+K) opens Find anything from anywhere in the workspace. Where Ctrl+K
+// already means something (adding a link in text, the website editor's own finder),
+// that place handles the key first and this does nothing.
+document.addEventListener('keydown',event=>{
+  if(event.defaultPrevented||event.isComposing||event.altKey||event.shiftKey||!(event.ctrlKey||event.metaKey)||event.key.toLowerCase()!=='k')return;
+  if(!state.book||state.access?.locked||finder.isOpen()||document.querySelector('dialog[open]'))return;
+  event.preventDefault();finder.open();
+});
 document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && (state.book||state.filesMode)) { event.preventDefault(); savePending().then(() => {if(state.page!=='website')notify(appText('changesSaved'));}).catch(report); } });
 
 

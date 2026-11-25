@@ -9,9 +9,13 @@ const tabs=[
 // Labels are obtained at render time so mounted navigation can change language.
 export const preferencePage=page=>tabs.some(([id])=>id===page);
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// The settings categories available now, with their visible labels (also used by Find anything).
+const categoryLabel=key=>key===null?t('userProfile','title'):['appAppearance','websiteDesign'].includes(key)?ux(key):t('preferences',key);
+const availableTabs=settings=>tabs.filter(([id])=>{const module=moduleForPage(id);return !module||enabledModule(settings,module.id);});
+export const preferenceCategories=settings=>availableTabs(settings).map(([id,key])=>({id,label:categoryLabel(key)}));
 export function preferencesFrame(page,content,settings){
- const available=tabs.filter(([id])=>{const module=moduleForPage(id);return !module||enabledModule(settings,module.id);});
- const label=key=>escape(key===null?t('userProfile','title'):['appAppearance','websiteDesign'].includes(key)?ux(key):t('preferences',key));
+ const available=availableTabs(settings);
+ const label=key=>escape(categoryLabel(key));
  if(page==='preferences')content+=`<section class="panel"><h2>${escape(t('preferences','diagnostics'))}</h2><p>${escape(t('preferences','diagnosticsSummary'))}</p><button class="button" data-action="operational-diagnostics">${escape(t('preferences','diagnosticsReview'))}</button></section>`+aboutView(escape);
  return `<div class="preferences-heading" lang="${language()}"><h1>${label('title')}</h1></div><label class="preferences-mobile field" lang="${language()}">${label('section')}<select id="preferences-section" aria-label="${label('section')}">${available.map(([id,key])=>`<option value="${id}" ${page===id?'selected':''}>${label(key)}</option>`).join('')}</select></label><div class="preferences-layout"><nav class="preferences-tabs" lang="${language()}" aria-label="${label('sections')}">${available.map(([id,key])=>`<button class="button" data-action="${id}" ${page===id?'aria-current="page"':''}>${label(key)}</button>`).join('')}</nav><div class="preferences-content">${content}</div></div>`;
 }

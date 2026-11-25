@@ -73,3 +73,24 @@ html[data-editor-page=website] .section-save{margin-top:.65rem;padding-top:.65re
 .tree-project .notebook-link{margin-left:.5rem;width:calc(100% - .5rem)}
 @media(max-width:760px){.topbar{padding:.5rem .75rem;gap:.5rem}.workspace-name{font-size:1.1rem}.workspace-identity{gap:.4rem}.navigation-resizer{display:none}}
 }
+/* Find anything: a labelled button in the title bar, and its search dialog. */
+.shell-find{display:inline-flex;align-items:center;gap:var(--ui-space-2);height:40px;padding:0 var(--ui-space-3);margin-inline-start:var(--ui-space-2);border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);background:var(--ui-surface);color:var(--ui-muted);font:inherit;cursor:pointer;white-space:nowrap}
+.shell-find:hover{color:var(--ui-accent);border-color:var(--ui-accent)}
+.shell-find:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.shell-find svg{width:20px;height:20px;flex:none}
+.shell-find kbd{font:inherit;font-size:.8em;padding:1px 6px;border:1px solid var(--ui-border);border-radius:4px;color:var(--ui-muted)}
+@media(max-width:760px){.shell-find-label,.shell-find kbd{display:none}.shell-find{width:40px;padding:0;justify-content:center;margin:0;border-color:transparent;background:transparent}}
+dialog.find-anything{width:min(40rem,calc(100vw - 2rem));max-height:min(34rem,calc(100dvh - 4rem));margin:10vh auto auto;padding:var(--ui-space-4);border:1px solid var(--ui-border);border-radius:12px;background:var(--ui-surface);color:var(--ui-text);box-sizing:border-box}
+dialog.find-anything[open]{display:flex;flex-direction:column}
+dialog.find-anything::backdrop{background:var(--ui-overlay)}
+.find-anything-form{display:flex;flex-direction:column;gap:var(--ui-space-2);min-height:0;margin:0}
+.find-anything h2{font-size:var(--ui-h3);margin:0}
+.find-anything input{width:100%;box-sizing:border-box;font:inherit;font-size:1.1rem;padding:var(--ui-space-3);border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);background:var(--ui-background);color:inherit}
+.find-anything input:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+.find-anything [role=listbox]{list-style:none;margin:0;padding:0;overflow:auto;min-height:0;max-height:24rem}
+.find-anything-group{font-size:.75rem;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--ui-muted);padding:var(--ui-space-3) var(--ui-space-3) var(--ui-space-1)}
+.find-anything [role=option]{padding:var(--ui-space-2) var(--ui-space-3);border-radius:var(--ui-control-radius);cursor:pointer;overflow-wrap:anywhere}
+.find-anything [role=option]:hover{background:var(--ui-tint)}
+.find-anything [role=option][aria-selected=true]{background:color-mix(in srgb,var(--ui-accent) 12%,var(--ui-surface));color:var(--ui-accent);box-shadow:inset 3px 0 0 var(--ui-accent)}
+.find-anything-status{margin:0;font-size:.85rem}
+.find-anything-detail{color:var(--ui-muted);font-size:.85em;margin-inline-start:var(--ui-space-2)}

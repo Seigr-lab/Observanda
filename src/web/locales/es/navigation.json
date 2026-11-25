@@ -13,5 +13,22 @@
   "openMenu": "Abrir el menú de la aplicación",
   "closeMenu": "Cerrar el menú de la aplicación",
   "resize": "Cambiar el ancho de la navegación",
-  "back": "Atrás"
+  "back": "Atrás",
+  "find": "Buscar cualquier cosa",
+  "findButton": "Buscar",
+  "findPlaceholder": "Lugares, configuración, herramientas y registros",
+  "findHint": "Escribe para buscar lugares, configuración, herramientas y registros.",
+  "findSearching": "Buscando registros…",
+  "findRecordsFailed": "Ahora no se pueden buscar los registros.",
+  "findCount": {
+    "one": "{count} resultado",
+    "other": "{count} resultados"
+  },
+  "findNone": "Nada coincide con «{query}».",
+  "findUntitled": "Registro sin título",
+  "findGroup_places": "Lugares",
+  "findGroup_settings": "Configuración",
+  "findGroup_tools": "Herramientas",
+  "findGroup_records": "Registros",
+  "findToolOff": "Actívala en Herramientas"
 }

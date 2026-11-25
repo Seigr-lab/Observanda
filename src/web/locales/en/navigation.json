@@ -13,5 +13,22 @@
   "openMenu": "Open app menu",
   "closeMenu": "Close app menu",
   "resize": "Resize navigation",
-  "back": "Back"
+  "back": "Back",
+  "find": "Find anything",
+  "findButton": "Find",
+  "findPlaceholder": "Places, settings, tools and records",
+  "findHint": "Type to search places, settings, tools and records.",
+  "findSearching": "Searching records…",
+  "findRecordsFailed": "Records could not be searched now.",
+  "findCount": {
+    "one": "{count} result",
+    "other": "{count} results"
+  },
+  "findNone": "Nothing matches “{query}”.",
+  "findUntitled": "Untitled record",
+  "findGroup_places": "Places",
+  "findGroup_settings": "Settings",
+  "findGroup_tools": "Tools",
+  "findGroup_records": "Records",
+  "findToolOff": "Enable it in Tools"
 }
