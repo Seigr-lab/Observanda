@@ -69,6 +69,8 @@ test('generic links retain owner-qualified labels, draft return, saved history a
   await main.getByLabel('Name',{exact:true}).fill('Unfinished project calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(36)');await unfinishedCheckpoint;
   await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});await expect(main).toContainText('The selected book owns this observation.');
   await expect(main.locator('[data-module-links]')).toContainText('Project calculation');await page.screenshot({path:test.info().outputPath('connected-work-desktop.png'),fullPage:true});
+  // Opened from the calculator, the way out names the calculator, not the records list.
+  await expect(main.locator('[data-action="back-to-records"]')).toHaveText('Return to Scientific calculator');
   await main.locator('[data-action="back-to-records"]').click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished project calculation',{timeout:15000});await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(36)');expect(page.url()).toBe(sourceURL);
   await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
   await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});

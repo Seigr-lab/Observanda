@@ -109,7 +109,7 @@ import {workspaceSaveRequest} from './workspace-edits.js';
 import {previewSurface} from './preview-surface.js';
 import {shellNavigation} from './shell-navigation.js';
 import {lazyFeatureUI} from './lazy-feature-ui.js';
-import {enabledModule,moduleForPage,moduleDestination} from './feature-modules.js';
+import {enabledModule,moduleForPage,moduleDestination,FEATURE_MODULES} from './feature-modules.js';
 import {dashboardUI} from './dashboard-ui.js';
 import {helpUI} from './help/ui.js';
 import {contextualHelp} from './help/context-ui.js';
@@ -602,8 +602,8 @@ const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>{const side
 const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),directoryChanged:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);},access:operation=>withProjectAccess(operation)});
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
-const recordContent=recordContentUI({state,api,esc,field,render,report,refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:({readonly})=>recordHistory.button({saved:true})+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary><div class="record-action-menu">'+bookReferences.button()+reviews.button()+migrationProvenance.button()+recordLocation.button()+(readonly?'':recordStarters.button()+recordRemoval.view())+'</div></details>',before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
-configurationRecord=configurationRecordCreation({state,api,esc,field,render,onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},editorOptions:{notify,destinations:recordLinkDestinations,figures:()=>[]},onSaved:async(result,original)=>{
+const recordContent=recordContentUI({state,api,esc,field,render,report,returnLabel:fallback=>recordReturnLabel(fallback),refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:({readonly})=>recordHistory.button({saved:true})+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary><div class="record-action-menu">'+bookReferences.button()+reviews.button()+migrationProvenance.button()+recordLocation.button()+(readonly?'':recordStarters.button()+recordRemoval.view())+'</div></details>',before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
+configurationRecord=configurationRecordCreation({state,api,esc,field,render,returnLabel:fallback=>recordReturnLabel(fallback),onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},editorOptions:{notify,destinations:recordLinkDestinations,figures:()=>[]},onSaved:async(result,original)=>{
  const [outline,content]=await Promise.all([newWorkspaceReader({snapshotId:result.etag}).read({requireOutline:true}),api('/api/workspace/read/record-content',{workspaceId:state.book.id,recordId:result.recordId,snapshotId:result.etag,offset:0,pagedHeader:true},{adopt:false})]);
  if(outline.etag!==result.etag||content.etag!==result.etag||content.recordId!==original.id||content.header?.createdAt!==original.createdAt||!revisionId(content.storageRevision))throw Error(t('recordDrafts','invalidPage'));
  adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=result.recordId;state.page='record-reader';state.recordReading=false;state.recordSection=null;state.dirty=false;recordContent.clear();render();await recordDrafts.refresh();
@@ -922,15 +922,21 @@ function renderRecordTable(entries,{action='edit-entry'}={}) {
  }).join('')}</tbody></table></div>`;
 }
 
+// The way out of a record goes back to where it was opened. Opened from a tool, that is
+// the tool with its unfinished work, and the button says so instead of "Back to records".
+function recordReturnLabel(fallback){
+  const origin=state.recordReturn,module=origin?.page==='module'?FEATURE_MODULES.find(item=>item.id===origin.moduleId):null;
+  return module?ux('returnTask',{name:moduleLabel(module)}):fallback;
+}
 function renderEditor() {
   if(configurationRecord?.active())return configurationRecord.view();
   const e=entry();
   if(!e){state.page='entries';return renderEntries();}
-  if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">${esc(appText('backRecords'))}</button><button class="button" data-action="record-edit">${esc(appText('editRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
+  if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">${esc(recordReturnLabel(appText('backRecords')))}</button><button class="button" data-action="record-edit">${esc(appText('editRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
    <article class="record-reader"><h1>${esc(e.title)}</h1>${publicationAvailability(e,state.book.notebooks.find(n=>n.id===e.notebookId),esc)}${recordActivity.view({readonly:true})}${workflow.view({readonly:true})}${recordRevisionView(e,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),relations:false,anchors:true,sectionsHtml:figure=>recordSections.view(e,{readonly:true,figure}),attemptReference:attempts.reference,resultReference:results.reference})}${materials.view(e,{readonly:true})}${recordDetails.relations(e,{readonly:true})}</article>`;
   const notebook=state.book.notebooks.find(n=>n.id===e.notebookId);
   const notebookOptions=state.book.projects.map(project=>`<optgroup label="${esc(appText('projectLabel',{project:project.title}))}">${state.book.notebooks.filter(n=>n.projectId===project.id).map(n=>option(n.id,n.title,e.notebookId)).join('')}</optgroup>`).join('');
-  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(appText('backRecords'))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}<details class="record-actions" data-disclosure="draft-actions"><summary>${esc(ux('actions'))}</summary><button class="button danger" data-action="delete-entry">${esc(t('recordAuthoring','remove'))}</button></details></div>
+  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(recordReturnLabel(appText('backRecords')))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}<details class="record-actions" data-disclosure="draft-actions"><summary>${esc(ux('actions'))}</summary><button class="button danger" data-action="delete-entry">${esc(t('recordAuthoring','remove'))}</button></details></div>
     <article class="record-draft-editor"><h1>${esc(ux('writeRecord'))}</h1><section class="editor-paper" aria-label="${esc(appText('entryEditor'))}">
       ${field(esc(appText('recordTitle')),`<textarea rows="1" class="title-input" data-entry="title" maxlength="180" placeholder="${esc(appText('recordName'))}">${esc(e.title)}</textarea>`)}
       ${documents.field({key:e.id+':body',label:appText('summaryContext'),value:e.body,set:value=>{editableRecord(state.book,e.id).body=value;dirtyRecord(e.id);}})}

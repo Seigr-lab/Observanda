@@ -4,7 +4,7 @@ import {t} from './i18n/index.js';
 
 // Seeding and selected editing use the existing checkpoint/review owners.
 // This controller keeps only one record header and the exact apply identity.
-export function configurationRecordCreation({state,api,esc,field,render,onDirty,onSaved,onDiscard,editorOptions={}}){
+export function configurationRecordCreation({state,api,esc,field,render,onDirty,onSaved,onDiscard,editorOptions={},returnLabel=fallback=>fallback}){
  let session=null;
  const text=(key,args)=>t('configurationEditor',key,args);
  const active=()=>Boolean(session&&session.context===researchContext(state)&&session.command.workspaceId===state.book?.id&&session.command.recordId===state.selected&&state.page==='editor');
@@ -50,7 +50,7 @@ export function configurationRecordCreation({state,api,esc,field,render,onDirty,
   session=value;onDirty();render();try{await initialize(value);}catch{}return value;
  }
  function stop(){const previous=session;session=null;previous?.controller.abort();previous?.editor?.destroy();previous?.host?.remove();}
- function view(){return '<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">'+esc(text('backToRecords'))+'</button></div><section class="editor-paper" data-configuration-record-host></section>'+(session?.error?'<p role="alert">'+esc(session.error.message)+'</p><button type="button" class="button" data-action="configuration-record-retry">'+esc(text('retry'))+'</button>':!session?.editor?'<p role="status">'+esc(text('startingRecord'))+'</p>':'');}
+ function view(){return '<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">'+esc(returnLabel(text('backToRecords')))+'</button></div><section class="editor-paper" data-configuration-record-host></section>'+(session?.error?'<p role="alert">'+esc(session.error.message)+'</p><button type="button" class="button" data-action="configuration-record-retry">'+esc(text('retry'))+'</button>':!session?.editor?'<p role="status">'+esc(text('startingRecord'))+'</p>':'');}
  function bind(){if(!active())return;const target=document.querySelector('[data-configuration-record-host]');if(target&&session.host&&!target.contains(session.host))target.append(session.host);}
  async function save(){
   const value=session;if(!active()||value.busy)return;
