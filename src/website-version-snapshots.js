@@ -9,6 +9,16 @@ const managed=file=>file.sourceId||file.feedAsset||file.feedPage;
 const derived=file=>file.themeSheet||file.appearanceSheet||file.tokenSheet||file.tokenFont||file.entryDisplaySheet;
 export const versionOwner=id=>root+'/'+(id??'default')+'/versions';
 export const governedResources=manifest=>new Set(manifest.files.filter(managed).map(file=>file.name.toLowerCase()));
+// A page's authored version depends only on its bytes, its path and the
+// resources the site governs (all in the pin). Source synchronizations commit a
+// site many times without a new version; remembering each analysed page keeps
+// every commit from reading every page again. Kept per vault, so it ends with it.
+const analysed=new WeakMap(),analysedLimit=4096;
+function analysedPages(store){
+ const vault=store.workspace.vault;let cache=analysed.get(vault);
+ if(!cache||cache.root!==store.workspace.root){cache={root:store.workspace.root,rows:new Map()};analysed.set(vault,cache);}
+ return cache.rows;
+}
 const sorted=(items,key)=>items.sort((a,b)=>a[key]<b[key]?-1:a[key]>b[key]?1:0);
 function resource(file){
  const result={name:file.name,contentType:file.contentType,blob:file.blob,size:file.size,sha256:file.sha256};
@@ -48,8 +58,16 @@ export async function versionSnapshot(store,manifest,prior,available,signal){
   if(former?.input===pin&&(former.unavailable||available.has(former.document?.file.blob))){
    pages.push({...cfg,input:pin,...(former.unavailable?{unavailable:true}:{own:former.own,document:former.document,...(former.stamps?{stamps:former.stamps}:{})})});continue;
   }
+  const known=analysedPages(store),key=JSON.stringify([manifest.id,page.path,pin]),remembered=known.get(key);
+  if(remembered?.unavailable){pages.push({...cfg,input:pin,unavailable:true});continue;}
+  if(remembered&&available.has(remembered.document.file.blob)){
+   const document=former?.own===remembered.own&&available.has(former.document?.file.blob)?former.document:remembered.document;
+   const stamps=document===former?.document&&remembered.stamps.length?remembered.stamps:null;
+   pages.push({...cfg,input:pin,own:remembered.own,document,...(stamps?{stamps}:{})});continue;
+  }
   const html=await store.readText(file,{signal}),model=authoredPageVersion(html,page.path,governed);
-  if(!model){pages.push({...cfg,input:pin,unavailable:true});continue;}
+  const remember=value=>{known.delete(key);known.set(key,value);if(known.size>analysedLimit)known.delete(known.keys().next().value);};
+  if(!model){remember({unavailable:true});pages.push({...cfg,input:pin,unavailable:true});continue;}
   const own=digest(JSON.stringify([model.chunks,model.slots.map(s=>s.id)]));
   let document=former?.own===own&&available.has(former.document?.file.blob)?former.document:null;
   if(!document){
@@ -63,6 +81,7 @@ export async function versionSnapshot(store,manifest,prior,available,signal){
   // sections differ. Record per-edition fingerprints, without retaining those
   // sections or rewriting the shared document template.
   const stamps=document===former?.document&&model.slots.length?model.slots.map(slot=>slot.stamp):null;
+  remember({own,document,stamps:model.slots.map(slot=>slot.stamp)});
   pages.push({...cfg,input:pin,own,document,...(stamps?{stamps}:{})});
  }
  for(const file of manifest.files){
