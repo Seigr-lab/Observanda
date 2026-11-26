@@ -122,3 +122,41 @@ test('agents attach files from a folder on this computer through the checked int
  const changes=(await result(await f.owner('/api/security/agent-keys/activity',{}))).activity;
  assert.deepEqual(changes.slice(0,2).map(entry=>[entry.operation,entry.title]),[['files/attach','Build 1.2.0'],['records/create','Build 1.2.0']]);
 });
+
+test('agents run the app\'s own commands within their key: lab book data, websites and PDFs, never security',{timeout:600000},async t=>{
+ const f=await agentServerFixture(t),{create}=await keys(f),project=await f.createProject('Software notes'),book=await f.createBook(project.projectId,'Release log'),other=await f.createBook(project.projectId,'Design notes');
+ const key=await create({kind:'workspace'}),place={projectId:project.projectId,labBookId:book.labBookId};
+ const app=(command,options)=>f.agent('/api/v1/agent/app/'+command,options);
+ // The installed app describes these commands to agents.
+ const description=await result(await f.agent('/api/v1/openapi.json'));
+ assert.ok(description.paths['/api/v1/agent/app/{command}'].post);assert.ok(description.paths['/api/v1/agent/app/{command}'].get);
+ // A record made available for publication through the same command as the app's own control.
+ const record=await result(await f.agent('/api/v1/agent/records/create',{key,data:{...place,record:{type:'experiment',title:'Coil test'}}}));
+ const prefix='projects/'+project.projectId+'/lab-books/'+book.labBookId;
+ const workspaceId=(await result(await app(prefix+'/workspace/read/start',{key,data:{}}))).metadata.id,identity={workspaceId,recordId:record.id,field:'share'};
+ const before=await result(await app(prefix+'/research/records/values/read',{key,data:identity}));assert.equal(before.value.value,false);
+ await result(await app(prefix+'/research/records/values/save',{key,data:{...identity,expectedRevision:before.revision,value:{value:true}}}));
+ assert.equal((await result(await app(prefix+'/research/records/values/read',{key,data:identity}))).value.value,true);
+ // Websites: the same editor commands, for workspace keys.
+ const site=await result(await app('website-files/create',{key,data:{name:'Lab site',html:'<!doctype html><html><head><title>Lab</title></head><body><main><p>Hello</p></main></body></html>'}}));
+ const sites=(await result(await app('website-files/list',{key,data:{}}))).items;assert.deepEqual(sites.map(item=>[item.id,item.name]),[[site.site.id,'Lab site']]);
+ // The owner sees the agent's changes under its name.
+ const changes=(await result(await f.owner('/api/security/agent-keys/activity',{}))).activity;
+ assert.deepEqual(changes.slice(0,2).map(entry=>[entry.operation,entry.keyName]),[['app/website',changes[0].keyName],['app/research',changes[0].keyName]]);
+ assert.equal(changes[1].projectId,project.projectId);assert.equal(changes[1].labBookId,book.labBookId);
+ // A read key only reads; a lab book key reaches only its lab book and no websites.
+ const readOnly=await create({kind:'workspace'},'read');
+ assert.ok((await result(await app('website-files/list',{key:readOnly,data:{}}))).items);
+ assert.equal((await result(await app('website-files/create',{key:readOnly,data:{name:'Refused',html:'<!doctype html><html><head><title>R</title></head><body></body></html>'}}),403)).code,'AGENT_KEY_SCOPE');
+ assert.equal((await result(await app(prefix+'/research/records/values/save',{key:readOnly,data:{...identity,expectedRevision:before.revision,value:{value:false}}}),403)).code,'AGENT_KEY_SCOPE');
+ const scoped=await create({kind:'lab-book',...place});
+ assert.equal((await result(await app(prefix+'/research/records/values/read',{key:scoped,data:identity}))).value.value,true);
+ assert.equal((await result(await app('projects/'+project.projectId+'/lab-books/'+other.labBookId+'/workspace/read/start',{key:scoped,data:{}}),403)).code,'AGENT_KEY_SCOPE');
+ assert.equal((await result(await app('website-files/list',{key:scoped,data:{}}),403)).code,'AGENT_KEY_SCOPE');
+ // Passwords, keys, preferences and storage stay with the owner.
+ for(const command of [prefix+'/access/details','projects/'+project.projectId+'/access/details','security/agent-keys/list','preferences','access/lock','storage/check','workspaces'])
+  assert.equal((await result(await app(command,{key,data:{}}),404)).code,'NOT_FOUND',command);
+ assert.equal((await result(await app('website-files/../security/agent-keys/list',{key,data:{}}),404)).code,'NOT_FOUND');
+ // Without a key, the app's commands are not reachable from a program.
+ assert.equal((await result(await app('website-files/list',{data:{}}),403)).code,'ORIGIN');
+});

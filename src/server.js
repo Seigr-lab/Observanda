@@ -157,6 +157,7 @@ import {Workspace,workspaceFile,assertRegular} from './storage.js';
 import {createNotebook,upgradeNotebook,MAX_BYTES} from './model.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
 import {agentRoute,runAgentOperation,agentOpenApi,AGENT_API_VERSION} from './agent-api.js';
+import {AGENT_APP_PREFIX,agentAppCommand,agentAppInScope} from './agent-app-commands.js';
 import {sandboxPreviewPath,serveSandboxPreview} from './website-sandbox-previews.js';
 import {AgentKeyStore} from './security/agent-keys.js';
 import {admitResearchBytes} from './research-capacity.js';
@@ -333,12 +334,33 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    if(editor){await ensureWorkspaceIdentity(context);editor.client.filesOnly=false;startJobs(context);return editor;}
    throw new AppError('ACCESS_LOCKED');
   };
-  const agentHttp=async(req,operation,json)=>{
+  const agentAuthority=async req=>{
    if(req.headers['x-observanda-session']||req.headers.cookie)throw new AppError('AUTH');
    const token=/^Bearer (\S+)$/.exec(req.headers.authorization??'')?.[1];if(!token||!agentKeys)throw new AppError('AGENT_KEY_INVALID');
    const key=await agentKeys.authenticate(token),selectedContext=context;
    if(!selectedContext.workspace||selectedContext.manualLock||(await selectedContext.workspace.outline()).metadata.id!==key.workspaceId)throw new AppError('ACCESS_LOCKED');
-   const owner=await agentOwner(),input=operation.method==='POST'?await body(req,operation.access==='write'?MAX_RECORD_COMMAND_BYTES:65536):undefined;
+   return {key,selectedContext,owner:await agentOwner()};
+  };
+  // An app command reached with a key runs as the owner's own request would,
+  // through the owner's unlocked session, within the key's scope and access.
+  const agentAppRequest=async(req,res,url,command)=>{
+   const {key,owner}=await agentAuthority(req);
+   if(!agentAppInScope(key,command)||command.write&&key.access!=='write')throw new AppError('AGENT_KEY_SCOPE');
+   url.pathname=command.route;req.url=command.route+url.search;
+   req.headers['x-observanda-session']=owner.id;req.headers['x-observanda-workspace']=context.id;
+   // The owner sees every change an agent made, under the key's name.
+   // It is recorded before the reply ends, so the change is listed once the agent hears it is done.
+   if(command.write){
+    const end=res.end.bind(res);
+    res.end=(...args)=>{
+     if(res.statusCode>=400)return end(...args);
+     void agentKeys.recordActivity({key,operation:'app/'+command.family,projectId:command.projectId??null,labBookId:command.labBookId??null,recordId:null,title:command.route.slice('/api/'.length).slice(0,180)}).catch(()=>{}).finally(()=>end(...args));
+     return res;
+    };
+   }
+  };
+  const agentHttp=async(req,operation,json)=>{
+   const {key,selectedContext,owner}=await agentAuthority(req),input=operation.method==='POST'?await body(req,operation.access==='write'?MAX_RECORD_COMMAND_BYTES:65536):undefined;
    const check=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(!liveSession(owner.id)||(await status(owner.client)).locked)throw new AppError('ACCESS_LOCKED');};
    const run=async(route,data)=>{
     const selected=projectRequest(route,'POST');if(!selected)throw new AppError('NOT_FOUND');
@@ -405,6 +427,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const agentCall=req.url.startsWith('/api/v1/agent/')&&/^Bearer /.test(req.headers.authorization??'')&&!req.headers['x-observanda-session']&&!req.headers.cookie;
       if (req.method === 'POST' && req.headers.origin !== origin && !agentCall) throw new AppError('ORIGIN');
       const url = new URL(req.url, origin);
+      if(agentCall&&url.pathname.startsWith(AGENT_APP_PREFIX)){
+       const command=agentAppCommand(req.method,url.pathname);if(!command)throw new AppError('NOT_FOUND');
+       await agentAppRequest(req,res,url,command);
+      }
       let downloadSession;
       if(url.searchParams.has('__observanda_download')){
        if(req.method!=='GET'||url.searchParams.getAll('__observanda_download').length!==1)throw new AppError('AUTH');

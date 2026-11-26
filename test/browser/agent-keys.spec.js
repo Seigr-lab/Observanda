@@ -45,5 +45,12 @@ test('the owner creates an agent key shown once, the key works, and revoking it 
   expect((await fetch(app.origin+'/api/v1/agent/me',{headers:{Authorization:'Bearer '+key}})).status).toBe(401);
   // The page opens again from its own address.
   await page.reload();await expect(main.getByRole('heading',{name:'Recent agent changes',exact:true})).toBeVisible();
+  // An agent works with the app's own commands, here a website, and the owner sees the change under its name.
+  await main.getByLabel('Name').fill('Website agent');await main.getByLabel('Reaches').selectOption('workspace');await main.getByLabel('Access').selectOption('write');
+  await main.getByRole('button',{name:'Create key',exact:true}).click();
+  const writer=await dialog.getByLabel('Agent key').inputValue();await dialog.getByRole('button',{name:'Done',exact:true}).click();
+  const made=await fetch(app.origin+'/api/v1/agent/app/website-files/create',{method:'POST',headers:{Authorization:'Bearer '+writer,'Content-Type':'application/json'},body:JSON.stringify({name:'Lab site',html:'<!doctype html><html><head><title>Lab</title></head><body><main><p>Hello</p></main></body></html>'})});
+  expect(made.status).toBe(200);
+  await page.reload();await expect(main.locator('[data-agent-activity] li').first()).toContainText('Website agent changed a website (website-files/create)');
  }finally{await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

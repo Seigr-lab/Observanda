@@ -14,7 +14,7 @@ import {refuseNewerFormat} from '../stored-format.js';
 import {preparePrivateDirectory} from './private-directory.js';
 
 export const AGENT_KEY_LIMIT=64;
-const LINE=String.fromCharCode(10),ACTIVITY_LIMIT=500,ACTIVITY_BYTES=4*1024*1024,ACTIVITY_OPERATIONS=['records/create','records/update','records/link','records/unlink','files/attach'];
+const LINE=String.fromCharCode(10),ACTIVITY_LIMIT=500,ACTIVITY_BYTES=4*1024*1024,ACTIVITY_OPERATIONS=['records/create','records/update','records/link','records/unlink','files/attach','app/research','app/website','app/pdf'];
 const PREFIX='obsk_',uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const instant=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&new Date(value).toISOString()===value;
 const secretHash=secret=>createHash('sha256').update(secret).digest('hex');
@@ -36,7 +36,7 @@ function validRecord(value,id){
 }
 function validActivity(value){
  return value&&Object.keys(value).sort().join()==='at,format,keyId,keyName,labBookId,operation,projectId,recordId,title,workspaceId'&&value.format===1&&instant(value.at)&&
-  [value.workspaceId,value.keyId,value.projectId,value.labBookId,value.recordId].every(uuid)&&validName(value.keyName)&&ACTIVITY_OPERATIONS.includes(value.operation)&&typeof value.title==='string'&&value.title.length<=180;
+  [value.workspaceId,value.keyId].every(uuid)&&ACTIVITY_OPERATIONS.includes(value.operation)&&(value.operation.startsWith('app/')?[value.projectId,value.labBookId,value.recordId].every(id=>id===null||uuid(id)):[value.projectId,value.labBookId,value.recordId].every(uuid))&&validName(value.keyName)&&ACTIVITY_OPERATIONS.includes(value.operation)&&typeof value.title==='string'&&value.title.length<=180;
 }
 // What the app shows and an agent may learn about a key; never its hash.
 export const agentKeySummary=({sha256,format,...summary})=>(void sha256,void format,structuredClone(summary));
