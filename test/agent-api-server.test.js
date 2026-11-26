@@ -125,7 +125,7 @@ test('agents attach files from a folder on this computer through the checked int
 
 test('agents run the app\'s own commands within their key: lab book data, websites and PDFs, never security',{timeout:600000},async t=>{
  const f=await agentServerFixture(t),{create}=await keys(f),project=await f.createProject('Software notes'),book=await f.createBook(project.projectId,'Release log'),other=await f.createBook(project.projectId,'Design notes');
- const key=await create({kind:'workspace'}),place={projectId:project.projectId,labBookId:book.labBookId};
+ const key=await create({kind:'workspace'}),place={projectId:project.projectId,labBookId:book.labBookId},workspaceIdOf=(await result(await f.owner('/api/workspace/read/start',{}))).metadata.id;
  const app=(command,options)=>f.agent('/api/v1/agent/app/'+command,options);
  // The installed app describes these commands to agents.
  const description=await result(await f.agent('/api/v1/openapi.json'));
@@ -137,6 +137,10 @@ test('agents run the app\'s own commands within their key: lab book data, websit
  const before=await result(await app(prefix+'/research/records/values/read',{key,data:identity}));assert.equal(before.value.value,false);
  await result(await app(prefix+'/research/records/values/save',{key,data:{...identity,expectedRevision:before.revision,value:{value:true}}}));
  assert.equal((await result(await app(prefix+'/research/records/values/read',{key,data:identity}))).value.value,true);
+ // The workspace's own lab book is reached with workspace keys only.
+ const root=await result(await app('workspace/read/start',{key,data:{}}));assert.equal(root.metadata.id,workspaceIdOf);
+ assert.equal((await result(await app('notebook',{key}))).book.id,workspaceIdOf);
+ assert.equal((await result(await app('workspace/read/start',{key:await create({kind:'project',projectId:project.projectId}),data:{}}),403)).code,'AGENT_KEY_SCOPE');
  // Websites: the same editor commands, for workspace keys.
  const site=await result(await app('website-files/create',{key,data:{name:'Lab site',html:'<!doctype html><html><head><title>Lab</title></head><body><main><p>Hello</p></main></body></html>'}}));
  const sites=(await result(await app('website-files/list',{key,data:{}}))).items;assert.deepEqual(sites.map(item=>[item.id,item.name]),[[site.site.id,'Lab site']]);

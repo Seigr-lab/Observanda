@@ -218,7 +218,7 @@ export function agentOpenApi(origin){
  }
  const command={name:'command',in:'path',required:true,schema:{type:'string'},description:'The app command, without /api/: for example projects/<projectId>/lab-books/<labBookId>/research/records/values/save, website-files/save or pdf/list.'};
  const appCommand=method=>({operationId:'appCommand'+method,summary:'Run one of the app\'s own commands, as the owner\'s screens do.',
-  description:'Lab book data: projects/... commands (a project or lab book key reaches only its own project or lab book). Websites: website-files/..., website-record-updates/check|apply and website-analysis/check (workspace keys). PDFs: pdf/... (workspace keys). Reading: GET dashboard. '+
+  description:'Lab book data: projects/... commands (a project or lab book key reaches only its own project or lab book), and for workspace keys the workspace\'s own lab book: workspace/read/..., research/... and GET notebook. Websites: website-files/..., website-record-updates/check|apply and website-analysis/check (workspace keys). PDFs: pdf/... (workspace keys). Reading: GET dashboard. '+
    'The body, the reply and every check are those of the app itself; a read key may run only commands that read. Passwords, keys, devices, preferences and workspace storage are not reachable. Changes are listed under the key\'s name in Preferences, Agents.',
   security:[{agentKey:[]}],parameters:[command],...(method==='Post'?{requestBody:{required:false,content:{'application/json':{schema:{type:'object'}},'application/octet-stream':{schema:{type:'string',format:'binary'}}}}}:{}),
   responses:{200:{description:'The app\'s own reply.'},422:error,401:error,403:error,404:error,409:error,423:error}});
