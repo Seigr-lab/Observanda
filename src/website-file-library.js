@@ -18,11 +18,12 @@ function shown(node){for(let parent=node;parent;parent=parent.parentNode)if(conc
 // its source record, attachments or a research catalogue to build a preview.
 // The record's title, its type, date and status line and its tags are shown
 // apart; the excerpt is the record's own writing.
-const labelling=new Set(['title','metadata','tags']);
+const labelling=new Set(['title','metadata','tags','relations']);
 function excerpt(root,title){
  const parts=[];let length=0;
  function visit(node){
-  if(length>=240||concealed(node)||labelling.has(attr(node,'data-observanda-part')))return;
+  // A record's labels and its links to other records are not its own text.
+  if(length>=240||concealed(node)||labelling.has(attr(node,'data-observanda-part'))||/(^|\s)record-related(\s|$)/.test(attr(node,'class')??''))return;
   if(node.nodeName==='#text'){const part=node.value.slice(0,1000).replace(/\s+/gu,' ').trim();if(part&&part!==title){parts.push(part);length+=part.length+1;}return;}
   for(const child of node.childNodes??[]){visit(child);if(length>=240)break;}
  }

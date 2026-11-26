@@ -93,6 +93,8 @@ test('a record excerpt is the record\'s own writing, not its title, type, date, 
  const provenance={workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()},sourceId=websiteSourceId({...provenance,target:'website'});
  // The parts of a converted record copy, as the publication renderer writes them.
  const html='<section data-observanda-part="title"><h2>Senary</h2></section><article><p data-observanda-part="metadata"><span>Concept / definition</span> <span>Date unknown</span> <span>Completed</span></p>'+
+  '<section class="record-related"><h2>Runs and takes</h2><ol><li><a href="#run">Senary trial — 20260930</a> · completed</li></ol></section>'+
+  '<section class="record-related" data-observanda-part="relations"><h3>Related research</h3><ul><li>Part of: Number systems</li></ul></section>'+
   '<ul class="tags" data-observanda-part="tags"><li>concept</li></ul><div data-observanda-part="body"><p>Base six is the default numerical notation.</p></div></article>';
  await store.putSource({sourceId,provenance,target:'website',visible:true,title:'Senary',html},{token:await store.beginSourceUpdate({sourceId,target:'website'})});
  assert.equal((await store.searchLibrary({})).items[0].preview,'Base six is the default numerical notation.');
