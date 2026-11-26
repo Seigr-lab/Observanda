@@ -4,7 +4,7 @@ import {parse,parseFragment,serialize} from 'parse5';
 import {AppError} from './errors.js';
 import {escapeWebsiteText as esc} from './website-file-html.js';
 import {attr,descendants} from './website-migration-views.js';
-import {compileWebsiteFeedTemplate,feedContentAtPage} from './website-feed-template.js';
+import {compileWebsiteFeedTemplate,feedContentAtPage,feedTitleLink} from './website-feed-template.js';
 import {readFeedSource,feedTemplateMetadata} from './website-feed-source.js';
 import {websiteHTMLByteLimit} from './website-file-policy.js';
 import {retainedArticleCSS} from './website-entry-styles.js';
@@ -88,7 +88,7 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
   const instance=feed.id+'-'+member.id;
   const html=withContent?shared?.html??await store.readText(source.html,{signal}):'';
   if(withContent&&shared)shared.html=html;
-  let markup=custom?custom.render({row,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(row.title)+'</h3>'+cardDetails(feed,row);
+  let markup=custom?custom.render({row,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+feedTitleLink(row,esc(row.title))+'</h3>'+cardDetails(feed,row);
   if(Buffer.byteLength(markup)>maxPageBytes)throw new AppError('WEBSITE_FEED_CAPACITY');
   let used=new Map(),style=null,styleKey='';
   if(withContent){

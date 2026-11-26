@@ -54,3 +54,12 @@ test('repetition stops at the caller’s byte budget and includes multibyte text
  assert.equal(Buffer.byteLength(design.render({...entry,maxBytes:size})),size);
  assert.throws(()=>design.render({...entry,maxBytes:size-1}),{code:'WEBSITE_FEED_CAPACITY'});
 });
+test('an item title leads to its record\'s page unless the layout already links it',()=>{
+ const linked={...row,workspaceId:'11111111-1111-4111-8111-111111111111',recordId:'22222222-2222-4222-8222-222222222222'},marker='#observanda-record-'+linked.workspaceId+'_'+linked.recordId;
+ const plain=compileWebsiteFeedTemplate('<article><h3 data-feed-field="title"></h3></article>').render({row:linked,page:'index.html',instance:'item-1'});
+ assert.equal(attr([...descendants(parseFragment(plain))].find(node=>node.tagName==='a'),'href'),marker);
+ const own=compileWebsiteFeedTemplate('<article><a href="#top"><h3 data-feed-field="title"></h3></a></article>').render({row:linked,page:'index.html',instance:'item-2'});
+ assert.equal([...descendants(parseFragment(own))].filter(node=>node.tagName==='a').length,1);
+ // A list row without a record keeps its title as text.
+ assert.doesNotMatch(compileWebsiteFeedTemplate('<h3 data-feed-field="title"></h3>').render({row,page:'index.html',instance:'item-3'}),/<a /);
+});

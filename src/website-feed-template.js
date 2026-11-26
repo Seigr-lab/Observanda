@@ -4,6 +4,7 @@ import {parseFragment,serialize,serializeOuter} from 'parse5';
 import {AppError} from './errors.js';
 import {validateWebsiteHTML,websiteHTMLByteLimit} from './website-file-policy.js';
 import {escapeWebsiteText} from './website-file-html.js';
+import {recordLinkHref} from './website-record-links.js';
 import {attr,descendants} from './website-migration-views.js';
 import {feedFields} from './web/website-feed-fields.js';
 import {mapImageCandidates} from './web/website-image-candidates.js';
@@ -81,9 +82,9 @@ export function compileWebsiteFeedTemplate(itemHTML){
  if(Buffer.byteLength(itemHTML)>256*1024)throw new AppError('LIMIT');
  const marker='obfeed'+randomUUID().replaceAll('-',''),tokens=[],bound=new Set();
  function token(value){tokens.push(value);return marker+(tokens.length-1)+'x';}
- const root=parseFragment(itemHTML,{onParseError:invalid}),pending=[{node:root,depth:0}];
+ const root=parseFragment(itemHTML,{onParseError:invalid}),pending=[{node:root,depth:0,linked:false}];
  while(pending.length){
-  const {node,depth}=pending.pop();if(depth>128)throw new AppError('LIMIT');
+  const {node,depth,linked}=pending.pop();if(depth>128)throw new AppError('LIMIT');
   if(node.tagName){
    if(!layoutElements.has(node.tagName))invalid();
    for(const a of node.attrs){
@@ -96,10 +97,10 @@ export function compileWebsiteFeedTemplate(itemHTML){
     if(!Object.hasOwn(feedFields,slot)||node.childNodes.some(child=>child.nodeName!=='#text'||child.value.trim())||
        ['br','hr'].includes(node.tagName)||richField(slot)&&!flowContainers.has(node.tagName)||
        ['ol','ul'].includes(node.tagName)&&slot!=='tags')invalid();
-    bound.add(slot);node.childNodes=[textNode(token({field:slot,list:node.tagName==='ul'||node.tagName==='ol'}))];continue;
+    bound.add(slot);node.childNodes=[textNode(token({field:slot,list:node.tagName==='ul'||node.tagName==='ol',linked:linked||node.tagName==='a'}))];continue;
    }
   }
-  for(const child of node.childNodes??[])pending.push({node:child,depth:depth+1});
+  for(const child of node.childNodes??[])pending.push({node:child,depth:depth+1,linked:linked||node.tagName==='a'});
  }
  if(!bound.size)invalid();
  const scopeToken=token({prefix:true});namespaceFragment(root,scopeToken);
@@ -136,6 +137,8 @@ export function compileWebsiteFeedTemplate(itemHTML){
    }
    if(part.field==='tags')return (row.tags??[]).map(tag=>part.list?'<li>'+escapeWebsiteText(tag)+'</li>':'<span class="website-feed-tag">'+escapeWebsiteText(tag)+'</span>').join(part.list?'':' ');
    const value=part.field==='title'?row.title:part.field==='date'?row.displayDate:row.recordType;
+   // A title leads to the record's own page on the website, unless the layout already links it.
+   if(part.field==='title'&&!part.linked)return feedTitleLink(row,escapeWebsiteText(value??''));
    return escapeWebsiteText(value??'');
   }
   return program.map(part=>{
@@ -145,3 +148,7 @@ export function compileWebsiteFeedTemplate(itemHTML){
   }).join('');
  }};
 }
+// The record's title as a link to the page where this website places the record.
+// The link is resolved when the website is previewed or published; a record the
+// website does not place keeps its title without a link.
+export function feedTitleLink(row,text){return row?.workspaceId&&row?.recordId&&text?'<a href="'+recordLinkHref(row.workspaceId,row.recordId)+'">'+text+'</a>':text;}
