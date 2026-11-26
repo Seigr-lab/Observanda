@@ -1,6 +1,7 @@
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
+import {storedLinkedRuns,websiteLinkedRuns} from './publication-conversion.js';
 
 // A website made in the website editor keeps the copy of each lab book record
 // it places. When the author saves the record again, the website keeps showing
@@ -22,8 +23,10 @@ async function placedSources(store,siteId,expectedRevision,selected=null){
   return groups;
  });
 }
-// Placed records the lab book has changed since the website took its copy. A
-// record that moved to another lab book is updated by that move, not here.
+// Placed records the lab book has changed since the website took its copy, and
+// records whose shared runs changed since then (a copy lists its runs, which
+// link to it, so the record itself is not saved when a run is). A record that
+// moved to another lab book is updated by that move, not here.
 async function changedRecords(reader,groups,signal,visit){
  for(const [workspaceId,rows] of groups){
   signal?.throwIfAborted();
@@ -31,7 +34,8 @@ async function changedRecords(reader,groups,signal,visit){
    const storage=new Proxy(pinned.storage,{get(target,key){if(key==='catalogue')return consume=>consume(catalogue);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
    for(const row of rows){
     signal?.throwIfAborted();const member=await catalogue.member(snapshot,row.origin.recordId);
-    if(member&&member.notebookId===row.origin.notebookId&&member.revision!==row.origin.recordRevision)await visit(row,storage);
+    if(!member||member.notebookId!==row.origin.notebookId)continue;
+    if(member.revision!==row.origin.recordRevision||storedLinkedRuns(row.origin)!==await websiteLinkedRuns(catalogue,snapshot,member.id,{signal}))await visit(row,storage);
    }
   });
  }
