@@ -76,7 +76,7 @@
 .desk-view-label{display:flex;align-items:center;gap:.4rem;font-size:.85rem}.desk-view-label select{max-width:15rem}
 .desk-modules{max-width:none;margin-bottom:2rem}.desk-modules h2{margin:0}.desk-modules>p{color:var(--ui-muted);line-height:1.6}
 .desk-module{display:flex;align-items:center;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--ui-border);cursor:pointer}.desk-module>span{flex:1}.desk-module strong,.desk-module small{display:block}.desk-module small{color:var(--ui-muted);margin-top:.3rem;line-height:1.5}
-.desk-module input[role=switch]{appearance:none;position:relative;width:42px;height:24px;flex:none;background:var(--ui-border);border-radius:20px;cursor:pointer}.desk-module input[role=switch]::before{content:'';display:block;position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:var(--ui-surface)}.desk-module input[role=switch]:checked{background:var(--ui-accent)}.desk-module input[role=switch]:checked::before{left:21px}
+
 .preferences-mobile{display:none}
 @media(max-width:760px){.preferences-tabs{display:none}.preferences-mobile{display:block;margin-bottom:1rem}.preferences-heading h1{margin-bottom:1rem}.desk-library-items{grid-template-columns:1fr}.desk-library>header>span{display:none}}
 .desk-toolbar .desk-add-cards{background:var(--ui-accent);color:var(--ui-on-accent,var(--ui-on-accent));border-color:var(--ui-accent);font-weight:600}

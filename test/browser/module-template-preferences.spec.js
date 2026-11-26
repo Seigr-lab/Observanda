@@ -39,6 +39,9 @@ test('module and template switches save independently, retain failed edits and k
   await preferences(page,'Templates');await expect(page).toHaveURL(/#\/preferences\/templates$/);
   const templates=main.getByRole('group',{name:'Lab-book templates',exact:true}),research=templates.getByRole('switch',{name:'Enable Research & development',exact:true});
   await expect(research).toBeChecked();await expect(main.getByRole('switch',{name:'Enable Inventory',exact:true})).toHaveCount(0);
+  // A switch keeps its full track with the knob inside it, whatever stylesheet a view's checkboxes use.
+  const track=await research.boundingBox();expect([track.width,track.height]).toEqual([42,24]);
+  const knob=await research.evaluate(element=>{const style=getComputedStyle(element,'::before');return [parseFloat(style.left),parseFloat(style.width)];});expect(knob[0]+knob[1]).toBeLessThanOrEqual(42);
   const templateLabels=await templates.locator('.desk-module strong').allTextContents();expect(templateLabels).toEqual([...templateLabels].sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'})));
   await research.uncheck();await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).not.toContain('laboratory-research-development');
   expect((await f.workspace.read()).book).toEqual(before.book);
