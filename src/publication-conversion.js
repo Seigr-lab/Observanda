@@ -142,6 +142,11 @@ const runsDigest=rows=>digest(serialize(rows.map(row=>row.id+'@'+row.revision).s
 // stores it as provenance.linkedRuns; a copy without one listed no runs.
 export async function websiteLinkedRuns(store,snapshot,recordId,{signal}={}){return runsDigest((await sharedRuns(store,snapshot,recordId,{signal})).map(run=>run.row));}
 export const storedLinkedRuns=provenance=>typeof provenance?.linkedRuns==='string'?provenance.linkedRuns:runsDigest([]);
+// The version of how a website copy is made. A copy made by an earlier version
+// is offered for update like a changed record (version 2: its runs, and an
+// excerpt from the record's own text).
+export const WEBSITE_COPY_VERSION=2;
+export const currentWebsiteCopy=provenance=>(provenance?.copyVersion??1)===WEBSITE_COPY_VERSION;
 async function linkedRecords(store,snapshot,record,target){
  if(target!=='website')return {linked:[]};
  const ids=new Set(),add=value=>{if(value?.kind==='record'&&value.workspaceId===snapshot.metadata.id&&value.id!==record.id&&ids.size<LINKED_RECORDS)ids.add(value.id);};
@@ -221,7 +226,7 @@ export class PublicationConversion{
    return {metadata:snapshot.metadata,record,...await linkedRecords(store,snapshot,record,target)};
   });
   const output=await convertPublicationRecord(storage,metadata,record,{target,linked});if(!output.visible)throw new AppError('RECORD_CHANGED');
-  return {sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null,...(target==='website'?{feedCompositionVersion:1,linkedRuns}:{permissionSignature:state.signature})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output};
+  return {sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null,...(target==='website'?{feedCompositionVersion:1,linkedRuns,copyVersion:WEBSITE_COPY_VERSION}:{permissionSignature:state.signature})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output};
  }
  async capture(storage,state,token){
   const {sourceId,provenance}=state,target=provenance.target;
@@ -255,8 +260,8 @@ export class PublicationConversion{
   });
   const liveOutput=refreshLive&&target==='website'?await this.composition(storage,state):undefined;
   // Only the tags of the kept copy change, so it still lists the runs it listed.
-  const kept=target==='website'?(await this.files.sourceStatus(sourceId)).pending?.previous?.provenance?.linkedRuns:undefined;
-  return this.files.updateSourceTags(sourceId,{token,tags,liveOutput,provenance:{...provenance,revision,recordRevision:revision,snapshotId:state.snapshotId,...(typeof kept==='string'?{linkedRuns:kept}:{})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined});
+  const previous=target==='website'?(await this.files.sourceStatus(sourceId)).pending?.previous?.provenance:undefined,kept=previous?.linkedRuns;
+  return this.files.updateSourceTags(sourceId,{token,tags,liveOutput,provenance:{...provenance,revision,recordRevision:revision,snapshotId:state.snapshotId,...(typeof kept==='string'?{linkedRuns:kept}:{}),...(previous?.copyVersion?{copyVersion:previous.copyVersion}:{})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined});
  }
  async reconcileFeed(store,row,metadata,snapshotId,storage,source,context,signal,{repairPermissions=false}={}){
   const sourceId=source.id;
@@ -268,7 +273,7 @@ export class PublicationConversion{
   repairPermissions||=Boolean(observed.pending&&!observed.pending.liveOnly);
   const snapshot=await store.snapshot(snapshotId);
   // An unchanged record is still recomposed when the shared runs it lists changed.
-  if(!repairPermissions&&!observed.pending&&observed.live.visible&&observed.live.provenance.feedCompositionVersion===1&&observed.live.provenance.recordRevision===row.revision&&storedLinkedRuns(observed.live.provenance)===await websiteLinkedRuns(store,snapshot,row.id,{signal}))return source;
+  if(!repairPermissions&&!observed.pending&&observed.live.visible&&observed.live.provenance.feedCompositionVersion===1&&observed.live.provenance.recordRevision===row.revision&&currentWebsiteCopy(observed.live.provenance)&&storedLinkedRuns(observed.live.provenance)===await websiteLinkedRuns(store,snapshot,row.id,{signal}))return source;
   const captured=observed.live.provenance?.recordRevision;
   if(captured&&captured!==row.revision){
    const index=store.historyIndex(row.id),head=await index.head(),old=await index.lookup(head,'version',captured,{optional:true}),now=await index.lookup(head,'version',row.revision);
@@ -282,7 +287,7 @@ export class PublicationConversion{
   const record=await withRecordDocument(store,row.id,row.revision,doc=>permittedOriginal(doc,'website'));
   const {linked,linkedRuns}=await linkedRecords(store,snapshot,record,'website');
   const output=await convertPublicationRecord(storage,metadata,record,{signal,target:'website',linked});if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-  const composition={title:record.title,provenance:{...source.provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1,linkedRuns},pickerContext:context,...output};
+  const composition={title:record.title,provenance:{...source.provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1,linkedRuns,copyVersion:WEBSITE_COPY_VERSION},pickerContext:context,...output};
   if(repairPermissions){
    await this.files.putSource({sourceId,target:'website',...composition,signal},{token});
    return this.files.scope(()=>this.files.source(sourceId),{signal});
@@ -415,7 +420,7 @@ export class PublicationConversion{
      await this.files.scope(()=>this.files.batchFences(async()=>{
       for(const {sourceId,token,provenance,row,metadata,record,output,linkedRuns} of group){
        signal?.throwIfAborted();
-       const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1,linkedRuns},pickerContext:libraryContext(metadata,provenance),...output,signal},{token});
+       const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1,linkedRuns,copyVersion:WEBSITE_COPY_VERSION},pickerContext:libraryContext(metadata,provenance),...output,signal},{token});
        pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
        await onSource?.();
       }

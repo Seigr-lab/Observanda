@@ -31,6 +31,12 @@ test('an experiment placed on a website lists its shared runs and is flagged whe
  assert.match(first.html,/Runs and takes/);
  assert.deepEqual(listed(first.html),[runs[0].title,runs[1].title]);
 
+ // A copy made by an earlier version of website copies is offered for update like a changed record.
+ const current=await store.scope(()=>store.source(sourceId));assert.equal(current.provenance.copyVersion,2);
+ const {copyVersion,...earlier}=current.provenance,copyHTML=await store.scope(()=>store.readText(current.html));
+ await store.putSource({sourceId,provenance:earlier,target:'website',visible:true,title:current.title,html:copyHTML},{token:await store.beginSourceUpdate({sourceId,target:'website',provenance:earlier})});
+ const olderSite=await store.siteVersion(siteId);
+
  app=await testServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const cookie=session.headers.get('x-observanda-session').split(';')[0],headers={Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json'};
@@ -38,17 +44,21 @@ test('an experiment placed on a website lists its shared runs and is flagged whe
  const post=(route,data)=>fetch(app.origin+route,{method:'POST',headers:{...headers,'X-Observanda-Workspace':context},body:JSON.stringify(data)});
  const check=async revision=>{const response=await post('/api/website-record-updates/check',{siteId,expectedRevision:revision}),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
 
+ const outdated=await check(olderSite);assert.deepEqual(outdated.items.map(item=>item.sourceId),[sourceId]);
+ const renewal=await post('/api/website-record-updates/apply',{siteId,expectedRevision:olderSite,sourceIds:[sourceId]}),renewed=await renewal.json();
+ assert.equal(renewal.status,200,JSON.stringify(renewed));assert.equal((await store.scope(()=>store.source(sourceId))).provenance.copyVersion,2);
  // Unchanged runs: nothing to update.
- assert.equal((await check(placed.site.revision)).total,0);
+ assert.equal((await check(renewed.revision)).total,0);
 
  // Sharing another run changes what the copy should list, though the experiment itself was not saved.
  await share(runs[2].id);
  assert.deepEqual(listed((await store.open(siteId)).html),[runs[0].title,runs[1].title]);
- const changed=await check(placed.site.revision);
+ const changed=await check(renewed.revision);
  assert.equal(changed.total,1);assert.deepEqual(changed.items.map(item=>({sourceId:item.sourceId,recordId:item.recordId})),[{sourceId,recordId:parent.id}]);
 
- const applied=await post('/api/website-record-updates/apply',{siteId,expectedRevision:placed.site.revision,sourceIds:[sourceId]}),result=await applied.json();
+ const applied=await post('/api/website-record-updates/apply',{siteId,expectedRevision:renewed.revision,sourceIds:[sourceId]}),result=await applied.json();
  assert.equal(applied.status,200,JSON.stringify(result));assert.equal(result.updated,1);
  assert.deepEqual(listed((await store.open(siteId)).html),runs.map(run=>run.title));
  assert.equal((await check(result.revision)).total,0);
+
 });
