@@ -2,6 +2,7 @@ import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {storedLinkedRuns,websiteLinkedRuns,currentWebsiteCopy} from './publication-conversion.js';
+import {withDeferredFeedRefresh} from './website-dynamic-feeds.js';
 
 // A website made in the website editor keeps the copy of each lab book record
 // it places. When the author saves the record again, the website keeps showing
@@ -58,9 +59,10 @@ export async function refreshWebsiteRecords(store,conversion,siteId,{expectedRev
  if(groups.size){
   const reader=await sourceReader({signal});
   try{
-   await changedRecords(reader,groups,signal,async(row,storage)=>{
+   // The record lists containing these records are refreshed once, after all of them.
+   await withDeferredFeedRefresh(store,()=>changedRecords(reader,groups,signal,async(row,storage)=>{
     await conversion.refreshRecord(storage,{workspaceId:row.origin.workspaceId,notebookId:row.origin.notebookId,recordId:row.origin.recordId});updated++;
-   });
+   }),{signal});
   }finally{await reader.close();}
  }
  // The websites placing these records were rewritten with the new copies.

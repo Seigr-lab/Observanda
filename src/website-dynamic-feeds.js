@@ -314,4 +314,31 @@ export async function refreshFeedBatch(store,sources,{signal}={}){
   if(changed)await store.commit(manifest,{signal});
  }
 }
-export function refreshFeedSubscriptions(store,source,options){return refreshFeedBatch(store,[source],options);}
+// A bulk update gathers the copies it changes and refreshes their lists once at
+// its end, instead of rewriting every list once per copy. Copies may be made
+// by the conversion's own producer, so the batch belongs to the workspace.
+const deferred=new Map();
+export function refreshFeedSubscriptions(store,source,options){
+ const batch=deferred.get(store.workspace.root);
+ if(batch){if(source)batch.sources.set(source.id,source);return Promise.resolve();}
+ return refreshFeedBatch(store,[source],options);
+}
+// Work that must follow the list refresh, such as removing a previous copy's
+// files that lists still showed, waits for a deferred refresh too.
+export function afterFeedRefresh(store,task){
+ const batch=deferred.get(store.workspace.root);
+ if(batch){batch.after.push(task);return Promise.resolve();}
+ return task();
+}
+export async function withDeferredFeedRefresh(store,operation,{signal}={}){
+ const root=store.workspace.root;if(deferred.has(root))return operation();
+ const batch={sources:new Map(),after:[]};deferred.set(root,batch);
+ try{return await operation();}
+ finally{
+  if(deferred.get(root)===batch)deferred.delete(root);
+  if(batch.sources.size||batch.after.length)await store.scope(async()=>{
+   if(batch.sources.size)await refreshFeedBatch(store,[...batch.sources.values()],{signal});
+   for(const task of batch.after)await task();
+  },{write:true,signal});
+ }
+}

@@ -241,9 +241,9 @@ export class PublicationConversion{
    const {source:base,pending}=await this.files.sourceStatus(sourceId);
    if(pending?.token!==token||!base?.visible||!pending.previous?.visible||pending.previous.revision!==base.revision)throw new AppError('CONFLICT');
    const {live,retired,retained}=output?await writeLiveFeedSource(this.files,base,{...output,context:output.pickerContext,signal}):await removeLiveFeedSource(this.files,base,{signal});
-   const {refreshFeedSubscriptions}=await import('./website-dynamic-feeds.js');
+   const {refreshFeedSubscriptions,afterFeedRefresh}=await import('./website-dynamic-feeds.js');
    await refreshFeedSubscriptions(this.files,live,{signal});
-   await releasePreviousFeedSource(this.files,retired,retained,signal);
+   await afterFeedRefresh(this.files,()=>releasePreviousFeedSource(this.files,retired,retained,signal));
    await this.files.finishSourceUpdate(sourceId,'website',signal);
   },{write:true,signal});
  }

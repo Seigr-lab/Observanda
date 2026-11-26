@@ -45,7 +45,7 @@ import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entr
 import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
 import {localizedRecordPage} from './website-record-language.js';
 import {fileHasEditorMenu} from './website-menu-styles.js';
-import {clearFeedSubscription,reflowFeedShell,refreshFeedSubscriptions,retainWebsiteFeedAssets,validateFeedFiles,websiteFeedPages,writeFeedSubscription} from './website-dynamic-feeds.js';
+import {afterFeedRefresh,clearFeedSubscription,reflowFeedShell,refreshFeedSubscriptions,retainWebsiteFeedAssets,validateFeedFiles,websiteFeedPages,writeFeedSubscription} from './website-dynamic-feeds.js';
 import {releasePreviousFeedSource,synchronizeFeedSource} from './website-feed-source.js';
 import {syncFeedShells} from './website-feed-shell.js';
 import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
@@ -914,8 +914,11 @@ export class WebsiteFileStore{
    await this.commit({...manifest,pages:nextPages,files:await this.siteAssets(nextFiles,sources,nextPages,{previous:manifest}),sources},{signal});
   }after=sites.next;}while(after!==null);
   await refreshFeedSubscriptions(this,live,{signal});
-  await releasePreviousFeedSource(this,retired,retained,signal);
-  if(prior){for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
+  // The previous copy's files go once the lists that showed it are refreshed.
+  await afterFeedRefresh(this,async()=>{
+   await releasePreviousFeedSource(this,retired,retained,signal);
+   if(prior){for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
+  });
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:source.title,revision:source.revision,visible,target};
  }
  insertSource(id,{sourceId,sourceRevision,...options}={}){return this.insertSources(id,{...options,sources:[{sourceId,sourceRevision}]},{requirePins:false});}
