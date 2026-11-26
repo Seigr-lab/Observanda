@@ -13,7 +13,7 @@ import {refuseNewerFormat} from '../stored-format.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {AccessTrustStore} from './access-trust.js';
 const generate=promisify(generateKeyPair);
-const creatingIdentities=new Map();
+const creatingIdentities=new Map(),DEVICE_KEY_LIFETIME=5*60*1000;
 export const deviceFingerprint=publicKey=>createHash('sha256').update(Buffer.from(publicKey,'base64')).digest('hex');
 export function validatePublicDevice(value){
  try{
@@ -75,14 +75,27 @@ export class DeviceStore{
    }finally{privateBytes.fill(0);}
   });}catch(error){if(error.code!=='LOCKED'||Date.now()>=deadline)throw error;await delay(50);}
  }
+ // Opening many lab books unlocks each with this device. The operating system
+ // decrypts the key once (a helper process on Windows), and the key is kept in
+ // memory for a short time, only while the device file is unchanged. A manual
+ // lock forgets it at once.
  async privateKey(){
   const current=await this.read();if(!current)throw new AppError('DEVICE_UNKNOWN');
+  let held=this.unprotected;
+  if(!held||held.protectedKey!==current.protectedKey||held.expires<=Date.now()){
+   held={protectedKey:current.protectedKey,expires:Infinity,key:this.unprotect(current)};this.unprotected=held;
+   held.key.then(()=>{held.expires=Date.now()+DEVICE_KEY_LIFETIME;},()=>{if(this.unprotected===held)this.unprotected=null;});
+  }
+  return {identity:current.public,key:await held.key};
+ }
+ async unprotect(current){
   const bytes=await this.protector.unprotect(Buffer.from(current.protectedKey,'base64'));
   try{
    const key=createPrivateKey({key:bytes,format:'der',type:'pkcs8'});
    if(createPublicKey(key).export({format:'der',type:'spki'}).toString('base64')!==current.public.publicKey)throw new AppError('DEVICE_INVALID');
-   return {identity:current.public,key};
+   return key;
   }finally{bytes.fill(0);}
  }
+ forgetPrivateKey(){this.unprotected=null;}
 }
 export const defaultDeviceStore=new DeviceStore();

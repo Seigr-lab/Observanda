@@ -94,7 +94,7 @@ test('server creates encrypted workspaces by default, auto-unlocks only authoriz
  // A device auto-unlock already in flight must not undo a later manual lock.
  let entered,release;
  const enteredPromise=new Promise(r=>entered=r),released=new Promise(r=>release=r),original=a.protector.unprotect;
- a.protector.unprotect=async bytes=>{entered();await released;return original(bytes);};
+ a.protector.unprotect=async bytes=>{entered();await released;return original(bytes);};a.forgetPrivateKey();
  const pending=client(app);await enteredPromise;
  assert.equal((await one.request('/api/access/lock',{})).status,200);
  release();const late=await pending;
