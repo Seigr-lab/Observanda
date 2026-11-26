@@ -69,6 +69,7 @@ function includeAsset(files,source,asset,draft){
  const other=files.get(asset.name);if(other&&other.sha256!==asset.sha256)throw new AppError('CONFLICT');
  if(!other||other.draft||!draft)files.set(asset.name,{...asset,sourceId:source.id,...(draft?{draft:true}:{})});
 }
+const sameUse=(a,b)=>!a&&!b||!!a&&!!b&&a.all===b.all&&!!a.sheet===!!b.sheet&&a.names.size===b.names.size&&[...a.names].every(name=>b.names.has(name));
 const siteOwner=(id,draft)=>ROOT+'/sites/'+siteName(id)+(draft?'/drafts':'');
 function assetSources(pages){
  const uses=new Map();
@@ -319,11 +320,19 @@ export class WebsiteFileStore{
   const manifest=this.validateManifest(await this.control(ROOT+'/sites/'+siteName(id)+'/revisions/'+revision+'.json'),id);
   if(manifest.revision!==revision)throw new AppError('FORMAT');return manifest;
  }
- async siteAssets(local,placements,pages){
+ // previous: the site's state this one replaces. A placed copy at the same
+ // revision, used by pages in the same way, keeps the files that state already
+ // checked, so a synchronization does not read every copy the site places.
+ async siteAssets(local,placements,pages,{previous}={}){
   const files=new Map(local.filter(file=>!file.sourceId).map(file=>[file.name,file]));
   const publicIds=assetSources(pages.filter(page=>!page.draft)),allIds=assetSources(pages);
+  const before=previous&&{placed:new Map(previous.sources.map(row=>[row.id,row.revision])),all:assetSources(previous.pages),published:assetSources(previous.pages.filter(page=>!page.draft)),files:Map.groupBy(previous.files.filter(file=>file.sourceId),file=>file.sourceId)};
   for(const placement of placements){
    if(!allIds.has(placement.id))continue;
+   if(before&&before.placed.get(placement.id)===placement.revision&&sameUse(before.all.get(placement.id),allIds.get(placement.id))&&sameUse(before.published.get(placement.id),publicIds.get(placement.id))){
+    for(const file of before.files.get(placement.id)??[]){const other=files.get(file.name);if(other&&other.sha256!==file.sha256)throw new AppError('CONFLICT');if(!other||other.draft||!file.draft)files.set(file.name,file);}
+    continue;
+   }
    const source=await this.source(placement.id,{pending:true});
    if(!source||source.revision!==placement.revision||source.target!=='website')throw new AppError('CONFLICT');
    const all=allIds.get(source.id),published=publicIds.get(source.id);
@@ -902,7 +911,7 @@ export class WebsiteFileStore{
     else if(descriptor.sourceId!==sourceId)nextFiles.push(descriptor);
    }
    const nextPages=[...pages.values()],sources=[...new Map(nextPages.flatMap(page=>page.placements.map(({id,revision})=>[id,{id,revision}]))).values()];
-   await this.commit({...manifest,pages:nextPages,files:await this.siteAssets(nextFiles,sources,nextPages),sources},{signal});
+   await this.commit({...manifest,pages:nextPages,files:await this.siteAssets(nextFiles,sources,nextPages,{previous:manifest}),sources},{signal});
   }after=sites.next;}while(after!==null);
   await refreshFeedSubscriptions(this,live,{signal});
   await releasePreviousFeedSource(this,retired,retained,signal);
