@@ -48,6 +48,13 @@ test('module and template switches save independently, retain failed edits and k
   await research.check();await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('laboratory-research-development');
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(main.getByLabel('Record type name',{exact:true})).toHaveValue('Custom research question');
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();
+  // A template no lab book uses yet shows its own record types, all of which a lab book starts with.
+  const beekeeping=templates.getByRole('switch',{name:'Enable Beekeeping',exact:true});await beekeeping.check();
+  await main.locator('[data-module-settings-id="laboratory-beekeeping"]').click();
+  const beeSettings=main.locator('[data-module-settings-slot="laboratory-beekeeping"]');
+  await expect(beeSettings).toContainText('No lab book uses this template yet.',{timeout:30000});
+  await expect(beeSettings.locator('.profile-record-types strong')).toContainText(['Apiary register','Hive register','Hive inspection']);
+  await main.locator('[data-module-settings-id="laboratory-beekeeping"]').click();await beekeeping.uncheck();
   await expect(main.locator('.desk-save-message')).toBeHidden();
   expect((await sessionRequest(page,'get',app.origin+'/api/activity').then(r=>r.json())).operations.filter(item=>item.kind==='/api/dashboard')).toEqual([]);
   await writer.run('ROLLBACK');await writer.close();writer=null;

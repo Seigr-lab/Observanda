@@ -52,7 +52,9 @@ export async function configurationTypeSettings(services,profile){
  async function discard(){if(pending)await pending;await editor.discard();error=null;draw();changed?.();}
  function view(){
   const found='<p role="status" data-configuration-labs-status>'+esc(finding?text('findingBooks'):total?text('foundBooks',{shown:labs.length,total}):'')+'</p>'+(cursor&&!finding?'<button type="button" class="button subtle" data-action="module-settings-command" data-command="more-books">'+esc(text('moreBooks'))+'</button>':'');
-  if(!notebook)return finding?found:'<p>'+esc(text('noProfileBooks'))+'</p>';
+  // The template's own record types, all turned on in every lab book that starts using it.
+  const types='<ul class="profile-record-types">'+(profile.sections??[]).map(section=>'<li><strong>'+esc(section.label)+'</strong>'+(section.description?'<small>'+esc(section.description)+'</small>':'')+'</li>').join('')+'</ul>';
+  if(!notebook)return finding?found:'<p>'+esc(text('noProfileBooks'))+'</p><p>'+esc(text('profileTypesOn'))+'</p>'+types;
   return '<div class="lab-type-settings">'+field(esc(text('labBook')),'<select data-configuration-lab '+(pending?'disabled':'')+'>'+labs.map(item=>option(item.key,label(item),notebook.key)).join('')+'</select>')+found+editor.view()+
    '<p role="status" data-type-settings-status>'+esc(statusText())+'</p><div class="inline-actions"><button type="button" class="button" data-action="module-settings-command" data-command="cancel" data-type-settings-button '+(pending||!isDirty()?'disabled':'')+'>'+esc(text('cancel'))+'</button><button type="button" class="button primary" data-action="module-settings-command" data-command="save" data-type-settings-button '+(pending||!isDirty()?'disabled':'')+'>'+esc(text('save'))+'</button></div></div>';
  }

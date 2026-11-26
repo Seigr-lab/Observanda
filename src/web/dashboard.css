@@ -129,7 +129,7 @@ html[data-context-navigation=drawer] .desk-inspector{visibility:hidden;pointer-e
 .module-preference-children{margin:0 0 1rem 1.25rem;padding:0 1.25rem 1rem;border-left:2px solid var(--ui-border);background:color-mix(in srgb,var(--ui-surface) 95%,var(--ui-accent));border-radius:0 0 10px 10px}
 .module-children-hint{font-size:.85rem;color:var(--ui-muted);padding-top:1rem;margin:0}
 .module-preference-children .desk-module{padding:1rem 0}
-.module-section-preview{font-size:.8rem;line-height:1.6}
+.module-section-preview{font-size:.8rem;line-height:1.6}.profile-record-types{list-style:none;margin:.5rem 0 1rem;padding:0;display:grid;gap:.5rem}.profile-record-types li{padding:.5rem .75rem;border:1px solid var(--ui-border);border-radius:6px;background:var(--ui-surface)}.profile-record-types strong,.profile-record-types small{display:block}.profile-record-types small{color:var(--ui-muted);margin-top:.15rem;line-height:1.5}
 .module-preference-children .module-preference-branch:last-child>.desk-module{border-bottom:0}
 .nav-button.nav-submodule{margin-left:.8rem;width:calc(100% - .8rem);border-left:1px solid var(--ui-border);border-radius:0 5px 5px 0}
 @media(max-width:600px){.module-preference-children{margin-left:.5rem;padding:0 .75rem .75rem}}
