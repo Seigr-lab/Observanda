@@ -44,7 +44,10 @@ test('project cards use current membership and book owners, including deletions 
  const hierarchy=await new ProjectRegistry({root:os.tmpdir()},workspaceId).hierarchy(directory,metadata);
  const dedicated={labBookId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),directory:'Dedicated observations'},removed={labBookId:randomUUID()},moved={labBookId:randomUUID()},local={id:randomUUID(),title:'Local observations',projectId};
  const bookDirectory={books:[dedicated],deleted:[removed],relocated:[moved]};
- t.mock.method(LabBookRegistry.prototype,'read',async()=>({value:bookDirectory}));
+ // Project cards read the indexed book directory: each retained book identity, active or not, masks its inline copy.
+ const bookRows=new Map([...bookDirectory.books.map(entry=>[entry.labBookId,{state:'active',entry}]),...bookDirectory.deleted.map(entry=>[entry.labBookId,{state:'deleted',entry}]),...bookDirectory.relocated.map(entry=>[entry.labBookId,{state:'relocated',entry}])]);
+ const bookView={revision:'b'.repeat(64),count:bookDirectory.books.length,get:async id=>bookRows.get(id)??null,page:async()=>({items:bookDirectory.books.map(entry=>({entry})),total:bookDirectory.books.length,next:null})};
+ t.mock.method(LabBookRegistry.prototype,'inspect',async operation=>operation(bookView));
  const projectMetadata={id:namespaceId,projects:[{id:projectId,title:'Same project name'},{id:foreignId,title:'Unrelated workspace project'},{id:legacyId,title:'Incorrect owner copy'}],notebooks:[...bookDirectory.books,...bookDirectory.deleted,...bookDirectory.relocated].map(book=>({id:book.labBookId,title:'Retained book entry',projectId})).concat(local)};
  const storage=(value,owner={})=>({root:os.tmpdir(),...owner,catalogue:read=>read({head:async()=> 'a'.repeat(64),snapshot:async()=>({metadata:value})})});
  const visit=async(consume,{selection})=>{const selected=projectCollectionScope(hierarchy,{selection});await consume(storage(metadata),{workspaceId,projectId:null},selected);await consume(storage(projectMetadata,{projectId}),{workspaceId:namespaceId,projectId},selected);};
