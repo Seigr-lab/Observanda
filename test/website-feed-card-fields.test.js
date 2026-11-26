@@ -8,6 +8,7 @@ import {Workspace} from '../src/storage.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {saveWebsiteFeed} from '../src/website-dynamic-feeds.js';
+import {priorFeedRows,FEED_MARKUP_VERSION} from '../src/website-feed-render.js';
 import {readableDay} from '../src/website-record-language.js';
 import {contentBuffer} from '../src/file-content.js';
 
@@ -37,4 +38,8 @@ test('a card list shows the date, type and excerpt chosen for it, in the page la
  assert.match(cards.html,new RegExp('<p class="website-feed-card-meta"><span data-feed-field="type" data-observanda-value="observation">Observació</span> <span data-feed-field="date" data-observanda-value="2026-05-02">'+readableDay('2026-05-02','ca')+'</span></p>'));
  assert.match(cards.html,/<p class="website-feed-card-excerpt">[^<]*Brood frames inspected after the spring flow\.[^<]*<\/p>/);
  const feed=(await store.scope(()=>store.raw(site))).feeds.at(-1);assert.deepEqual(feed.cardFields,['date','type','excerpt']);
+ // A list keeps the markup version it was rendered with; one stored by an earlier version renders its items again.
+ assert.equal(feed.markup,FEED_MARKUP_VERSION);
+ const {markup,...earlier}=feed,manifest=await store.scope(()=>store.raw(site));
+ assert.equal(await priorFeedRows(store,manifest,earlier,feed,'',undefined)(feed.members[0]),null);
 });

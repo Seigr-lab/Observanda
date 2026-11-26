@@ -120,8 +120,11 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
 // In particular, a second pending source may already have a newer head while
 // its own site refresh is still outstanding. Its last committed row and assets
 // remain valid in the fenced intermediate revision until its writer finishes.
+// The markup an item renders to. A list rendered with an earlier version renders
+// its items again instead of reusing them (version 2: titles lead to record pages).
+export const FEED_MARKUP_VERSION=2;
 export function priorFeedRows(store,manifest,old,feed,hostHTML,signal){
- if(!old||old.unavailable||feed.template!==old.template||feed.itemHTML!==old.itemHTML||JSON.stringify(feed.cardFields??[])!==JSON.stringify(old.cardFields??[]))return async()=>null;
+ if(!old||old.unavailable||(old.markup??1)!==FEED_MARKUP_VERSION||feed.template!==old.template||feed.itemHTML!==old.itemHTML||JSON.stringify(feed.cardFields??[])!==JSON.stringify(old.cardFields??[]))return async()=>null;
  const revisions=new Map(old.members.map(row=>[row.id,row.revision])),locations=new Map(),cache=new Map();
  for(const group of old.groups)for(const id of group.ids)locations.set(id,group);
  const files=new Map(manifest.files.map(f=>[f.name,f]));

@@ -9,7 +9,7 @@ import {websiteInsertionOffset} from './website-file-html.js';
 import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {normalizeFeedCriteria,enumerateFeedMembers,feedMemberForSource,compareFeedMembers} from './website-feed-query.js';
 import {changeGroups,initialGroups} from './website-feed-groups.js';
-import {feedMarker,digest,maxPageBytes,feedCSS,feedStyle,feedSection,makeFeedRenderer,priorFeedRows,pageName,feedCardFields} from './website-feed-render.js';
+import {feedMarker,digest,maxPageBytes,feedCSS,feedStyle,feedSection,makeFeedRenderer,priorFeedRows,pageName,feedCardFields,FEED_MARKUP_VERSION} from './website-feed-render.js';
 import {continuationShell} from './website-feed-shell.js';
 import {styledPageHTML} from './website-entry-styles.js';
 
@@ -209,7 +209,7 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
    rendered.push({key:group.key,ids:group.ids,stamp,assets});
    operationAdvance(group.ids.length,'feedRender');
   }
-  feedList.push({...feed,groups:rendered,layoutAsset:feedStyle});
+  feedList.push({...feed,groups:rendered,layoutAsset:feedStyle,markup:FEED_MARKUP_VERSION});
  }
  const kept=new Set(rendered.map(g=>g.key));
  for(const g of old?.groups??[])if(g.key!=='host'&&!kept.has(g.key))files.delete(pageName(old,g.key));
