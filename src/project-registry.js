@@ -135,14 +135,14 @@ export class ProjectRegistry{
   if(!validProjectReferenceTarget(target))throw new AppError('INVALID');const moved=await resolveRecordOwnerReference(this,target);if(moved)return moved;
   return this.inspect(async view=>{
    const direct=await view.get(target.workspaceId,{index:'namespace'});this.assertState(direct);
-   if(direct)return projectRenameLocation(this,direct.entry,await view.ancestors(direct.entry.projectId));
+   if(direct)return projectRenameLocation(this,direct.entry,await view.ancestors(direct.entry.projectId,{known:direct}));
    const book=await new LabBookDirectory(this).locate(target.workspaceId);if(book)return book;
    throw new AppError('NOT_FOUND');
   });
  }
  assertState(row){if(!row)return;if(row.state==='deleted')throw new AppError('PROJECT_DELETED');if(row.state==='relocated'){const error=new AppError('PROJECT_MOVED');error.projectId=row.entry.projectId;error.workspaceId=row.entry.workspaceId;throw error;}}
- namespace(namespaceId){if(!researchId(namespaceId))throw new AppError('INVALID');return this.inspect(async view=>{const row=await view.get(namespaceId,{index:'namespace'});this.assertState(row);if(!row)throw new AppError('NOT_FOUND');return projectRenameLocation(this,row.entry,await view.ancestors(row.entry.projectId));});}
- locate(projectId){if(!researchId(projectId))throw new AppError('INVALID');return this.inspect(async view=>{const row=await view.get(projectId);this.assertState(row);if(!row)throw new AppError('NOT_FOUND');return projectRenameLocation(this,row.entry,await view.ancestors(projectId));});}
+ namespace(namespaceId){if(!researchId(namespaceId))throw new AppError('INVALID');return this.inspect(async view=>{const row=await view.get(namespaceId,{index:'namespace'});this.assertState(row);if(!row)throw new AppError('NOT_FOUND');return projectRenameLocation(this,row.entry,await view.ancestors(row.entry.projectId,{known:row}));});}
+ locate(projectId){if(!researchId(projectId))throw new AppError('INVALID');return this.inspect(async view=>{const row=await view.get(projectId);this.assertState(row);if(!row)throw new AppError('NOT_FOUND');return projectRenameLocation(this,row.entry,await view.ancestors(projectId,{known:row}));});}
 }
 
 function insideProjectRoot(root,child){const relative=path.relative(root,child);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);}

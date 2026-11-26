@@ -18,13 +18,13 @@ export class OwnerDirectoryRegistry{
    async *entries({index='active',after=null,prefix=''}={}){for(const row of rows.filter(row=>keys(row)[index]!==undefined).sort((a,b)=>keys(a)[index]<keys(b)[index]?-1:1)){const key=keys(row)[index];if((after===null||key>after)&&key.startsWith(prefix))yield {key,...row};}},
    async page({index='active',after=null,offset=0,limit=50,prefix=''}={}){const all=await Array.fromAsync(view.entries({index,prefix})),eligible=all.filter(row=>after===null||row.key>after),items=eligible.slice(offset,offset+limit);return {items,total:all.length,next:eligible.length>offset+limit?items.at(-1)?.key??null:null};},
   };
-  view.ancestors=async id=>{const legacy=await this.legacyProjects(),result=[],seen=new Set();for(let next=id;next!==null;){if(seen.has(next))throw new AppError('FORMAT');seen.add(next);const row=await view.get(next);if(row&&row.state!=='active')throw new AppError('FORMAT');const entry=row?.entry??legacy.find(value=>value.projectId===next);if(!entry)throw new AppError('NOT_FOUND');result.push(entry);next=entry.parentId;}return result;};return view;
+  view.ancestors=async(id,{known}={})=>{let legacy=null;const result=[],seen=new Set();for(let next=id;next!==null;){if(seen.has(next))throw new AppError('FORMAT');seen.add(next);const row=next===id&&known!==undefined?known:await view.get(next);if(row&&row.state!=='active')throw new AppError('FORMAT');const entry=row?.entry??(legacy??=await this.legacyProjects()).find(value=>value.projectId===next);if(!entry)throw new AppError('NOT_FOUND');result.push(entry);next=entry.parentId;}return result;};return view;
  }
  inspect(operation,{legacy=false}={}){return this.access.read(async current=>{
   let view;if(current.legacy)view=this.legacyView(current.legacy);else{const {directory,value,revision}=current;
    view={nameKey:name=>value.namePolicy==='folded'?name.normalize('NFC').toLowerCase():name,revision,aliases:value.aliases,count:value.roots.active?.count??0,native:true,
     get:(id,options)=>directory.find(value,id,options),page:options=>directory.page(value,options),entries:options=>directory.rows(value,{index:'active',...options}),
-    ancestors:async id=>directory.ancestors(value,id,{legacy:await this.legacyProjects(directory.store)})};
+    ancestors:async(id,{known}={})=>directory.ancestors(value,id,{legacy:()=>this.legacyProjects(directory.store),known})};
   }
   view.legacy=[];if(legacy)for(const entry of await this.legacyProjects(current.directory?.store))if(!await view.get(entry.projectId))view.legacy.push(entry);
   return operation(view);

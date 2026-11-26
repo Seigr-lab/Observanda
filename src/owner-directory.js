@@ -58,10 +58,13 @@ export class NativeOwnerDirectory{
   const items=[];for(;position<end&&items.length<limit;position++){signal?.throwIfAborted();const selected=await this.index.entryAt({root},position),row=await this.row(selected.revision);if(this.keys(head,row)[index]!==selected.id)damaged();items.push({key:selected.id,...this.decoded(row)});}
   return {items,total:end-start,next:position<end?items.at(-1)?.key??null:null};
  }
- async ancestors(head,id,{legacy=[]}={}){
+ // legacy may be a function: projects missing from the directory are then read
+ // only when a parent is not found. known is the row of id already read from head.
+ async ancestors(head,id,{legacy=[],known}={}){
+  let inherited=Array.isArray(legacy)?legacy:null;
   const result=[],seen=new Set();for(let next=id;next!==null;){
-   if(seen.has(next))throw new AppError('FORMAT');seen.add(next);const row=await this.find(head,next);
-   if(row&&row.state!=='active')throw new AppError('FORMAT');const entry=row?.entry??legacy.find(value=>value.projectId===next);
+   if(seen.has(next))throw new AppError('FORMAT');seen.add(next);const row=next===id&&known!==undefined?known:await this.find(head,next);
+   if(row&&row.state!=='active')throw new AppError('FORMAT');const entry=row?.entry??(inherited??=await legacy()).find(value=>value.projectId===next);
    if(!entry)throw new AppError('NOT_FOUND');result.push(entry);next=entry.parentId;
   }return result;
  }
