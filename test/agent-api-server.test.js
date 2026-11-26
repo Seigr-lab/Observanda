@@ -164,3 +164,25 @@ test('agents run the app\'s own commands within their key: lab book data, websit
  // Without a key, the app's commands are not reachable from a program.
  assert.equal((await result(await app('website-files/list',{data:{}}),403)).code,'ORIGIN');
 });
+
+test('agents link a run to its investigation with the app\'s workflow roles',{timeout:600000},async t=>{
+ const f=await agentServerFixture(t),{create}=await keys(f),project=await f.createProject('Bench work'),book=await f.createBook(project.projectId,'Coil tests');
+ const key=await create({kind:'workspace'}),place={projectId:project.projectId,labBookId:book.labBookId};
+ const make=async(type,title)=>result(await f.agent('/api/v1/agent/records/create',{key,data:{...place,record:{type,title}}}));
+ const first=await make('experiment','First coil'),second=await make('experiment','Second coil'),run=await make('run','Coil run 1'),method=await make('protocol','Winding method');
+ const get=async id=>result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:id}}));
+ const link=async(recordId,linkValue,status=200)=>result(await f.agent('/api/v1/agent/records/link',{key,data:{...place,recordId,expectedRevision:(await get(recordId)).revision,link:linkValue}}),status);
+ // A run belongs to one investigation: linking another replaces it.
+ await link(run.id,{recordId:first.id,role:'run-of'});
+ assert.deepEqual((await get(run.id)).links.map(item=>[item.role,item.type,item.recordId]),[['run-of','Run / take of',first.id]]);
+ await link(run.id,{recordId:second.id,role:'run-of',type:'Run of'});
+ assert.deepEqual((await get(run.id)).links.map(item=>[item.role,item.type,item.recordId]),[['run-of','Run of',second.id]]);
+ // Only a run can be a run of something, and never of another run.
+ assert.equal((await link(first.id,{recordId:second.id,role:'run-of'},422)).code,'INVALID');
+ const other=await make('run','Coil run 2');assert.equal((await link(other.id,{recordId:run.id,role:'run-of'},422)).code,'INVALID');
+ // An exact role keeps the target's saved revision; an ordinary link has no role.
+ await link(run.id,{recordId:method.id,role:'uses-method'});await link(run.id,{recordId:first.id});
+ const links=(await get(run.id)).links;assert.deepEqual(links.map(item=>item.role),['run-of','uses-method',null]);
+ const stored=(await result(await f.owner('/api/projects/'+project.projectId+'/lab-books/'+book.labBookId+'/workspace/read/selection',{workspaceId:(await result(await f.owner('/api/projects/'+project.projectId+'/lab-books/'+book.labBookId+'/workspace/read/start',{}))).metadata.id,ids:[run.id]}))).book.entries[0];
+ assert.equal(stored.relations.find(item=>item.role==='uses-method').target.revision,(await get(method.id)).revision);
+});

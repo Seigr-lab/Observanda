@@ -8,6 +8,7 @@ import {AppError} from './errors.js';
 import {recordBrowse} from './web/record-query.js';
 import {RECORD_TYPES,STATUSES} from './web/record-types.js';
 import {RELATION_TYPES} from './web/record-model.js';
+import {WORKFLOW_ROLES,workflowRole} from './web/record-workflow.js';
 import {markdownRichText,richTextForAgents} from './agent-markdown.js';
 import {AGENT_APP_GUIDE} from './agent-app-guide.js';
 
@@ -32,7 +33,7 @@ const recordOutput={type:'object',properties:{
  id,revision:{type:'string',description:'Pass this as expectedRevision when you update the record.'},type:{type:'string'},title:{type:'string'},status:{type:'string'},tags:{type:'array',items:{type:'string'}},
  occurredOn:{type:['string','object']},text:{type:'string',description:'The record text as plain text.'},
  sections:{type:'array',items:{type:'object',properties:{id,title:{type:'string'},text:{type:'string'}}}},
- links:{type:'array',items:{type:'object',properties:{id,type:{type:'string'},label:{type:'string'},recordId:id,sameLabBook:{type:'boolean'}}}},createdAt:{type:'string'},updatedAt:{type:'string'}}};
+ links:{type:'array',items:{type:'object',properties:{id,type:{type:'string'},role:{type:['string','null']},label:{type:'string'},recordId:id,sameLabBook:{type:'boolean'}}}},createdAt:{type:'string'},updatedAt:{type:'string'}}};
 const written={type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}};
 
 export const AGENT_OPERATIONS=Object.freeze([
@@ -56,7 +57,7 @@ export const AGENT_OPERATIONS=Object.freeze([
   output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'}}}},
  {name:'records/link',method:'POST',access:'write',summary:'Link a record to another record, in the same lab book or another lab book of the same project.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','link'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},
-   link:{type:'object',additionalProperties:false,required:['recordId'],properties:{type:{type:'string',minLength:1,maxLength:80,description:'How the records relate, for example: '+RELATION_TYPES.join(', ')+'. Defaults to Related to.'},recordId:{...id,description:'The record to link to.'},labBookId:{...id,description:'Its lab book, when it is not this one. It must be in the same project.'}}}}},
+   link:{type:'object',additionalProperties:false,required:['recordId'],properties:{type:{type:'string',minLength:1,maxLength:80,description:'How the records relate, for example: '+RELATION_TYPES.join(', ')+'. Defaults to Related to, or to the name of its role.'},role:{type:'string',enum:WORKFLOW_ROLES.map(role=>role.id),description:'A workflow role, as in the app: run-of links a run to its investigation (one per run; a new one replaces it), follows-run links a run to the run before it, uses-method and compares point at the current saved revision of the target.'},recordId:{...id,description:'The record to link to.'},labBookId:{...id,description:'Its lab book, when it is not this one. It must be in the same project.'}}}}},
   output:{type:'object',properties:{id,revision:{type:'string'},title:{type:'string'},linkId:id}}},
  {name:'records/unlink',method:'POST',access:'write',summary:'Remove a link from a record.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId','recordId','expectedRevision','linkId'],properties:{...book,recordId:id,expectedRevision:{type:'string',pattern:'^[a-f0-9]{64}$'},linkId:id}},
@@ -141,7 +142,7 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
   const {record,revision}=await read(input.recordId);
   return {id:record.id,revision,type:record.type,title:record.title,status:record.status,tags:record.tags,occurredOn:dateOutput(record.occurredOn),text:richTextForAgents(record.body),
    sections:record.sections.map(section=>({id:section.id,title:section.title,text:richTextForAgents(section.body)})),
-   links:record.relations.filter(link=>link.target.kind==='record').map(link=>({id:link.id,type:link.type,label:link.label,recordId:link.target.id,sameLabBook:link.target.workspaceId===workspaceId})),createdAt:record.createdAt,updatedAt:record.updatedAt};
+   links:record.relations.filter(link=>link.target.kind==='record').map(link=>({id:link.id,type:link.type,role:link.role??null,label:link.label,recordId:link.target.id,sameLabBook:link.target.workspaceId===workspaceId})),createdAt:record.createdAt,updatedAt:record.updatedAt};
  }
  const sections=(values,existing=[])=>values.map(section=>{
   if(section.id&&!existing.some(item=>item.id===section.id))throw new AppError('INVALID',[{field:'sections'}]);
@@ -186,9 +187,15 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
   // The target's lab book must be one this key reaches, in the same project.
   const targetBook=input.link.labBookId??input.labBookId;if(!inScope(key,{projectId:input.projectId,labBookId:targetBook}))forbidden();
   const targetPrefix='/api/projects/'+input.projectId+'/lab-books/'+targetBook,targetWorkspace=targetBook===input.labBookId?workspaceId:(await run(targetPrefix+'/workspace/read/start',{})).metadata.id;
-  const target=(await run(targetPrefix+'/workspace/read/selection',{workspaceId:targetWorkspace,ids:[input.link.recordId]})).book?.entries?.find(entry=>entry.id===input.link.recordId);
+  const selected=await run(targetPrefix+'/workspace/read/selection',{workspaceId:targetWorkspace,ids:[input.link.recordId]}),target=selected.book?.entries?.find(entry=>entry.id===input.link.recordId);
   if(!target)throw new AppError('NOT_FOUND');
-  const linkId=randomUUID(),relations=[...record.relations,{id:linkId,type:input.link.type??'Related to',target:{workspaceId:targetWorkspace,kind:'record',id:target.id},label:target.title}];
+  // Workflow roles follow the app's rules: a run belongs to one investigation,
+  // and exact roles point at the current saved revision of the target.
+  const role=input.link.role?workflowRole(input.link.role):null;
+  if(role&&(target.id===record.id||(role.id==='run-of'||role.id==='follows-run')&&record.type!=='run'||role.id==='run-of'&&target.type==='run'))throw new AppError('INVALID',[{field:'input.link.role'}]);
+  const reference={workspaceId:targetWorkspace,kind:'record',id:target.id,...(role?.exact?{revision:selected.recordRevisions[target.id]}:{})};
+  const linkId=randomUUID(),kept=role?.id==='run-of'?record.relations.filter(link=>link.role!=='run-of'):record.relations;
+  const relations=[...kept,{id:linkId,type:input.link.type??(role?role.label:'Related to'),...(role?{role:role.id}:{}),target:reference,label:target.title}];
   return {...await save(record.id,revision,{...record,relations,updatedAt:at}),linkId};
  }
  if(operation.name==='records/unlink'){
