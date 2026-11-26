@@ -12,6 +12,15 @@ import {createCatalogueConnections} from './catalogue-connections.js';
 import {withQueryCacheScope} from './query-cache-scope.js';
 const accessCodes=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN']);
 const unavailableCodes=new Set([...accessCodes,'STORAGE_PROJECT_BUSY','LAB_BOOK_IMPORT_PENDING','LAB_BOOK_MOVE_PENDING','STORAGE_INCOMPLETE']);
+// A registry that locates each project once for one stage of a walk.
+function locatedOnce(registry){
+ const view=Object.create(registry),located=new Map();
+ view.locate=projectId=>{
+  if(!located.has(projectId)){const pending=registry.locate(projectId);located.set(projectId,pending);pending.catch(()=>located.delete(projectId));}
+  return located.get(projectId).then(value=>structuredClone(value));
+ };
+ return view;
+}
 export function projectRecordCollection(application,client,check){
  return async(consume,{workspaceId,query,scope,signal,selection=null,namespaces=null,includeBooks=true,includeOwner=()=>true,onUnavailable=null})=>{
   const registry=await application.registry();
@@ -22,13 +31,19 @@ export function projectRecordCollection(application,client,check){
   const connections=createCatalogueConnections(application.workspace);
   try{return await connections.run(async()=>{
   const checks=[];
+  // During the walk each project's location is read once and reused by its own
+  // and its lab books' access checks; access files are still read every time.
+  // The walk ends by locating every project again through the registry itself
+  // and comparing the registry revision, so a move or rename during the walk
+  // still refuses the result.
+  const walkRegistry=locatedOnce(registry);
   await check();signal?.throwIfAborted();
   if(directory.includeRoot&&includeOwner({workspaceId:registry.workspaceId,projectId:null,labBookId:null})&&(!namespaces||namespaces.has(registry.workspaceId)))await withQueryCacheScope(application,client,[],async()=>consume(application.workspace,{workspaceId:registry.workspaceId,projectId:null,labBookId:null},await directory.ownerScope(null)??directory.chosen));
   for await(const entry of directory.projects()){
    const selectedScope=await directory.ownerScope(entry);
    signal?.throwIfAborted();await check();
    await application.tracked(async()=>{
-    const owner=new ProjectSessionOwner(application,client,entry.projectId,{check,recoverRenames:false});let admitted=false;
+    const owner=new ProjectSessionOwner(application,client,entry.projectId,{check,recoverRenames:false,registry:async()=>walkRegistry});let admitted=false;
     const unavailable=async(error,address)=>{if(!onUnavailable||!unavailableCodes.has(error.code))return false;await check();await onUnavailable(error,address);return true;};
     try{
      await owner.use(async project=>{
@@ -50,7 +65,7 @@ export function projectRecordCollection(application,client,check){
       }
       });
       if(await books.version()!==stamp)throw new AppError('RECORD_QUERY_CURSOR');
-      checks.push(async()=>{await current();const fresh=new ProjectSessionOwner(application,client,entry.projectId,{check:current,recoverRenames:false});try{await fresh.use(async parent=>{if(await new LabBookRegistry(parent).version()!==stamp)throw new AppError('RECORD_QUERY_CURSOR');},{locationOnly:true});}finally{await fresh.close();}});
+      checks.push(async()=>{await current();const fresh=new ProjectSessionOwner(application,client,entry.projectId,{check:current,recoverRenames:false,registry:async()=>locatedOnce(registry)});try{await fresh.use(async parent=>{if(await new LabBookRegistry(parent).version()!==stamp)throw new AppError('RECORD_QUERY_CURSOR');},{locationOnly:true});}finally{await fresh.close();}});
      },{locationOnly:true});
     }catch(error){if(accessCodes.has(error.code))error.projectId??=entry.projectId;if(admitted||!await unavailable(error,{workspaceId:entry.namespaceId,projectId:entry.projectId,labBookId:null}))throw error;}finally{await owner.close();}
    },entry.projectId);

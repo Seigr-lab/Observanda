@@ -14,6 +14,7 @@ import {ProjectApplication,projectRequest} from '../src/project-application.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookDirectory} from '../src/lab-book-directory.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {OwnerDirectoryRegistry} from '../src/owner-directory-registry.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {defaultPanelConfig} from '../src/web/dashboard-model.js';
@@ -39,7 +40,14 @@ test('lab books using a type are listed across project and lab book stores in pa
   ResearchCatalogue.prototype.record=()=>{throw Error('Listing lab books loaded a record body');};
   const command={workspaceId:root.id,etag:await f.workspace.catalogue(store=>store.head()),provider:'laboratory-beekeeping-spaces',config:defaultPanelConfig(),options:{},limit:1,key:null,cursor:null};
   const read=data=>application.run(client,projectRequest('/api/projects/dashboard-collection/structure','POST'),{...command,...data});
-  const items=[];let page=await read();assert.equal(page.total,2);items.push(...page.items);
+  // Each project is located once while its books are read and once more, freshly, when the
+  // walk is confirmed; a current workspace never reads its snapshot for projects missing from
+  // the directory.
+  const located=[],legacy=[],locate=ProjectRegistry.prototype.locate,legacyProjects=OwnerDirectoryRegistry.prototype.legacyProjects;
+  ProjectRegistry.prototype.locate=function(id){located.push(id);return locate.call(this,id);};OwnerDirectoryRegistry.prototype.legacyProjects=function(...args){legacy.push(1);return legacyProjects.apply(this,args);};
+  let page;try{page=await read();}finally{ProjectRegistry.prototype.locate=locate;OwnerDirectoryRegistry.prototype.legacyProjects=legacyProjects;}
+  assert.deepEqual(Object.values(Object.groupBy(located,id=>id)).map(list=>list.length),[2,2]);assert.ok(legacy.length<=1,'projects missing from the directory are read only when a parent is missing');
+  const items=[];assert.equal(page.total,2);items.push(...page.items);
   while(page.nextCursor){page=await read({cursor:page.nextCursor});items.push(...page.items);}
   assert.deepEqual(items.map(item=>item.title).sort(),['Colony book','Hive book']);
   const owners=Object.fromEntries(items.map(item=>[item.title,item.owner]));
