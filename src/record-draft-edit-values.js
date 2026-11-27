@@ -8,6 +8,21 @@ import {validWritingValue} from './web/record-writing-model.js';
 import {researchId} from './web/research-reference.js';
 import {digest,serialize} from './storage-format.js';
 import {placedFigures} from './web/book-selectors.js';
+import {attemptValueField} from './web/record-attempt-value.js';
+import {preparationMethodLinks} from './web/attempt-workflow.js';
+// An identity derived from the edit, so replaying an edit gives the same draft.
+const derivedId=(...parts)=>{const h=digest(serialize(parts));return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-'+'89ab'[parseInt(h[16],16)%4]+h.slice(17,20)+'-'+h.slice(20,32);};
+// A new preparation links the methods it uses, as saving one on a saved record does.
+async function linkPreparationMethods(document,field,preparation){
+ const links=preparationMethodLinks([],{preparations:[preparation]},{uuid:()=>null});
+ for await(const relation of document.items(['relations'])){
+  if(!links.length)break;if((await document.tree.selected(relation.value,['role'])).value!=='uses-method')continue;
+  const target=(await document.tree.selected(relation.value,['target'])).value,index=links.findIndex(link=>['workspaceId','kind','id','revision'].every(key=>link.target[key]===target[key]));
+  if(index>=0)links.splice(index,1);
+ }
+ if(!links.length)return document;
+ return document.splice(['relations'],await document.tree.arrayLength(document.root,['relations']),0,links.map(link=>({...link,id:derivedId(field,link.target)})));
+}
 export const draftEditGroups={details:null,writing:['sections'],custom:['template','fields'],contributors:['contributors'],relations:['relations'],media:['attachments'],figures:['figures'],preparations:['attempt','preparations'],events:['attempt','events'],assessments:['attempt','assessments'],results:['results','statements'],tags:['tags']};
 const fieldPrefix={contributors:'contributor',relations:'relation',media:'media',figures:'figure',preparations:'attempt:preparation',events:'attempt:event',assessments:'attempt:assessment',results:'result'};
 export async function draftEditFields(document,group,offset,{signal}={}){
@@ -72,7 +87,10 @@ export function validDraftEdit(field,value){
 }
 export async function replaceDraftEdit(document,field,value,selected){
  if(!validDraftEdit(field,value))throw new AppError('INVALID');
- if(validRecordValueField(field))return replaceRecordValue(document,field,value,selected);
+ if(validRecordValueField(field)){
+  const next=await replaceRecordValue(document,field,value,selected);
+  return attemptValueField(field)?.kind==='preparation'&&selected.position<0&&value.value?linkPreparationMethods(next,field,value.value):next;
+ }
  if(field==='sections'){
   const ids=selected.value.ids,index=ids.indexOf(value.sectionId);
   if(value.action==='insert'){

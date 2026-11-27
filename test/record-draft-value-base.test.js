@@ -11,6 +11,8 @@ import {ResearchDrafts} from '../src/research-drafts.js';
 import {MediaStore} from '../src/media.js';
 import {validRetainedFigure} from '../src/web/retained-figure-model.js';
 import {proseText} from '../src/web/prose-model.js';
+import {RecordPreparationDrafts} from '../src/record-preparation-drafts.js';
+import {ResearchRecords,recordRevision} from '../src/research.js';
 
 const body=text=>({type:'doc',content:[{type:'paragraph',content:[{type:'text',text}]}]});
 
@@ -60,9 +62,20 @@ test('value, writing and figure recovery copies are based on a new record draft 
  assert.equal(validRetainedFigure(built.value.value),true);
  await saveValue(figureField,figureBase,built.value);
 
+ // A run preparation is prepared in its own copy and saved into the draft with the methods it uses linked.
+ const method={...structuredClone(f.record),id:randomUUID(),title:'Transect method',type:'protocol',sections:[],figures:[],body:'Walk the bank.',relations:[]};delete method.results;
+ await new ResearchRecords(f.workspace,{}).save({workspaceId,changes:[{id:method.id,expectedRevision:null,record:method}]});
+ const savedMethod=(await f.workspace.read()).book.entries.find(item=>item.id===method.id),methodRef={...await f.materials.pinRecord(method.id,recordRevision(savedMethod)),label:method.title};
+ const preparationField='attempt:preparation:'+randomUUID(),preparationBase=await read(preparationField),preparations=new RecordPreparationDrafts(f.workspace);
+ const preparationCommand={workspaceId,recordId,selection:{field:preparationField,revision:preparationBase.revision,recordDraft:base(preparationBase)},draft:null};
+ const opened=await preparations.open(preparationCommand);
+ const prepared=await preparations.change({...preparationCommand,id:randomUUID(),commandId:randomUUID(),operations:[{type:'header',value:{...opened.header,reason:'First survey',applicability:'Dry weather, low water',protocols:[methodRef]}}]});
+ const kept=await preparations.save({...preparationCommand,draft:prepared.draft});assert.equal(kept.saved,true);
+ assert.deepEqual(await preparations.save({...preparationCommand,draft:prepared.draft}),kept);
+
  // Each finished dialog removes its copy, as a saved record's dialog does.
  const drafts=new ResearchDrafts(f.workspace);
- for(const [id,revision] of [[titleDraft,firstCopy.revision],[writingDraft,writingCopy.revision],[figureDraft,built.revision]])await drafts.remove({id,workspaceId,expectedRevision:revision});
+ for(const [id,revision] of [[titleDraft,firstCopy.revision],[writingDraft,writingCopy.revision],[figureDraft,built.revision],[prepared.draft.id,prepared.draft.revision]])await drafts.remove({id,workspaceId,expectedRevision:revision});
 
  const seed=(await drafts.list({workspaceId})).drafts.find(item=>item.id===receipt.draft.id);
  const ready=await review.prepare({id:receipt.draft.id,workspaceId,expectedRevision:seed.revision});
@@ -71,6 +84,8 @@ test('value, writing and figure recovery copies are based on a new record draft 
  assert.equal(entry.title,'River bank survey');
  assert.deepEqual(entry.sections.map(item=>[item.title,proseText(item.body)]),[['Observation','Eroded bank.']]);
  assert.deepEqual(entry.figures.map(item=>item.id),[figureId]);
+ assert.deepEqual(entry.attempt.preparations.map(item=>[item.id,item.reason]),[[preparationField.slice(20),'First survey']]);
+ assert.deepEqual(entry.relations.filter(link=>link.role==='uses-method').map(link=>link.target.id),[method.id]);
  // A saved draft is no longer a base for new copies.
  await assert.rejects(values.write({id:randomUUID(),workspaceId,recordId,expectedRevision:null,selection:{field:'title',revision:title.revision,recordDraft:{id:ready.id,edit:null}},value:{value:'Late'}}),{code:'DRAFT_CHANGED'});
 });

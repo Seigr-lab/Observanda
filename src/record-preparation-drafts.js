@@ -112,8 +112,23 @@ export class RecordPreparationDrafts{
   });
  }
  async save(command,options={}){return this.workspace.withLock(()=>this.saveLocked(command,options));}
+ // A new record's preparation is saved into its draft as one edit; the draft's edit adds
+ // the method links. The edit's identity comes from the checkpoint, so a retry is the same edit.
+ async saveIntoDraft(command,{signal}={}){
+  const {plan,preparation}=await this.workspace.catalogue(store=>this.source(store,command,async source=>{
+   await validatePreparationDocument(source.document,source.reference,{signal});
+   if(source.saved.draft.preparationEdit)await new PreparationIdentityIndex(source.document,source.saved.draft.preparationEdit.identities).verify(source.reference,{signal});
+   const {RecordDraftEdits}=await import('./record-draft-edits.js');
+   return {plan:await new RecordDraftEdits(store).plan(command.selection.recordDraft.id),preparation:await source.document.tree.read(source.reference)};
+  }));
+  const {RecordDraftReview}=await import('./record-draft-review.js'),{saved,...value}=plan,h=digest(serialize({draft:command.draft,selection:command.selection}));void saved;
+  const operationId=h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-'+'89ab'[parseInt(h[16],16)%4]+h.slice(17,20)+'-'+h.slice(20,32);
+  const result=await new RecordDraftReview(this.workspace,null).editWriteLocked({id:plan.id,workspaceId:command.workspaceId,expectedRevision:digest(serialize(value)),field:command.selection.field,value:{value:preparation},valueRevision:command.selection.revision,editRevision:command.selection.recordDraft.edit,operationId});
+  return {saved:true,editRevision:result.editRevision,revision:result.revision};
+ }
  async saveLocked(command,{signal}={}){
   if(!exact(command,fields)||!command.draft||!target(command))invalid();
+  if(command.selection.recordDraft)return this.saveIntoDraft(command,{signal});
   return this.workspace.catalogue(store=>this.source(store,command,async source=>{
    const {snapshot,row,etag}=await new RecordValues(this.workspace).select(store,command),header=await validatePreparationDocument(source.document,source.reference,{signal});if(source.saved.draft.preparationEdit)await new PreparationIdentityIndex(source.document,source.saved.draft.preparationEdit.identities).verify(source.reference,{signal});
    return withRecordDocument(store,row.id,row.revision,async original=>{
