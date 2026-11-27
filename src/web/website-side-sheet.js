@@ -19,7 +19,8 @@ export function showSideSheet(dialog,{doc=document,wide=false}={}){
  if(!dialog.isConnected)doc.body.append(dialog);
  dialog.show();
  if(editor)editor.inert=true;
- const resize=()=>place();doc.defaultView.addEventListener('resize',resize);
+ // After fitting a resized window, the field being worked on stays in view.
+ const resize=()=>{place();const active=doc.activeElement;if(active&&dialog.contains(active))active.scrollIntoView({block:'nearest'});};doc.defaultView.addEventListener('resize',resize);
  const keys=event=>{
   if(event.key!=='Escape'||event.defaultPrevented||!dialog.open)return;
   // A dialog opened from the tool (a confirmation) closes first.
