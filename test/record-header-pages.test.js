@@ -29,7 +29,9 @@ test('record header collections page independently and visible prose resolves la
  assert.deepEqual(first.inline.figures,[record.figures[256]]);assert.equal(first.collections.figures.total,257);
  const late=await reader.read({...target,windows:{contributors:253,figures:253,relations:253,fields:253}});
  assert.deepEqual(late.header.contributors,record.contributors.slice(253));assert.deepEqual(late.header.figures,record.figures.slice(253));assert.deepEqual(late.inline.figures,[]);
- assert.deepEqual(late.header.template.fields,record.template.fields.slice(253));assert.equal(late.header.template.values.v256,'9256');
+ // A field window carries each field's header, its schema revision and how many choices it has; choices page on their own.
+ assert.deepEqual(late.header.template.fields.map(({schemaRevision,...field})=>field),record.template.fields.slice(253).map(({choices,...field})=>({...field,choiceCount:choices.length})));
+ assert.ok(late.header.template.fields.every(field=>/^[a-f0-9]{64}$/.test(field.schemaRevision)));assert.equal(late.header.template.values.v256,'9256');
  const values=new RecordValues(f.workspace),base=await values.read({workspaceId:book.id,recordId:record.id,field:'title'});
  await values.save({workspaceId:book.id,recordId:record.id,field:'title',expectedRevision:base.revision,value:{value:'New title'}});
  assert.equal((await reader.read({...target,snapshotId:etag,windows:{fields:256}})).header.title,record.title);
