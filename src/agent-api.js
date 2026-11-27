@@ -9,7 +9,7 @@ import {recordBrowse} from './web/record-query.js';
 import {RECORD_TYPES,STATUSES} from './web/record-types.js';
 import {RELATION_TYPES} from './web/record-model.js';
 import {WORKFLOW_ROLES,workflowRole} from './web/record-workflow.js';
-import {markdownRichText,richTextForAgents} from './agent-markdown.js';
+import {markdownRichText,richTextForAgents,agentRichText} from './agent-markdown.js';
 import {AGENT_APP_GUIDE} from './agent-app-guide.js';
 
 export const AGENT_API_VERSION='1.0.0';
@@ -146,13 +146,15 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
  }
  const sections=(values,existing=[])=>values.map(section=>{
   if(section.id&&!existing.some(item=>item.id===section.id))throw new AppError('INVALID',[{field:'sections'}]);
-  return {id:section.id??randomUUID(),title:section.title,body:markdownRichText(section.text??'')};
+  // A section sent back as it was read keeps its stored text, figures and tables included.
+  const stored=section.id?existing.find(item=>item.id===section.id).body:undefined;
+  return {id:section.id??randomUUID(),title:section.title,body:agentRichText(section.text??'',stored)};
  });
  const apply=(record,fields)=>{
   const next={...record};
   for(const key of ['type','title','status','tags'])if(Object.hasOwn(fields,key))next[key]=fields[key];
   if(Object.hasOwn(fields,'occurredOn'))next.occurredOn=dateValue(fields.occurredOn);
-  if(Object.hasOwn(fields,'text'))next.body=markdownRichText(fields.text);
+  if(Object.hasOwn(fields,'text'))next.body=agentRichText(fields.text,record.body);
   if(Object.hasOwn(fields,'sections'))next.sections=sections(fields.sections,record.sections);
   return next;
  };

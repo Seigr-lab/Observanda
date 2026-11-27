@@ -44,7 +44,8 @@ test('agents learn the API from the app and work only through their key, scope a
  const created=await result(await f.agent('/api/v1/agent/records/create',{key,data:{...place,record:{type:'note',title:'Release 1.2',status:'completed',tags:['release'],occurredOn:'2026-11-24',text:'# Changes\n\nFixed **two** bugs in `parser`.\n\n- faster start\n- smaller files',sections:[{title:'Known issues',text:'None yet.'}]}}}));
  const read=await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}));
  assert.equal(read.revision,created.revision);assert.equal(read.title,'Release 1.2');assert.equal(read.occurredOn,'2026-11-24');assert.deepEqual(read.tags,['release']);
- assert.match(read.text,/Fixed two bugs in parser/);assert.deepEqual(read.sections.map(section=>[section.title,section.text]),[['Known issues','None yet.']]);
+ // Text reads back in the Markdown it was written in, so an agent can check and resend it.
+ assert.equal(read.text,'# Changes\n\nFixed **two** bugs in `parser`.\n\n- faster start\n- smaller files');assert.deepEqual(read.sections.map(section=>[section.title,section.text]),[['Known issues','None yet.']]);
  const stored=(await result(await f.owner('/api/projects/'+project.projectId+'/lab-books/'+book.labBookId+'/workspace/read/selection',{workspaceId:(await result(await f.owner('/api/projects/'+project.projectId+'/lab-books/'+book.labBookId+'/workspace/read/start',{}))).metadata.id,ids:[created.id]}))).book.entries[0];
  assert.equal(validRichText(stored.body),true);assert.equal(stored.body.content[0].type,'heading');
  const listed=await result(await f.agent('/api/v1/agent/records/list',{key,data:{...place,search:'Release'}}));assert.deepEqual(listed.records.map(item=>item.id),[created.id]);assert.deepEqual({title:listed.records[0].title,type:listed.records[0].type,status:listed.records[0].status},{title:'Release 1.2',type:'note',status:'completed'});assert.equal(listed.total,1);

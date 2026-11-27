@@ -53,5 +53,34 @@ export function markdownRichText(source){
  if(!validRichText(doc))throw new AppError('INVALID',[{field:'text'}]);
  return doc;
 }
-// Agents read record text back as plain text; the rich document stays available.
-export const richTextForAgents=value=>typeof value==='string'?value:richTextPlain(value);
+// Agents read record text back in the same Markdown they write, so what they wrote, and
+// the formatting written in the app, can be checked and sent back unchanged.
+function markedText(node){
+ let value=node.text??'';
+ for(const mark of node.marks??[]){
+  if(mark.type==='code')value='`'+value+'`';
+  else if(mark.type==='strong')value='**'+value+'**';
+  else if(mark.type==='em')value='*'+value+'*';
+  else if(mark.type==='link'&&safeRichLink(mark.attrs?.href))value='['+value+']('+mark.attrs.href+')';
+ }
+ return value;
+}
+const inlineMarkdown=(nodes,breaks='\n')=>(nodes??[]).map(node=>node.type==='text'?markedText(node):node.type==='hard_break'?breaks:richTextPlain(node)).join('');
+// Parts the Markdown cannot express (figures, tables, equations...) are named in place; a
+// section or summary sent back unchanged keeps them, since it is then left exactly as stored.
+function blockMarkdown(block){
+ if(block.type==='paragraph')return inlineMarkdown(block.content);
+ if(block.type==='heading')return '#'.repeat(Math.min(3,Math.max(1,(block.attrs?.level??2)-1)))+' '+inlineMarkdown(block.content,' ');
+ if(block.type==='bullet_list'||block.type==='ordered_list')return (block.content??[]).map((item,index)=>(block.type==='ordered_list'?(index+1)+'. ':'- ')+(item.content??[]).map(part=>part.type==='paragraph'?inlineMarkdown(part.content,' '):richTextPlain(part)).join(' ')).join('\n');
+ if(block.type==='blockquote')return (block.content??[]).map(part=>'> '+(part.type==='paragraph'?inlineMarkdown(part.content,' '):richTextPlain(part))).join('\n');
+ if(block.type==='code_block')return '```'+(block.attrs?.language??'')+'\n'+(block.content??[]).map(node=>node.text??'').join('')+'\n```';
+ return '['+block.type.replace(/_/g,' ')+': '+richTextPlain(block).replace(/\s+/g,' ').trim().slice(0,200)+']';
+}
+export function richTextMarkdown(doc){
+ if(typeof doc==='string')return doc;
+ return (doc?.content??[]).map(blockMarkdown).join('\n\n');
+}
+export const richTextForAgents=richTextMarkdown;
+// A text sent back as it was read keeps the stored document exactly; a changed text is
+// read as Markdown.
+export const agentRichText=(source,stored)=>stored!==undefined&&source===richTextMarkdown(stored)?stored:markdownRichText(source);
