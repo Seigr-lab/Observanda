@@ -18,7 +18,7 @@ test('reader removal pins the reviewed revision, recovers uncertain replies and 
  ResearchCatalogue.prototype.record=()=>{throw Error('Reader removal reconstructed an original');};page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{const route=new URL(r.url()).pathname;if(/^\/api\/workspace\/read\/(selection|page)$/.test(route))reads.push(route);if(route==='/api/research/records/remove')commands.push(r.postDataJSON());});
  const dialog=page.getByRole('dialog',{name:'Remove record',exact:true}),open=async()=>{
   // Removing a record is an editing action: Edit record, then Record actions.
-  const edit=page.getByRole('button',{name:'Edit record',exact:true});if(await edit.isVisible())await edit.click();
+  await expect(page.locator('.record-reader h1')).toBeVisible({timeout:30000});const edit=page.getByRole('button',{name:'Edit record',exact:true});if(await edit.isVisible()){await edit.click();await expect(page.locator('.record-editing')).toBeVisible({timeout:30000});}
   const actions=page.locator('details.record-actions');await expect(actions).toBeVisible();if(!await actions.evaluate(node=>node.open))await actions.locator('summary').click();
   await actions.getByRole('button',{name:'Remove record',exact:true}).click();
  },remove=()=>dialog.getByRole('button',{name:'Remove record',exact:true}).click();let release;
