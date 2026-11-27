@@ -1278,7 +1278,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(['appearance','themes'].includes(operation)&&await beforeLeave(true)){
     const base=opened,current=()=>opened===base&&!stale;
     const themes=operation==='themes',node=themes&&selected!=null?blockAt(websiteHTML(base.html),selected):null;
-    await editWebsiteAppearance({opened:base,directory:directory(),request,t:tr,signal:controller.signal,current,trigger:element,themes,blockPath:node?selected:null,sectionTitle:node?label(node):'',
+    await editWebsiteAppearance({opened:base,directory:directory(),request,t:tr,signal:controller.signal,current,trigger:element,themes,canvas:document.getElementById('website-files-canvas')?.contentDocument??null,blockPath:node?selected:null,sectionTitle:node?label(node):'',
      apply:values=>run(async()=>{
       if(!current())throw Object.assign(Error(tr('changed')),{code:'WEBSITE_CHANGED'});
       const saved=await request(themes?'themes/change':'appearance/save',{siteId:base.site.id,path:base.path,expectedRevision:base.site.revision,...(themes?values:{values})},{signal:controller.signal});

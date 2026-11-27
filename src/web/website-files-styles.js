@@ -2,6 +2,7 @@ import {tokenGroups,tokenStates,tokenValue,tokenID} from './website-token-model.
 import {confirmAction} from './confirm-action.js';
 import {styleField,styleOptions} from './website-style-controls.js';
 import {inspectWebsiteStyle} from './website-style-inspection.js';
+import {showSideSheet} from './website-side-sheet.js';
 
 // This dialog edits the current site's saved style library. Every read and
 // write carries the revision acknowledged by the ordinary website editor.
@@ -171,6 +172,6 @@ export async function editWebsiteStyles({t,opened,selection,target,instance,bloc
  group.onchange=async()=>{if(Object.keys(rules).length&&!await confirmAction(t('discardConfirm'),{action:'discard'})){group.value=activeGroup;return;}activeGroup=group.value;rules={};edited=true;renderFields();renderScopes();update();};
  property.onchange=()=>void task(inspect);inspector.ontoggle=()=>{if(inspector.open)void task(inspect);};
  scope.onchange=update;existingFont.onchange=()=>void task(displayFont);editor.onsubmit=event=>{event.preventDefault();void task(saveDefinition);};
- document.body.append(dialog);dialog.showModal();
+ showSideSheet(dialog);
  await task(async()=>{await load(0);if(fresh()){select(catalog.items[0]);await displayFont();query.focus();}});
 }

@@ -2,6 +2,7 @@ import {feedItemEditor} from './website-feed-item-editor.js';
 import {confirmAction} from './confirm-action.js';
 import {websiteSearchChoices} from './website-files-picker-refinements.js';
 import {operationProgress} from './operation-progress-ui.js';
+import {showSideSheet} from './website-side-sheet.js';
 
 const hasFilter=criteria=>Object.keys(criteria??{}).length>0;
 export function websiteFileFeeds({t,request,refresh,report}){
@@ -189,7 +190,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   dialog.addEventListener('cancel',event=>{event.preventDefault();cancel();});
   dialog.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();event.stopPropagation();if(!saving&&!loading)form.requestSubmit();}});
   dialog.addEventListener('close',()=>{if(current===dialog)current=null;dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
-  document.body.append(dialog);dialog.showModal();loading=true;editing.disabled=list.disabled=true;paint();
+  showSideSheet(dialog);loading=true;editing.disabled=list.disabled=true;paint();
   try{
    const pending=recovery?.siteId===site.id&&recovery.page===page?recovery:null;
    const restore=pending&&await confirmAction(t('feedRestoreDraft'),{action:'restore'});if(pending)recovery=null;

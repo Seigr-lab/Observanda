@@ -508,3 +508,10 @@
 .website-editor-bar .website-files-status.website-files-error { white-space:normal; text-align:start }
 /* Inside the application frame the page already has its margins. */
 .main .website-files-app,.main .website-files-app:has(.website-editor-bar) { padding:0; max-width:none }
+/* Tools that open beside the live page: a full-height column over the rail and the left column. */
+.website-author-dialog.website-side-sheet { position:fixed; inset-inline-end:auto; inset-block-end:auto; margin:0; z-index:30; box-sizing:border-box; width:min(46rem,calc(100vw - 2rem)); box-shadow:var(--ui-shadow); overflow:auto }
+.website-author-dialog.website-appearance-dialog.website-side-sheet:not(.website-appearance-live) { width:min(52rem,calc(100vw - 2rem)) }
+.website-side-sheet.website-appearance-live .website-appearance-columns { grid-template-columns:minmax(0,1fr) }
+.website-side-sheet.website-appearance-live .website-appearance-columns > :last-child { display:block; background:none; border:0 }
+.website-side-sheet .website-token-columns { grid-template-columns:minmax(0,1fr) }
+.website-side-sheet .website-token-columns>section { border-inline-end:0; padding-inline-end:0 }
