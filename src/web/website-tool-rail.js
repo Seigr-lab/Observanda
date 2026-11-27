@@ -20,15 +20,19 @@ const TOOLS=[
  ['exchange','designExchange',icon('<path d="M7 7h11l-3-3M17 17H6l3 3"/>')],
  ['versions','versionsTitle',icon('<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>')]
 ];
+// The rail in groups: building the page, its style, media and the whole site.
+const GROUPS=[['railBuild',['left-add','left-layers','left-content','pages','menu','feeds']],['railStyle',['appearance','themes','styles','regions']],['railMedia',['galleries','media']],['railSite',['exchange','versions']]];
+const BY_ACTION=new Map([...PAGE_PANELS,...TOOLS].map(entry=>[entry[0],entry]));
 // Tools whose open state is a docked panel are marked as the current tool.
 const PANEL={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'};
 
 export function websiteToolRail({t,esc}){
  function view({mode,label,left}){
-  return '<nav class="website-tool-rail" aria-label="'+esc(label)+'">'+[...PAGE_PANELS,...TOOLS].map(([action,key,picture])=>{
+  const tool=([action,key,picture])=>{
    const current=action.startsWith('left-')?mode==='visual'&&action==='left-'+left:PANEL[action]&&PANEL[action]===mode;
    return '<button type="button" class="website-tool" data-action="website-files-'+action+'"'+(current?' aria-current="true"':'')+'>'+picture+'<span>'+esc(t(key))+'</span></button>';
-  }).join('')+'</nav>';
+  };
+  return '<nav class="website-tool-rail" aria-label="'+esc(label)+'">'+GROUPS.map(([name,actions])=>'<div class="website-tool-group" role="group" aria-label="'+esc(t(name))+'"><span class="website-tool-group-name" aria-hidden="true">'+esc(t(name))+'</span>'+actions.map(action=>tool(BY_ACTION.get(action))).join('')+'</div>').join('')+'</nav>';
  }
  return {view};
 }

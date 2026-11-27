@@ -77,7 +77,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let remoteEdition='website';
  // The page editor's left column shows one panel at a time: adding, the page's layers, or lab book content.
- let leftPanel='add';
+ let leftPanel='add',railObserver=null;
  let visual=null,selected=null,anchor='',trail=[],step=-1;
  const viewport=websiteFileViewport({esc,t:tr,getRanges:()=>opened?.site.breakpoints??defaultBreakpoints(),changed:()=>visual?.viewportChanged()});
  let awaitingAccess=false,conflictingPage=null;
@@ -919,6 +919,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      const item=doc.querySelector('section[data-website-feed="'+CSS.escape(entry.feedId)+'"] [data-website-feed-source="'+CSS.escape(entry.sourceId)+'"]');
      if(!item){notify(tr('changed'),true);return;}
      // The preview remains inert until its binding callback returns.
+  // A rail with more tools below its edge fades there until it is scrolled to the end.
+  railObserver?.disconnect();railObserver=null;
+  const rail=document.querySelector('.website-tool-rail');
+  if(rail){const edge=()=>rail.toggleAttribute('data-more',rail.scrollTop+rail.clientHeight<rail.scrollHeight-4);rail.onscroll=edge;railObserver=new ResizeObserver(edge);railObserver.observe(rail);edge();}
      requestAnimationFrame(()=>{
       if(!preview.isConnected||preview.contentDocument!==doc)return;
       item.tabIndex=-1;item.focus({preventScroll:true});item.scrollIntoView({block:'center'});

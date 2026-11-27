@@ -280,6 +280,7 @@
  .website-files-canvas { height:53vh; min-height:240px }
 }
 .component-rail-tabs { display:flex; gap:.15rem; background:var(--background,var(--ui-surface)); position:sticky; top:0; z-index:1; padding:.25rem 0 .4rem }
+ .website-files-editor>.website-tool-rail,.website-files-code-layout>.website-tool-rail { max-height:none;min-height:0;align-self:stretch }
 .component-rail-tabs button { flex:1; min-width:0; padding:.35rem .4rem; font-size:.87em }
 .component-rail-tabs [aria-pressed=true] { border-color:var(--accent,var(--ui-accent)); color:var(--accent,var(--ui-accent)); font-weight:650 }
 .website-files-editor>aside:has(>[data-website-components]:not([hidden]))>:not(.component-rail-tabs,[data-website-components]) { display:none }
@@ -442,19 +443,19 @@
 .element-card[hidden],.element-group[hidden] { display:none }
 .element-card-icon svg { width:1.55rem; height:1.55rem }
 /* Site tools rail: the first column beside the page, in every editing view. */
-.website-files-editor { grid-template-columns:5.75rem minmax(17rem,21%) minmax(0,1fr) minmax(15rem,19%) }
-.website-files-editor[data-source-open] { grid-template-columns:5.75rem minmax(10rem,15rem) minmax(0,1fr) minmax(17rem,.8fr) }
-.website-files-editor[data-panel-open] { grid-template-columns:5.75rem minmax(22rem,34%) minmax(0,1fr) }
-.website-files-code-layout { display:grid; grid-template-columns:5.75rem minmax(0,1fr); gap:.75rem; align-items:start }
-.website-tool-rail { position:sticky; top:.5rem; display:grid; align-content:start; gap:.15rem; padding:.3rem; max-height:76vh; overflow-y:auto; scrollbar-width:thin; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius) }
-.website-tool { display:grid; justify-items:center; gap:.15rem; padding:.35rem .15rem; font:inherit; font-size:.68rem; line-height:1.15; text-align:center; color:var(--ui-muted); background:transparent; border:1px solid transparent; border-radius:var(--ui-control-radius); cursor:pointer }
+.website-files-editor { grid-template-columns:6.5rem minmax(17rem,21%) minmax(0,1fr) minmax(15rem,19%) }
+.website-files-editor[data-source-open] { grid-template-columns:6.5rem minmax(10rem,15rem) minmax(0,1fr) minmax(17rem,.8fr) }
+.website-files-editor[data-panel-open] { grid-template-columns:6.5rem minmax(22rem,34%) minmax(0,1fr) }
+.website-files-code-layout { display:grid; grid-template-columns:6.5rem minmax(0,1fr); gap:.75rem; align-items:start }
+.website-tool-rail { position:sticky; top:.5rem; display:grid; align-content:start; gap:.3rem; padding:.3rem; max-height:76vh; overflow-y:auto; scrollbar-width:thin; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius) }
+.website-tool { display:grid; justify-items:center; gap:.05rem; padding:.25rem .1rem; font:inherit; font-size:.75rem; line-height:1.15; text-align:center; color:var(--ui-muted); background:transparent; border:1px solid transparent; border-radius:var(--ui-control-radius); cursor:pointer }
 .website-tool:hover,.website-tool:focus-visible { color:var(--ui-accent); background:var(--ui-tint) }
 .website-tool[aria-current=true] { color:var(--ui-accent); background:var(--ui-tint); border-color:var(--ui-accent) }
 .website-tool svg { width:1.25rem; height:1.25rem }
 /* Narrower windows keep every column, slimmer; the stacked layout below 62rem lays the rail out as a row. */
-@media (max-width:1100px){ .website-files-editor { grid-template-columns:4.75rem minmax(13rem,24%) minmax(0,1fr) minmax(12rem,20%) } .website-files-editor[data-panel-open] { grid-template-columns:4.75rem minmax(18rem,38%) minmax(0,1fr) } .website-tool { font-size:.62rem } }
+@media (max-width:1100px){ .website-files-editor { grid-template-columns:4.75rem minmax(13rem,24%) minmax(0,1fr) minmax(12rem,20%) } .website-files-editor[data-panel-open] { grid-template-columns:4.75rem minmax(18rem,38%) minmax(0,1fr) } .website-tool { font-size:.75rem } }
 /* The docked content library takes the library column; the rail keeps its own. */
-@media (min-width:62rem){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:5.75rem minmax(16rem,26%) minmax(0,1fr) minmax(13rem,20%) } }
+@media (min-width:62rem){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:6.5rem minmax(16rem,26%) minmax(0,1fr) minmax(13rem,20%) } }
 @media (min-width:62rem) and (max-width:1100px){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:4.75rem minmax(14rem,28%) minmax(0,1fr) minmax(12rem,20%) } }
 @media (max-width:61.999rem),(max-height:37.999rem){ .website-tool-rail { position:static; max-height:none; grid-template-columns:repeat(auto-fill,minmax(4.75rem,1fr)) } .website-files-code-layout { grid-template-columns:1fr } }
 /* Properties of the selected part, in tabs. */
@@ -472,3 +473,9 @@
 @media(min-width:62rem) and (min-height:38rem) {
  .main>.website-files-app:is(:has(.website-source-gallery),:has(.website-files-editor,#website-files-preview)) { height:calc(100dvh - var(--shell-content-top,64px) - 2rem) }
 }
+/* Groups: a line between them, so building, style, media and site tools read apart; each is named for assistive technology. */
+.website-tool-group { display:grid; gap:.1rem }
+.website-tool-group+.website-tool-group { border-block-start:1px solid var(--ui-border); padding-block-start:.3rem }
+.website-tool-group-name { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
+/* More tools below: the rail's lower edge fades until it is scrolled to the end. */
+.website-tool-rail[data-more] { mask-image:linear-gradient(to bottom,#000 calc(100% - 2.5rem),transparent); }
