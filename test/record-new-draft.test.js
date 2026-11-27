@@ -5,6 +5,7 @@ import {figureValueFixture} from './record-figure-values-fixture.js';
 import {RecordConfigurationSeed} from '../src/record-configuration-seed.js';
 import {RecordDraftReview} from '../src/record-draft-review.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
+import {verifyRecordDraftEdits} from '../src/record-draft-edits.js';
 import {proseText} from '../src/web/prose-model.js';
 
 const media={get:async()=>{throw Error('Unexpected media');}};
@@ -37,8 +38,21 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  assert.deepEqual(reading.sections.values.map(section=>section.title),['Observation','Context']);assert.equal(reading.sections.total,2);
  await assert.rejects(review.reading({...target(plan),unexpected:true}),{code:'INVALID'});
 
- const selected=await review.editRead({...target(plan),field:'title'});
- await review.editWrite({...target(plan),field:'title',value:{value:'River bank survey'},valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()});
+// Each draft edit is read first, then written against what was read.
+ const write=async(field,value)=>{const selected=await review.editRead({...target(plan),field});return review.editWrite({...target(plan),field,value,valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()});};
+ await write('title',{value:'River bank survey'});
+ // A draft takes new parts as a saved record does: sections are inserted, moved and removed, tags and contributors added.
+ const [observation,context]=record.sections.map(section=>section.id),methods=randomUUID(),notes=randomUUID();
+ await write('sections',{action:'insert',sectionId:methods,beforeId:context,value:{title:'Methods',body:{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Transect walk.'}]}]}}});
+ await write('sections',{action:'insert',sectionId:notes,beforeId:null,value:{title:'Notes',body:{type:'doc',content:[{type:'paragraph',content:[]}]}}});
+ await write('sections',{action:'move',sectionId:notes,position:0});
+ await write('sections',{action:'remove',sectionId:context});
+ await assert.rejects(write('sections',{action:'insert',sectionId:methods,beforeId:null,value:{title:'Again',body:{type:'doc',content:[{type:'paragraph',content:[]}]}}}),{code:'INVALID'});
+ await write('tag:0',{value:'river'});await write('tag:1',{value:'survey'});
+ await assert.rejects(write('tag:5',{value:'far'}),{code:'MISSING'});
+ const contributor=randomUUID();await write('contributor:'+contributor,{value:{name:'Field assistant',role:'Observer'}});
+ // Every recorded edit, the new kinds included, replays to the same draft.
+ await f.workspace.catalogue(store=>verifyRecordDraftEdits(store));
  const draft=(await new ResearchDrafts(f.workspace).list({workspaceId:f.book.id})).drafts.find(item=>item.id===receipt.draft.id);assert.ok(draft);
  const ready=await review.prepare({id:receipt.draft.id,workspaceId:f.book.id,expectedRevision:draft.revision});
  assert.equal((await review.reading({...target(ready)})).header.title,'River bank survey');
@@ -47,5 +61,6 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  assert.equal(saved.recordId,recordId);
  const entry=(await f.workspace.read()).book.entries.find(item=>item.id===recordId);
  assert.equal(entry.title,'River bank survey');assert.equal(entry.type,'observation');assert.equal(entry.template,undefined);
- assert.deepEqual(entry.sections.map(section=>[section.title,proseText(section.body)]),[['Observation',''],['Context','']]);
+ assert.deepEqual(entry.sections.map(section=>[section.title,proseText(section.body)]),[['Notes',''],['Observation',''],['Methods','Transect walk.']]);
+ assert.deepEqual(entry.tags,['river','survey']);assert.deepEqual(entry.contributors.map(person=>[person.id,person.name,person.role]),[[contributor,'Field assistant','Observer']]);
 });
