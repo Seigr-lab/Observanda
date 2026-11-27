@@ -24,7 +24,8 @@ test('normal record reading pages stored sections without selection hydration an
   requests.length=0;
   await page.goto(app.origin+'/#/records/'+record.id+'/read/'+record.sections[250].id);
   await expect(page.locator('#record-section-'+record.sections[250].id)).toBeFocused();
-  await expect(page.locator('.record-sections>section[id]')).toHaveCount(4);
+  // The window runs from the anchored section to the end: sections 251 to 257.
+  await expect(page.locator('.record-sections>section[id]')).toHaveCount(7);
   expect(requests.some(url=>url.endsWith('/record-content'))).toBe(true);
   expect(requests.some(url=>url.endsWith('/start'))).toBe(false);
   expect(requests.some(url=>/\/(selection|page)$/.test(url))).toBe(false);

@@ -52,7 +52,8 @@ test('selected writing edits retain other sections, compose concurrent edits, re
  await f.workspace.catalogue(store=>store.verifyRecordHistory(f.record.id));
  t.mock.restoreAll();await f.workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
  const untouched=await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,offset:17,header:false});
- assert.deepEqual(untouched.sections.values,f.record.sections.slice(17,21));
+ // One reading window holds twelve sections.
+ assert.deepEqual(untouched.sections.values,f.record.sections.slice(17,29));
  await assert.rejects(f.writing.read({...f.target(39),workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
  await assert.rejects(f.writing.read({...f.target(39),sectionId:randomUUID()}),{code:'MISSING'});
  await assert.rejects(f.writing.save({...f.target(39),expectedRevision:current.revision,value:{id:randomUUID(),title:'Illegal identity replacement',body:''}}),{code:'INVALID'});

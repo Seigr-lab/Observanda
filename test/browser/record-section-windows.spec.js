@@ -23,10 +23,10 @@ test('long records page their sections in windows for reading, editing, finding 
  const write=async(i,text)=>{await section(i).getByRole('button',{name:'Edit section',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit writing section',exact:true});await dialog.locator('.ProseMirror').fill(text);await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(section(i)).toContainText(text);};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+e.id+'/read');
-  // Reading shows one window of four sections with its position.
-  await expect(shown).toHaveCount(4);await expect(range).toHaveText('Sections 1–4 of 257');await expect(page.getByRole('button',{name:'Previous sections',exact:true})).toBeDisabled();
-  await page.getByRole('button',{name:'Next sections',exact:true}).click();await expect(range).toHaveText('Sections 5–8 of 257');await expect(section(4)).toBeVisible();
-  await page.getByRole('button',{name:'Previous sections',exact:true}).click();await expect(range).toHaveText('Sections 1–4 of 257');
+  // Reading shows one window of twelve sections with its position.
+  await expect(shown).toHaveCount(12);await expect(range).toHaveText('Sections 1–12 of 257');await expect(page.getByRole('button',{name:'Previous sections',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Next sections',exact:true}).click();await expect(range).toHaveText('Sections 13–24 of 257');await expect(section(12)).toBeVisible();
+  await page.getByRole('button',{name:'Previous sections',exact:true}).click();await expect(range).toHaveText('Sections 1–12 of 257');
   await page.getByLabel('Find section heading',{exact:true}).fill('Observation 257');await page.getByRole('button',{name:'Find next',exact:true}).click();await expect(section(256)).toBeVisible();await expect(range).toHaveText('Sections 257–257 of 257');
   await page.getByLabel('Find section heading',{exact:true}).fill('Absent heading');await page.getByRole('button',{name:'Find next',exact:true}).click();await expect(page.getByRole('alert')).toContainText('No section heading matches.');
   // Editing works in any window and keeps every other section.
@@ -42,7 +42,7 @@ test('long records page their sections in windows for reading, editing, finding 
   expect(JSON.stringify((await writing.read({...target,sectionId:e.sections[130].id})).value.body)).toContain('Revised late observation');
   // An anchored link opens the window that holds its section, and paging moves focus with the window.
   await page.evaluate(({id,section})=>location.hash='#/records/'+id+'/read/'+section,{id:e.id,section:e.sections[211].id});
-  await expect(section(211)).toBeFocused();await expect(shown).toHaveCount(4);await expect(page.locator('.record-sections')).toContainText('Exact retained notes 212.');
+  await expect(section(211)).toBeFocused();await expect(shown).toHaveCount(12);await expect(page.locator('.record-sections')).toContainText('Exact retained notes 212.');
   await page.getByRole('button',{name:'Next sections',exact:true}).click();await expect(shown.first()).toBeFocused();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('section-windows-mobile.png')});

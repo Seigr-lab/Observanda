@@ -148,7 +148,7 @@ test('draft discovery pages, retries and recovers one selected original without 
   const review=page.locator('.record-draft-review');await expect(review.locator('[role=status]')).toContainText('0 of 0');
   expect(f.records).toEqual([]);expect(new Set(f.draftBodies)).toEqual(new Set(['metadata:.observanda/drafts/'+f.commands[13].id+'.json']));
   await review.getByRole('button',{name:'Save recovered record',exact:true}).click();
-  await expect(review).toHaveCount(0,{timeout:30000});await expect(page.locator('.record-reader > h1')).toHaveText('Unfinished observation 13');
+  await expect(review).toHaveCount(0,{timeout:30000});await expect(page.locator('.record-reader h1')).toHaveText('Unfinished observation 13');
   expect(await f.drafts.read(f.commands[13].id)).toBe(null);
   expect(f.records).toEqual([]);expect(f.requests.some(url=>url.endsWith('/workspace/read/page'))).toBe(false);expect(f.errors).toEqual([]);
  }finally{await f.close();}
@@ -185,7 +185,7 @@ test('a failed recovery save retains its source draft and review for retry',asyn
   await page.context().route('**/api/research/drafts/review/apply',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic unavailable storage'}}));
   await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review.locator('[role=alert]')).toContainText('Synthetic unavailable storage');
   expect(await f.drafts.read(f.commands[0].id)).not.toBe(null);
-  await page.context().unroute('**/api/research/drafts/review/apply');await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review).toHaveCount(0,{timeout:30000});await expect(page.locator('.record-reader > h1')).toHaveText('Unfinished observation 00');
+  await page.context().unroute('**/api/research/drafts/review/apply');await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review).toHaveCount(0,{timeout:30000});await expect(page.locator('.record-reader h1')).toHaveText('Unfinished observation 00');
   expect(await f.drafts.read(f.commands[0].id)).toBe(null);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
