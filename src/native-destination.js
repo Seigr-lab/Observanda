@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {withMutationFilesSession} from './mutation-files.js';
-import {nativeMember} from './native-storage-tree.js';
+import {memberParts} from './native-storage-tree.js';
 import {temporaryWriteName} from './storage-temporary.js';
 import {createHash} from 'node:crypto';
 import {writeFilePart} from './segmented-file-io.js';
@@ -33,6 +33,31 @@ export function withNativeDestination(root,operation){
  const prior=(scopes.getStore()??[]).find(scope=>scope.active&&scope.root===root);if(prior)return operation(prior);
  return withMutationFilesSession(async service=>{
   let parent,directory,internal,active=true;
+  // Folders opened for one file stay open for the scope's later files: a site's files share
+  // a few folders, and opening a folder again costs two helper requests (open and close).
+  // The helper opens folders shared for reading, writing and deleting, so a held folder
+  // never blocks a rename or removal. Bounded; after any failure the idle ones are forgotten.
+  const folders=new Map(),FOLDER_LIMIT=128;
+  const closeFolder=async(key,entry)=>{folders.delete(key);await entry.handle?.close();};
+  async function trimFolders(all=false){
+   for(const [key,entry] of [...folders]){if(!all&&folders.size<=FOLDER_LIMIT)break;if(entry.uses===0&&entry.handle)await closeFolder(key,entry);}
+  }
+  // Concurrent files share one pending open of a folder rather than opening it twice.
+  async function heldFolder(base,space,parts,{create=false,missing=false}){
+   let current=base,key=space;const held=[];
+   try{
+    for(const part of parts){
+     key+='/'+part;let entry=folders.get(key);
+     if(entry){folders.delete(key);folders.set(key,entry);}
+     else{entry={uses:0,handle:null,ready:current.directory(part,{create,missing})};folders.set(key,entry);entry.ready.then(handle=>{entry.handle=handle;if(!handle&&folders.get(key)===entry)folders.delete(key);},()=>{if(folders.get(key)===entry)folders.delete(key);});}
+     entry.uses++;held.push(entry);
+     const handle=await entry.ready;if(!handle){release(held);return null;}
+     current=handle;
+    }
+   }catch(error){release(held);throw error;}
+   return {directory:current,held};
+  }
+  function release(held){for(const entry of held)entry.uses--;}
   const scope={root,
    get active(){return active;},
    get identity(){return directory?.identity;},get internalIdentity(){return internal?.identity;},get directory(){return directory;},get internalDirectory(){return internal;},
@@ -56,8 +81,14 @@ export function withNativeDestination(root,operation){
    },
    async member(file,operation,options={}){
     if(!active||!directory||!internal||!inside(root,file))throw new AppError('STORAGE_COPY');
-    const relative=path.relative(root,path.resolve(file)).split(path.sep).join('/');
-    return relative.startsWith('.observanda/')?nativeMember(internal,relative.slice('.observanda/'.length),operation,options):nativeMember(directory,relative,operation,options);
+    const relative=path.relative(root,path.resolve(file)).split(path.sep).join('/'),own=relative.startsWith('.observanda/');
+    const parts=memberParts(own?relative.slice('.observanda/'.length):relative),name=parts.pop();
+    const opened=await heldFolder(own?internal:directory,own?'internal':'root',parts,options);
+    if(!opened)return operation(null,name);
+    let failed=false;
+    try{return await operation(opened.directory,name);}
+    catch(error){failed=true;throw error;}
+    finally{release(opened.held);await (failed?trimFolders(true).catch(()=>{}):trimFolders());}
    },
    async write(file,content){
     const bytes=Buffer.isBuffer(content)?content:Buffer.from(content,'utf8');
@@ -94,7 +125,7 @@ export function withNativeDestination(root,operation){
    }
   };
   try{return await scopes.run([...(scopes.getStore()??[]),scope],()=>operation(scope));}
-  finally{active=false;await internal?.close();await directory?.close();await parent?.close();}
+  finally{active=false;for(const entry of [...folders.values()].reverse())await entry.handle?.close().catch(()=>{});folders.clear();await internal?.close();await directory?.close();await parent?.close();}
  });
 }
 

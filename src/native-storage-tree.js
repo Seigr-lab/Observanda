@@ -4,7 +4,7 @@ import {AppError} from './errors.js';
 
 // The worker holds at most one directory handle per depth. File bodies are
 // never accumulated while traversing a tree; only small control files use read.
-function memberParts(relative){
+export function memberParts(relative){
  if(typeof relative!=='string'||!relative||relative.includes('\\')||relative.split('/').some(part=>!part||part==='.'||part==='..'))throw new AppError('UNSAFE');
  return relative.split('/');
 }
