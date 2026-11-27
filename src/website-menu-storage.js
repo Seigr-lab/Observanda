@@ -92,7 +92,7 @@ export function saveSiteMenu(store,id,{expectedRevision,path='index.html',items,
   const nextPages=[...pages.values()],sources=[...new Map(nextPages.flatMap(page=>page.placements.map(({id,revision})=>[id,{id,revision}]))).values()];
   const usedPictures=new Set([...nextPages.flatMap(page=>page.pictures??[]),...Object.values(manifest.pictureStyles??{}).flat()]);
   const members=[...files.values()].filter(file=>!file.picture||usedPictures.has(file.name));
-  const candidate={...manifest,pages:nextPages,sources,files:await store.siteAssets(members,sources,nextPages)};
+  const candidate={...manifest,pages:nextPages,sources,files:await store.siteAssets(members,sources,nextPages,{previous:manifest})};
   await store.assertSources(candidate);
   return store.present(await store.commit(candidate,{signal}),path,{signal});
  },{write:true,signal});
