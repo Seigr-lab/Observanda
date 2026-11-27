@@ -66,18 +66,19 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   for(let p=row.parent;p;p=p.parent)if(!expanded.has(p.path)){expanded.add(p.path);changed=true;}
   if(!changed)return;chosen=path;
   let visible=visibleRows(),index=visible.indexOf(row);
-  if(index<0&&query){query='';controls.querySelector('input').value='';visible=visibleRows();index=visible.indexOf(row);}
+  if(index<0&&query){query='';const input=controls?.querySelector('input');if(input)input.value='';visible=visibleRows();index=visible.indexOf(row);}
   offset=Math.max(0,Math.floor(index/pageSize)*pageSize);draw();paintTrail();
  }
+ // The layer model and the selection path follow the page whether or not the Layers panel shows its list.
  function paint(host,doc){
-  if(host!==list)bindList(host);
+  if(host&&host!==list)bindList(host);
   observer?.disconnect();
   model=indexWebsiteLayers(doc);draw();paintTrail();
   observer=new MutationObserver(records=>updateRows(doc,records));
   observer.observe(doc.body,{subtree:true,characterData:true,childList:true,attributes:true,attributeFilter:['id','aria-label','alt','class','hidden','data-section-id','data-region-kind','data-observanda-source','data-observanda-link','data-observanda-part','data-observanda-editor','data-image-gallery','data-website-source-gallery','data-website-recording','data-website-feed','data-website-instance','data-website-region','data-website-menu','data-website-annotation']});
  }
  function updateRows(doc,records){
-  if(!model||!list?.isConnected)return;
+  if(!model)return;
   const affected=new Set();
   for(const record of records){
    const el=record.target.nodeType===1?record.target:record.target.parentElement;
@@ -96,7 +97,7 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   for(const row of affected){
    const wasVisible=matches(row);if(!refreshLayerLabel(row))continue;
    relabel=true;if(wasVisible!==matches(row)){redraw=true;continue;}
-   const item=list.querySelector('li[data-path="'+row.path+'"]');if(!item)continue;
+   const item=list?.isConnected?list.querySelector('li[data-path="'+row.path+'"]'):null;if(!item)continue;
    item.querySelector('[data-layer-select]').textContent=row.label;
    const grip=item.querySelector('[data-layer-grip]');if(grip){grip.title=t('layerDragHint',{name:row.label});grip.setAttribute('aria-label',grip.title);}
   }

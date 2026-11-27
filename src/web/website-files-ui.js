@@ -879,8 +879,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  // The outline follows the loaded canvas document; a reloading canvas paints
  // it again when the new document is ready.
  function paintStructure(doc){
-  const list=document.querySelector('[data-website-files-structure]');if(!list||!doc)return;
-  hierarchy.paint(list,doc);
+  if(!doc)return;
+  hierarchy.paint(document.querySelector('[data-website-files-structure]'),doc);
  }
  function bindStructure(list){
   hierarchy.bindList(list);
