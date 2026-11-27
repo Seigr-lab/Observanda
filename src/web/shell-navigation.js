@@ -13,13 +13,17 @@ export function shellNavigation() {
   const topbarObserver=new ResizeObserver(measureTopbar);
   const measureMenu=()=>document.documentElement.style.setProperty('--shell-navigation-height',(observedMenu?.getBoundingClientRect().height??0)+'px');
   const menuObserver=new ResizeObserver(measureMenu);
-  try{const value=localStorage.getItem('observanda.menu.open');if(value!==null)override=value==='true';}catch{}
-  const remember=()=>{try{localStorage.setItem('observanda.menu.open',String(override));}catch{}};
+  // The website editor needs the window's width: there the navigation starts closed,
+  // and opening or closing it there is remembered for the editor alone.
+  const wide=new Set(['website']);let wideOverride=null;
+  const stored=key=>{try{const value=localStorage.getItem(key);return value===null?null:value==='true';}catch{return null;}};
+  override=stored('observanda.menu.open');wideOverride=stored('observanda.menu.open.editor');
+  const remember=()=>{try{if(wide.has(page))localStorage.setItem('observanda.menu.open.editor',String(wideOverride));else localStorage.setItem('observanda.menu.open',String(override));}catch{}};
   function apply(next=page) {
     page=next;const nextCompact=window.innerWidth<=760;if(nextCompact!==compact){compact=nextCompact;compactOpen=false;}
     const root=document.documentElement, collapsed=root.dataset.navigationCollapsed==='true';
-    if(preference!==null&&preference!==collapsed){override=!collapsed;remember();}preference=collapsed;
-    const open=compact?compactOpen:override??!collapsed, drawer=open&&compact;
+    if(preference!==null&&preference!==collapsed){override=!collapsed;try{localStorage.setItem('observanda.menu.open',String(override));}catch{}}preference=collapsed;
+    const open=compact?compactOpen:wide.has(page)?wideOverride??false:override??!collapsed, drawer=open&&compact;
     root.dataset.contextNavigation=open?(drawer?'drawer':'open'):'closed';
     root.dataset.editorPage=page??'';
     const topbar=document.querySelector('.topbar');if(topbar!==observedTopbar){topbarObserver.disconnect();observedTopbar=topbar;if(topbar)topbarObserver.observe(topbar);}measureTopbar();
@@ -32,7 +36,8 @@ export function shellNavigation() {
   }
   window.addEventListener('resize',()=>apply());
   document.addEventListener('observanda:interface-layout',()=>apply());
-  function close(){if(compact)compactOpen=false;else{override=false;remember();}apply();document.querySelector('[data-action="shell-menu"]')?.focus();}
+  const choose=open=>{if(wide.has(page))wideOverride=open;else override=open;remember();};
+  function close(){if(compact)compactOpen=false;else choose(false);apply();document.querySelector('[data-action="shell-menu"]')?.focus();}
   document.addEventListener('keydown',e=>{if(e.key==='Tab'&&document.documentElement.dataset.contextNavigation==='drawer'){const stops=[...document.querySelectorAll('#main-navigation button,#main-navigation a,#main-navigation summary,[data-action="shell-menu"]')].filter(el=>!el.disabled&&el.tabIndex>=0&&el.checkVisibility()&&!el.closest('[inert]'));const index=stops.indexOf(document.activeElement);if(stops.length){e.preventDefault();stops[(index+(e.shiftKey?-1:1)+stops.length)%stops.length].focus();}}if(e.key==='Escape'&&document.documentElement.dataset.contextNavigation!=='closed'&&(document.documentElement.dataset.contextNavigation==='drawer'||e.target.closest?.('#main-navigation,[data-action="shell-menu"]'))&&!document.querySelector('dialog[open]')){e.preventDefault();close();}});
-  return {apply,beforeAction(button){if(document.documentElement.dataset.contextNavigation==='drawer'&&button.closest?.('#main-navigation'))close();},action(button){if(button.dataset.action==='shell-menu'){const open=document.documentElement.dataset.contextNavigation==='closed';if(compact)compactOpen=open;else{override=open;remember();}apply();if(open&&compact)document.querySelector('#main-navigation .nav-button')?.focus();return true;}if(button.dataset.action==='shell-menu-close'){close();return true;}return false;}};
+  return {apply,beforeAction(button){if(document.documentElement.dataset.contextNavigation==='drawer'&&button.closest?.('#main-navigation'))close();},action(button){if(button.dataset.action==='shell-menu'){const open=document.documentElement.dataset.contextNavigation==='closed';if(compact)compactOpen=open;else choose(open);apply();if(open&&compact)document.querySelector('#main-navigation .nav-button')?.focus();return true;}if(button.dataset.action==='shell-menu-close'){close();return true;}return false;}};
 }

@@ -56,7 +56,7 @@ html[data-context-navigation=drawer] .workspace-navigation .nav-button{width:100
 .shell-menu-backdrop{display:none}
 html[data-context-navigation=drawer] .shell-menu-backdrop{display:block;position:fixed;inset:var(--shell-topbar-height,64px) 0 0;z-index:100;border:0;background:var(--ui-overlay);cursor:default}
 html[data-context-navigation=drawer] .topbar{z-index:102}
-html[data-editor-page=website] .main{max-width:none;width:100%;margin:0;padding-block:1rem}
+html[data-editor-page=website] .main{max-width:none;width:100%;margin:0;padding:.5rem .75rem .75rem}
 html[data-editor-page=website] .section-save{margin-top:.65rem;padding-top:.65rem}
 #main-navigation{padding:.85rem .7rem;background:var(--ui-surface);border-right:1px solid var(--ui-border)}
 #main-navigation .brand{margin:0 .3rem .85rem;font-size:1.2rem}
