@@ -33,6 +33,7 @@
   "done": "Fet",
   "activityTitle": "Canvis recents dels agents",
   "noActivity": "Encara no hi ha canvis d'agents.",
+  "activityCreateLabBook": "{key} ha creat el quadern de laboratori «{title}»",
   "activityCreate": "{key} ha creat «{title}»",
   "activityUpdate": "{key} ha canviat «{title}»",
   "activityLink": "{key} ha afegit un enllaç a «{title}»",

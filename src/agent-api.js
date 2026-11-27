@@ -44,6 +44,9 @@ export const AGENT_OPERATIONS=Object.freeze([
  {name:'lab-books/list',method:'POST',access:'read',summary:'List the lab books of a project.',
   input:{type:'object',additionalProperties:false,required:['projectId'],properties:{projectId:id,cursor,limit:limit(50)}},
   output:{type:'object',properties:{labBooks:{type:'array',items:{type:'object',properties:{labBookId:id,title:{type:'string'}}}},nextCursor:cursor}}},
+ {name:'lab-books/create',method:'POST',access:'write',summary:'Create a lab book in a project. It opens with the same access as the rest of the workspace; no password is involved.',
+  input:{type:'object',additionalProperties:false,required:['projectId','title'],properties:{projectId:id,title:{type:'string',minLength:1,maxLength:120,description:'The lab book name; it is also its folder name, so it must be unique in the project.'}}},
+  output:{type:'object',properties:{labBookId:id,title:{type:'string'}}}},
  {name:'records/list',method:'POST',access:'read',summary:'List the records of a lab book, optionally matching search text.',
   input:{type:'object',additionalProperties:false,required:['projectId','labBookId'],properties:{...book,search:{type:'string',maxLength:512},cursor,limit:limit(100)}},
   output:{type:'object',properties:{records:{type:'array',items:{type:'object'}},nextCursor:cursor,total:{type:'integer'}}}},
@@ -127,6 +130,12 @@ export async function runAgentOperation(operation,input,{key,run,now=()=>new Dat
  if(operation.name==='lab-books/list'){
   const value=await run('/api/projects/'+input.projectId+'/lab-books/list',{after:input.cursor??null,limit:input.limit??50,revision:null});
   return {labBooks:value.items.filter(item=>inScope(key,{projectId:input.projectId,labBookId:item.labBookId})).map(item=>({labBookId:item.labBookId,title:item.directory})),nextCursor:value.next??null};
+ }
+ if(operation.name==='lab-books/create'){
+  // A key for one lab book cannot add lab books to its project.
+  if(key.scope.kind==='lab-book')forbidden();
+  const labBookId=randomUUID(),result=await run('/api/projects/'+input.projectId+'/lab-books/create',{id:randomUUID(),book:{id:labBookId,title:input.title,projectId:input.projectId},username:'',password:''});
+  return {labBookId:result?.book?.labBookId??labBookId,title:input.title};
  }
  const prefix='/api/projects/'+input.projectId+'/lab-books/'+input.labBookId;
  const start=await run(prefix+'/workspace/read/start',{}),workspaceId=start.metadata.id;

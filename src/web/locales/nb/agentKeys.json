@@ -33,6 +33,7 @@
   "done": "Ferdig",
   "activityTitle": "Nylige endringer fra agenter",
   "noActivity": "Ingen endringer fra agenter ennå.",
+  "activityCreateLabBook": "{key} opprettet laboratorieboka «{title}»",
   "activityCreate": "{key} opprettet «{title}»",
   "activityUpdate": "{key} endret «{title}»",
   "activityLink": "{key} la til en lenke i «{title}»",

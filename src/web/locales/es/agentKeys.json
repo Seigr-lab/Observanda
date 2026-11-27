@@ -33,6 +33,7 @@
   "done": "Hecho",
   "activityTitle": "Cambios recientes de los agentes",
   "noActivity": "Todavía no hay cambios de agentes.",
+  "activityCreateLabBook": "{key} creó el cuaderno de laboratorio «{title}»",
   "activityCreate": "{key} creó «{title}»",
   "activityUpdate": "{key} cambió «{title}»",
   "activityLink": "{key} añadió un enlace a «{title}»",

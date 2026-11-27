@@ -369,7 +369,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    };
    const output=await runAgentOperation(operation,input,{key,run});
    // The owner sees every agent change under the key's name; the change is already saved.
-   if(operation.access==='write'&&operation.activity!==null)await agentKeys.recordActivity({key,operation:operation.activity??operation.name,projectId:input.projectId,labBookId:input.labBookId,recordId:output.id,title:output.title}).catch(()=>{});
+   if(operation.access==='write'&&operation.activity!==null)await agentKeys.recordActivity({key,operation:operation.activity??operation.name,projectId:input.projectId,labBookId:input.labBookId??output.labBookId??null,recordId:output.id??null,title:output.title}).catch(()=>{});
    return json(output);
   };
   const activate=async(location,client,vault=null,{movingFrom,followSettings=false}={})=>operationStage('activate',{},async()=>{

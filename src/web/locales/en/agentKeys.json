@@ -33,6 +33,7 @@
   "done": "Done",
   "activityTitle": "Recent agent changes",
   "noActivity": "No agent changes yet.",
+  "activityCreateLabBook": "{key} created the lab book “{title}”",
   "activityCreate": "{key} created “{title}”",
   "activityUpdate": "{key} changed “{title}”",
   "activityLink": "{key} added a link to “{title}”",

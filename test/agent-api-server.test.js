@@ -20,7 +20,7 @@ test('agents learn the API from the app and work only through their key, scope a
  // The description needs no key and names this build's operations.
  const description=await result(await f.agent('/api/v1/openapi.json'));
  assert.equal(description.openapi,'3.1.0');assert.equal(description.servers[0].url,f.app.origin);
- for(const name of ['me','projects/list','lab-books/list','records/list','records/get','records/create','records/update'])assert.ok(description.paths['/api/v1/agent/'+name],name);
+ for(const name of ['me','projects/list','lab-books/list','lab-books/create','records/list','records/get','records/create','records/update'])assert.ok(description.paths['/api/v1/agent/'+name],name);
  assert.equal(description.paths['/api/v1/agent/records/create'].post.requestBody.content['application/json'].schema.properties.record.required.join(),'type,title');
  // No key, a browser origin, or a session mixed with a key is refused.
  assert.equal((await result(await f.agent('/api/v1/agent/me'),401)).code,'AGENT_KEY_INVALID');
@@ -60,6 +60,16 @@ test('agents learn the API from the app and work only through their key, scope a
  // The owner sees each agent change under the key's name, newest first.
  const changes=(await result(await f.owner('/api/security/agent-keys/activity',{}))).activity;
  assert.deepEqual(changes.map(entry=>[entry.operation,entry.recordId,entry.title,entry.keyName]),[['records/update',created.id,'Release 1.2',me.name],['records/create',created.id,'Release 1.2',me.name]]);
+ // An agent creates a lab book without any password; it opens like the rest of the workspace.
+ const added=await result(await f.agent('/api/v1/agent/lab-books/create',{key,data:{projectId:project.projectId,title:'Manager notes'}}));
+ assert.equal(added.title,'Manager notes');
+ assert.deepEqual((await result(await f.agent('/api/v1/agent/lab-books/list',{key,data:{projectId:project.projectId}}))).labBooks.map(item=>item.title).sort(),['Design notes','Manager notes','Release log']);
+ const first=await result(await f.agent('/api/v1/agent/records/create',{key,data:{projectId:project.projectId,labBookId:added.labBookId,record:{type:'note',title:'First entry'}}}));
+ assert.equal((await result(await f.agent('/api/v1/agent/records/get',{key,data:{projectId:project.projectId,labBookId:added.labBookId,recordId:first.id}}))).title,'First entry');
+ // A lab book name is unique in its project; a key for one lab book cannot add lab books.
+ assert.equal((await result(await f.agent('/api/v1/agent/lab-books/create',{key,data:{projectId:project.projectId,title:'Manager notes'}}),409)).code,'EXISTS');
+ assert.equal((await result(await f.agent('/api/v1/agent/lab-books/create',{key:await create({kind:'lab-book',projectId:project.projectId,labBookId:book.labBookId}),data:{projectId:project.projectId,title:'Elsewhere'}}),403)).code,'AGENT_KEY_SCOPE');
+ assert.deepEqual((await result(await f.owner('/api/security/agent-keys/activity',{}))).activity.slice(0,2).map(entry=>[entry.operation,entry.labBookId,entry.title]),[['records/create',added.labBookId,'First entry'],['lab-books/create',added.labBookId,'Manager notes']]);
  assert.equal(created.title,'Release 1.2');
  // Scope and access are enforced on every operation.
  const readOnly=await create({kind:'workspace'},'read');
