@@ -43,3 +43,43 @@
 .record-media-tile-audio,.record-media-tile-video{grid-column:1/-1}
 .record-media-tile audio,.record-media-tile video{max-width:100%}
 .record-media-credit{margin:.25rem 0 0;font-size:.875em}
+/* A record read as a lab book page: one surface, a readable column and a clear ladder of
+   type: the record's facts, its title, its tags, the summary, then each section under its own heading. */
+.record-reader:not(.record-editing){max-width:52rem;margin-inline:auto;padding:clamp(1.25rem,3vw,2.75rem);background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-radius);box-shadow:var(--ui-shadow)}
+.record-document-head{margin:0 0 1.75rem;padding-bottom:1.5rem;border-bottom:1px solid var(--ui-border)}
+.record-document-head h1{margin:.6rem 0 .75rem;font-family:var(--ui-heading);font-size:clamp(1.9rem,1.2rem + 1.6vw,2.6rem);line-height:1.15;letter-spacing:-.01em}
+.record-meta,.record-tag-list{display:flex;flex-wrap:wrap;gap:.4rem;margin:0;padding:0;list-style:none}
+.record-meta li{padding:.2rem .65rem;font-size:.8rem;font-weight:600;line-height:1.4;border-radius:999px;color:var(--ui-text);background:var(--ui-tint)}
+.record-meta .record-meta-type{color:var(--ui-on-accent);background:var(--ui-accent)}
+.record-meta .record-meta-date{font-weight:500;color:var(--ui-muted);background:none;border:1px solid var(--ui-border)}
+.record-tag-list li{padding:.15rem .6rem;font-size:.8rem;line-height:1.4;border:1px solid var(--ui-border);border-radius:999px;color:var(--ui-muted)}
+.record-tag-list li::before{content:'#';margin-inline-end:.1em;opacity:.6}
+.record-availability{margin:.9rem 0 0;font-size:.85rem;color:var(--ui-muted)}
+.record-reader .record-revision>.prose>p:first-of-type{font-size:1.12em;line-height:1.65;color:var(--ui-text)}
+.record-reader .prose p{margin:0 0 .85em}
+.record-reader .prose :is(ul,ol){margin:0 0 1em;padding-inline-start:1.4em}
+.record-reader .prose li{margin-block:.25em}
+.record-reader .prose :is(h3,h4){margin:1.4em 0 .5em;font-family:var(--ui-heading);font-size:1.05rem}
+/* The sections of a long record, listed at the top of the reading. */
+.record-reader-contents{margin:1.75rem 0 .5rem;padding:1rem 1.25rem;border-radius:var(--ui-radius);background:var(--ui-tint)}
+.record-reader-contents>p{margin:0 0 .5rem;font-size:.78rem;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ui-muted)}
+.record-reader-contents ol{margin:0;padding-inline-start:1.4em;columns:2 14rem;column-gap:2rem}
+.record-reader-contents li{margin-block:.2rem;break-inside:avoid}
+.record-reader-contents a{color:var(--ui-accent);text-decoration:none}
+.record-reader-contents a:hover,.record-reader-contents a:focus-visible{text-decoration:underline}
+.record-reader .record-sections>section{margin-top:2.25rem;padding-top:1.75rem;border-top:1px solid var(--ui-border)}
+.record-reader .record-sections>section:first-of-type{border-top:0;padding-top:0}
+.record-reader .record-sections .section-bar h2{margin:0;font-family:var(--ui-heading);font-size:1.4rem;line-height:1.25}
+.record-reader .record-sections .section-bar{margin-block:0 .9rem}
+/* Editing: each section is one heading row; its visibility and its actions sit on that row. */
+.record-sections>section>.section-bar:has(.section-bar-actions){display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin-block:1.75rem .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--ui-border)}
+.record-sections>section>.section-bar:has(.section-bar-actions) h3{margin:0;flex:1 1 12rem;font-family:var(--ui-heading);font-size:1.15rem}
+.section-bar-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem}
+.section-bar-actions .inline-actions{display:contents}
+.section-bar-actions .button{min-height:2rem;padding:.25rem .6rem;font-size:.85rem}
+.section-bar-actions .button:not([data-action=writing-edit]){color:var(--ui-muted);background:none;border-color:transparent}
+.section-bar-actions .button:not([data-action=writing-edit]):hover:not(:disabled){color:var(--ui-accent);border-color:var(--ui-border)}
+/* The record's further parts (fields, figures, contributors, links) under one kind of label. */
+.record-reader:not(.record-editing) .record-revision>section{margin-top:2rem;padding-top:1.25rem;border-top:1px solid var(--ui-border)}
+.record-reader:not(.record-editing) .record-revision>section>h3{margin:0 0 .75rem;font:650 .78rem/1.3 var(--ui-font);letter-spacing:.05em;text-transform:uppercase;color:var(--ui-muted)}
+@media print{.record-reader:not(.record-editing){max-width:none;padding:0;border:0;box-shadow:none}.record-reader-contents{display:none}}

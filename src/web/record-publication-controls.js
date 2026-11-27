@@ -29,8 +29,10 @@ export function publicationChoices(website,pdf,esc){
  return '<span class="badge" data-publication-choices>'+targets.map(target=>esc(targetLabel(target)+' · '+text((target==='website'?website:pdf)?'yes':'no'))).join(' / ')+'</span>';
 }
 
-export function publicationAvailability(record,book,esc,{editing=false,draft=false,busy=false}={}){
+// compact: one line for a record being read, naming where it may be published.
+export function publicationAvailability(record,book,esc,{editing=false,draft=false,busy=false,compact=false}={}){
  const edit=field=>'<button class="button subtle" type="button" data-action="record-value-edit" data-value-field="'+field+'"'+(busy?' disabled':'')+' aria-label="'+esc(text('edit_'+field))+'">'+esc(text('edit_editButton'))+'</button>';
+ if(compact)return '<p class="record-availability" data-record-publication>'+targets.map(target=>{const field=entryField(target),allowed=record[field]===true,bookOff=book&&!sourceNotebookAllowed(book,target);return esc(targetLabel(target)+': '+text(!allowed?'private':bookOff?'publicationBookBlocked':'public'));}).join(' · ')+'</p>';
  const choices=targets.map(target=>{
   const field=entryField(target),allowed=record[field]===true,bookOff=book&&!sourceNotebookAllowed(book,target);
   const status=text(!allowed?'private':bookOff?'publicationBookBlocked':'public');

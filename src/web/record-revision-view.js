@@ -38,18 +38,23 @@ export function recordRevisionField(key,record,esc,{anchors=false,captionReferen
  if(key==='type')return esc(typeName(record));
  if(key==='status')return esc(statusLabel(v));
  if(key==='share')return esc(msg(record.share?'revisionIncluded':'revisionPrivate'));
- if(key==='tags')return list(v.map(t=>esc(t)));
+ if(key==='tags')return v.length?'<ul class="record-tag-list">'+v.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>':list([]);
  if(key==='contributors')return list(v.map(p=>esc(p.name)+(p.role?' &middot; '+esc(p.role):'')));
  if(key==='relations')return list(v.map(r=>esc(r.type)+' &middot; '+esc(msg(r.target.revision?'revisionExactLink':'revisionCurrentLink',{label:r.label||msg('linkedItem'),...(r.target.revision?{revision:r.target.revision.slice(0,12)}:{})}))));
  if(key==='attachments')return recordMediaGallery(v.filter(a=>['image','audio','video'].includes(a.kind)&&!placedFigures(record).has(a.id)),esc,{assetUrl,player:a=>'<figure><'+(a.kind==='audio'?'audio':'video')+' src="'+esc(assetUrl(a.id))+'" controls preload="none" aria-label="'+esc(a.alt||a.caption||msg('media_'+a.kind))+'">'+recordCaptionTracks(a,{recordId:record.id,assetUrl,esc,reference:captionReference})+'</'+(a.kind==='audio'?'audio':'video')+'><figcaption>'+esc(a.caption)+mediaCreditLine(a.metadata,esc)+'</figcaption><div class="result-statement-text">'+esc(a.transcript)+'</div>'+mediaMetadataDetails(a.metadata,esc)+'</figure>'});
  if(key==='template')return v?'<p>'+esc(templateText(v.label))+'</p><dl>'+v.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+value(customFieldValueText(f,v.values[f.key]),esc)+(templateFieldAction?templateFieldAction(f):'')+'</dd>').join('')+'</dl>':'<p>'+esc(msg('revisionNoFields'))+'</p>';
  return value(v,esc);
 }
-export function recordRevisionView(record,esc,{captionReference=null,relations=true,anchors=false,sectionsHtml=null,fieldsHtml={},inlineRecord=record,attemptReference=null,attemptWindow=null,resultReference=null,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figureResults=null,figureReference=null,retainedFigureAction=null}={}){
+// title: the record read as a page; its header carries the type, status and date, the title, the tags
+// and headExtra (such as where the record may be published).
+export function recordRevisionView(record,esc,{title=null,headExtra='',captionReference=null,relations=true,anchors=false,sectionsHtml=null,fieldsHtml={},inlineRecord=record,attemptReference=null,attemptWindow=null,resultReference=null,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figureResults=null,figureReference=null,retainedFigureAction=null}={}){
  const figure=recordFigureRenderer(inlineRecord,esc,{translate:t,assetUrl,figureSources,figureActions,figureResults,figureReference,retainedFigureAction});
  const fieldView=key=>Object.hasOwn(fieldsHtml,key)?fieldsHtml[key]:recordRevisionField(key,record,esc,{captionReference,assetUrl,figureSources,figureActions,figureResults,figureReference,retainedFigureAction});
- const figures=fieldView('figures'),details=['tags','contributors',...(relations?['relations']:[]),'attachments'].filter(k=>record[k]?.length||fieldsHtml[k]).map(k=>({key:k,html:fieldView(k)})).filter(v=>v.html);
- return '<article class="record-revision"><p class="scope-kicker">'+esc(typeName(record))+' &middot; '+esc(statusLabel(record.status))+' &middot; '+esc(recordDateLabel(record.occurredOn))+'</p>'+
+ const figures=fieldView('figures'),details=[...(title===null?['tags']:[]),'contributors',...(relations?['relations']:[]),'attachments'].filter(k=>record[k]?.length||fieldsHtml[k]).map(k=>({key:k,html:fieldView(k)})).filter(v=>v.html);
+ const facts=[['type',typeName(record)],['status',statusLabel(record.status)],['date',recordDateLabel(record.occurredOn)]].filter(([,text])=>text);
+ const head=title===null?'<p class="scope-kicker">'+esc(typeName(record))+' &middot; '+esc(statusLabel(record.status))+' &middot; '+esc(recordDateLabel(record.occurredOn))+'</p>'
+  :'<header class="record-document-head"><ul class="record-meta">'+facts.map(([key,text])=>'<li class="record-meta-'+key+'">'+esc(text)+'</li>').join('')+'</ul><h1>'+esc(title)+'</h1>'+(record.tags?.length?recordRevisionField('tags',record,esc):'')+headExtra+'</header>';
+ return '<article class="record-revision">'+head+
   (record.outcome?'<p><strong>'+esc(msg('revisionOutcomeCaption'))+'</strong> '+esc(record.outcome)+'</p>':'')+'<div class="prose">'+recordRevisionField('body',record,esc,{anchors,figure})+(record.sections.length?(sectionsHtml?sectionsHtml(figure):recordRevisionField('sections',record,esc,{anchors,figure})):'' )+'</div>'+
   (fieldsHtml.attempt??attemptView(record.attempt,esc,{message:attemptMessage,reference:attemptReference,window:attemptWindow}))+(fieldsHtml.results??resultStatementsView(record.results,esc,{reference:resultReference}))+(record.template?'<section><h3>'+esc(fieldLabel('template'))+'</h3>'+fieldView('template')+'</section>':'')+
   (figures?'<section><h3>'+esc(fieldLabel('figures'))+'</h3>'+figures+'</section>':'')+
