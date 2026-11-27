@@ -22,12 +22,14 @@ test('every command in the published agent guide works as documented, in order, 
  assert.equal(new Set(AGENT_APP_GUIDE.map(step=>step.id)).size,AGENT_APP_GUIDE.length);
  // The installed app publishes the guide with the command it explains.
  const description=await result(await f.agent('/api/v1/openapi.json')),operations=description.paths['/api/v1/agent/app/{command}'];
+ // The whole guide is at the top of the description; each method carries its own steps, and none an empty list.
+ assert.deepEqual(description.info['x-observanda-guide'].map(step=>step.id),AGENT_APP_GUIDE.map(step=>step.id));assert.match(description.info.description,/x-observanda-guide/);
  for(const method of ['GET','POST']){
-  const published=operations[method.toLowerCase()]['x-observanda-guide'];
-  assert.deepEqual(published.map(step=>step.id),AGENT_APP_GUIDE.filter(step=>step.method===method).map(step=>step.id));
-  assert.match(operations[method.toLowerCase()].description,/x-observanda-guide lists the main commands/);
+  const steps=AGENT_APP_GUIDE.filter(step=>step.method===method),published=operations[method.toLowerCase()]['x-observanda-guide'];
+  if(steps.length){assert.deepEqual(published.map(step=>step.id),steps.map(step=>step.id));assert.match(operations[method.toLowerCase()].description,/x-observanda-guide lists the main commands/);}
+  else{assert.equal(published,undefined);assert.match(operations[method.toLowerCase()].description,/at the top of this description/);}
  }
- for(const step of AGENT_APP_GUIDE)assert.ok(Object.values(operations).some(operation=>operation['x-observanda-guide'].some(item=>item.id===step.id&&item.command===step.command)),step.id);
+ for(const step of AGENT_APP_GUIDE)assert.ok(Object.values(operations).some(operation=>(operation['x-observanda-guide']??[]).some(item=>item.id===step.id&&item.command===step.command)),step.id);
  const project=await f.createProject('Field trials'),book=await f.createBook(project.projectId,'Coil measurements');
  const record=await result(await f.agent('/api/v1/agent/records/create',{key,data:{projectId:project.projectId,labBookId:book.labBookId,record:{type:'experiment',title:'Coil test'}}}));
  const values={projectId:project.projectId,labBookId:book.labBookId,recordId:record.id,newId:randomUUID()};

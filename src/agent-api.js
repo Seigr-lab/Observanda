@@ -236,15 +236,18 @@ export function agentOpenApi(origin){
   }};
  }
  const command={name:'command',in:'path',required:true,schema:{type:'string'},description:'The app command, without /api/: for example projects/<projectId>/lab-books/<labBookId>/research/records/values/save, website-files/save or pdf/list.'};
+ // The guide sits with the method its commands use, and whole at the top of the description,
+ // so no method shows an empty guide.
+ const guide=method=>AGENT_APP_GUIDE.filter(step=>step.method===method.toUpperCase());
  const appCommand=method=>({operationId:'appCommand'+method,summary:'Run one of the app\'s own commands, as the owner\'s screens do.',
   description:'Lab book data: projects/... commands (a project or lab book key reaches only its own project or lab book), and for workspace keys the workspace\'s own lab book: workspace/read/..., research/... and GET notebook. Websites: website-files/..., website-record-updates/check|apply and website-analysis/check (workspace keys). PDFs: pdf/... (workspace keys). Reading: GET dashboard. '+
-   'The body, the reply and every check are those of the app itself; a read key may run only commands that read. Passwords, keys, devices, preferences and workspace storage are not reachable. Changes are listed under the key\'s name in Preferences, Agents. x-observanda-guide lists the main commands with example bodies.',
+   'The body, the reply and every check are those of the app itself; a read key may run only commands that read. Passwords, keys, devices, preferences and workspace storage are not reachable. Changes are listed under the key\'s name in Preferences, Agents. '+(guide(method).length?'x-observanda-guide lists the main commands with example bodies.':'The main commands, with example bodies, are listed under x-observanda-guide at the top of this description and with the POST method.'),
   security:[{agentKey:[]}],parameters:[command],...(method==='Post'?{requestBody:{required:false,content:{'application/json':{schema:{type:'object'}},'application/octet-stream':{schema:{type:'string',format:'binary'}}}}}:{}),
   responses:{200:{description:'The app\'s own reply.'},422:error,401:error,403:error,404:error,409:error,423:error},
-  'x-observanda-guide':AGENT_APP_GUIDE.filter(step=>step.method===method.toUpperCase())});
+  ...(guide(method).length?{'x-observanda-guide':guide(method)}:{})});
  paths['/api/v1/agent/app/{command}']={get:appCommand('Get'),post:appCommand('Post')};
  return {openapi:'3.1.0',
-  info:{title:'Observanda agent API',version:AGENT_API_VERSION,description:'Use Observanda from programs on this computer. The workspace owner creates a key in Observanda (Preferences, Agents); send it as a bearer token. A key works only while its workspace, and the project or lab book it reaches, is unlocked in the app. Every change goes through the same checks as a change made in the app.'},
+  info:{title:'Observanda agent API',version:AGENT_API_VERSION,description:'Use Observanda from programs on this computer. The workspace owner creates a key in Observanda (Preferences, Agents); send it as a bearer token. A key works only while its workspace, and the project or lab book it reaches, is unlocked in the app. Every change goes through the same checks as a change made in the app. x-observanda-guide lists the main app commands with example bodies.','x-observanda-guide':AGENT_APP_GUIDE},
   servers:[{url:origin}],
   components:{securitySchemes:{agentKey:{type:'http',scheme:'bearer',description:'An Observanda agent key (obsk_...).'}}},
   paths};
