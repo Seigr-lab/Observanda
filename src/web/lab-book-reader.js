@@ -1,4 +1,4 @@
-import {headerWindowSize} from './record-header-windows.js';
+import {headerWindowSize,RECORD_SECTION_WINDOW} from './record-header-windows.js';
 import {retainedTableAction} from './retained-table-reader.js';
 import {bindReadingTables} from './record-reading-tables.js';
 import {recordHeaderControls} from './record-header-controls.js';
@@ -33,7 +33,7 @@ export async function readBookWindow(api,command,{signal,onCommand=()=>{}}={}){
    pending={...pending,cursor:result.search.nextCursor};continue;
   }
   const sections=result.sections;
-  if(result.header?.id!==command.recordId||!sections||![sections.offset,sections.total].every(n=>Number.isSafeInteger(n)&&n>=0)||!Array.isArray(sections.values)||sections.values.length>4||sections.offset+sections.values.length>sections.total||!result.collections)throw Error(text('incomplete'));
+  if(result.header?.id!==command.recordId||!sections||![sections.offset,sections.total].every(n=>Number.isSafeInteger(n)&&n>=0)||!Array.isArray(sections.values)||sections.values.length>RECORD_SECTION_WINDOW||sections.offset+sections.values.length>sections.total||!result.collections)throw Error(text('incomplete'));
   for(const [name,page] of Object.entries(result.collections))if(!page||![page.offset,page.count,page.total].every(n=>Number.isSafeInteger(n)&&n>=0)||page.count>headerWindowSize(name)||page.offset+page.count>page.total)throw Error(text('incomplete'));
   return {...result,readingProjection:true};
  }
@@ -44,7 +44,7 @@ export async function readBookPage({state,api,page,signal}){
 }
 const windowButton=(key,action,esc,disabled=false,attributes='')=>'<button type="button" class="button" data-action="record-list-content-'+action+'" '+attributes+(disabled?' disabled':'')+'>'+esc(contentText(key))+'</button>';
 function sectionControls(page,esc,busy){
- if(page.total<=4)return '';
+ if(page.total<=RECORD_SECTION_WINDOW)return '';
  return '<nav class="record-section-navigation" data-record-collection="sections" aria-label="'+esc(contentText('navigation'))+'"><span role="status">'+esc(contentText('range',{first:page.offset+1,last:page.offset+page.values.length,total:page.total}))+'</span><div class="inline-actions">'+windowButton('previous','previous',esc,busy||page.offset===0,'data-collection="sections"')+windowButton('next','next',esc,busy||page.offset+page.values.length>=page.total,'data-collection="sections"')+'</div><label>'+esc(contentText('goTo'))+' <input type="number" data-collection-position="sections" min="1" max="'+page.total+'" value="'+(page.offset+1)+'" required></label>'+windowButton('go','go',esc,busy,'data-collection="sections"')+'</nav>';
 }
 export function bookReadingEntry(value,esc,options={}){
@@ -103,7 +103,9 @@ export function bookReadingWindows({api,esc,records,active,decorate,assetUrl,wor
    await load(item,next,{focus:'results'});return true;
   }
   const collection=control.dataset.collection,page=collection==='sections'?item.sections:item.collections[collection];if(!page)return true;
-  const size=collection==='sections'?4:headerWindowSize(collection);let offset=page.offset+(operation==='previous'?-size:size);
+  // A section window may hold fewer than twelve sections (long ones): Next starts where it ended and
+  // Previous steps back as many sections as it holds.
+  const size=collection==='sections'?RECORD_SECTION_WINDOW:headerWindowSize(collection);const step=collection==='sections'?Math.max(1,page.values.length):size;let offset=page.offset+(operation==='previous'?-step:step);
   if(operation==='go'){const input=node(item.recordId).querySelector('[data-collection-position="'+collection+'"]');if(!input.reportValidity())return true;offset=Number(input.value)-1;}
   const next=command(item);if(collection==='sections')next.offset=Math.max(0,offset);else next.windows[collection]=Math.max(0,offset);
   await load(item,next,{focus:collection});return true;

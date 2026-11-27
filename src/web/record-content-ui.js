@@ -19,7 +19,7 @@ import {attemptInputChecks} from './attempt-input-check.js';
 import {recordEditingView} from './record-editing-view.js';
 import {publicationAvailability,publicationChoices} from './record-publication-controls.js';
 import {focusElement} from './focus-management.js';
-import {headerWindowSize} from './record-header-windows.js';
+import {headerWindowSize,RECORD_SECTION_WINDOW} from './record-header-windows.js';
 import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js';
 
 // Reading windows live outside editable workspace snapshots. Selected editing
@@ -53,7 +53,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
     const next=result.search;if(typeof next.nextCursor!=='string'||next.nextCursor===pending.cursor||!Number.isSafeInteger(next.scanned)||next.scanned<1||next.scanned>=next.total)throw Error(text('failed'));
     progress=next;pending={...pending,cursor:next.nextCursor};render();
    }
-   if(result.sections.values.length>4)throw Error(text('failed'));
+   if(result.sections.values.length>RECORD_SECTION_WINDOW)throw Error(text('failed'));
    const header=result.header??reading?.header,resultPage=result.collections?.results;
    if(resultPage&&(![resultPage.offset,resultPage.count,resultPage.total].every(value=>Number.isSafeInteger(value)&&value>=0)||resultPage.count>4||resultPage.offset+resultPage.count>resultPage.total||(header?.results?.statements??[]).length!==resultPage.count))throw Error(text('failed'));
    reading={...result,header};offset=result.sections.offset;resultFigure=reading.resultWindow?.figureId??null;
@@ -67,7 +67,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
  }
  const button=(key,action,disabled=false)=>'<button type="button" class="button" data-action="content-'+action+'" '+(disabled?'disabled':'')+'>'+esc(text(key))+'</button>';
  function navigation(){
-  const {total,offset,values}=reading.sections;if(total<=4)return '';
+  const {total,offset,values}=reading.sections;if(total<=RECORD_SECTION_WINDOW)return '';
   return '<nav class="record-section-navigation" aria-label="'+esc(text('navigation'))+'"><span role="status">'+esc(text('range',{first:offset+1,last:offset+values.length,total}))+'</span><div class="inline-actions">'+button('previous','previous',busy||offset===0)+button('next','next',busy||offset+values.length>=total)+'</div>'+field(esc(text('goTo')),'<input type="number" data-content-position min="1" max="'+total+'" required value="'+(offset+1)+'">')+button('go','go',busy)+'<div class="record-section-find">'+field(esc(text('findHeading')),'<input type="search" data-content-search value="'+esc(search)+'">')+button('findNext','find',busy)+'</div></nav>';
  }
  function view(){
@@ -148,7 +148,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
    extra={search,after:search===lastSearch?offset+1:0};lastSearch=search;
   }else if(name==='content-go'){
    const input=document.querySelector('[data-content-position]');if(!input.reportValidity())return true;extra={offset:Number(input.value)-1};
-  }else if(name!=='content-retry')extra={offset:Math.max(0,offset+(name==='content-previous'?-4:4))};
+  }else if(name!=='content-retry')extra={offset:Math.max(0,name==='content-previous'?offset-Math.max(1,reading.sections.values.length):offset+reading.sections.values.length)};
   collectionFocus=name==='content-retry'?pendingCollection:null;focus=!collectionFocus;state.recordSection=null;const task=load(extra,name==='content-retry');render();await task;return true;
  }
  async function whenReady(id){

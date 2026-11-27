@@ -11,6 +11,18 @@ import {withRecordDocument} from './record-document.js';
 import {recordReadingHeader,validHeaderWindows} from './record-reading-header.js';
 import {resultAnchorId} from './record-result-document.js';
 import {materialRecordSummary} from './material-record-summary.js';
+// A reading window holds up to twelve sections, so most records show whole, and stops early once it
+// holds about 240 000 characters, so a record of very long sections still pages in pieces. The
+// next window starts where this one ended.
+const RECORD_SECTION_WINDOW=12,RECORD_SECTION_BUDGET=240000;
+async function sectionWindow(page,offset){
+ let window=await page(offset),size=JSON.stringify(window.values).length;
+ while(window.values.length<RECORD_SECTION_WINDOW&&size<RECORD_SECTION_BUDGET&&window.offset+window.values.length<window.total){
+  const next=await page(window.offset+window.values.length,Math.min(4,RECORD_SECTION_WINDOW-window.values.length));if(!next.values.length)break;
+  window={...window,values:[...window.values,...next.values]};size+=JSON.stringify(next.values).length;
+ }
+ return window;
+}
 
 const natural=v=>Number.isSafeInteger(v)&&v>=0;
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
@@ -46,7 +58,7 @@ export class RecordContent {
      for(const name of names)if(name!=='sections')Object.defineProperty(header,name,{value:await selected([name]),enumerable:true});
      if(header.id!==command.recordId||header.notebookId!==row.notebookId)damaged();
     }
-    const sections=await page(offset);
+    const sections=await sectionWindow(page,offset);
     const paged=command.pagedHeader?await withRecordDocument(store,row.id,row.revision,document=>recordReadingHeader(store,row,document,sections.values,{windows:command.windows,anchor:command.anchor,resultFigure:command.resultFigure,signal})):{};
     signal?.throwIfAborted();
     const {revision}=await materialRecordSummary(store,row);

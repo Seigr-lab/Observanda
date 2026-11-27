@@ -4,12 +4,13 @@ import {editableRecord} from './workspace-snapshot.js';
 import {proseText,renderProse} from './prose-model.js';
 import {recordFigureRenderer} from './book-reading.js';
 import {sectionAnchor} from './record-workflow.js';
+import {RECORD_SECTION_WINDOW} from './record-header-windows.js';
 import {t} from './i18n/index.js';
 
 // This window is presentation state, not a record edit. Section identities and
 // their order belong to the record, including when edits cross a window edge.
 export function recordSectionsUI({state,documents,esc,field,icon,dirty,render}){
- const text=(key,args)=>t('recordSections',key,args),size=4;
+ const text=(key,args)=>t('recordSections',key,args),size=RECORD_SECTION_WINDOW;
  let owner=null,first=null,offset=0,focus=null,anchor=null,search='',lastSearch=null;
  const record=()=>state.book?.entries.find(r=>r.id===state.selected);
  function position(e){
