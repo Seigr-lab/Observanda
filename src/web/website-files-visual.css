@@ -18,6 +18,10 @@
 .website-visual-rich:has(.website-visual-actions[hidden]) .website-rich-context { margin:0 }
 .website-visual-rich .website-visual-actions[hidden] { display:none }
 .website-rich-sample { margin-inline-end:.4em;white-space:nowrap; }
+.website-visual-rich .website-visual-actions { gap:.2rem }
+.website-visual-rich button.website-rich-tool { display:inline-grid;place-items:center;min-width:2rem;height:2rem;padding:0 .35rem;line-height:1 }
+.website-visual-rich button.website-rich-tool svg { display:block }
+.website-visual-rich [data-visual-command] :is(sub,sup) { font-size:.7em }
 .website-visual-rich [data-visual-command=bold] strong { font-weight:700; }
 .website-visual-rich [data-visual-command=italic] em { font-style:italic; }
 .website-visual-rich [data-visual-command=underline] u { text-decoration:underline; }

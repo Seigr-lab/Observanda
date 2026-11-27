@@ -56,21 +56,21 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
   function button(key,fn){
     const b=make('button',t(key));b.type='button';tools.append(b);listen(b,'click',fn);return b;
   }
+  // One compact row: each command shows a short sample of what it does; its name is the
+  // button's accessible name and tooltip.
+  const svg=paths=>'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+paths+'</svg>';
+  const icons={clearFormatting:svg('<path d="M5 6h11M10 6l-3 13M14 14l6 6M20 14l-6 6"/>'),insertUnorderedList:svg('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/>'),insertOrderedList:svg('<path d="M10 6h10M10 12h10M10 18h10M4 4.5h1.5V9M3.5 9h3M3.5 14.5a1.5 1.5 0 0 1 3 .3c0 1-3 2.2-3 3.7h3"/>')};
   for(const [name,key] of commands){
     const b=button(key,()=>command(name));b.dataset.visualCommand=name;controls.set(name,b);
-    const sample={bold:'strong',italic:'em',underline:'u',strikeThrough:'s',highlight:'mark',inlineCode:'code'}[name];
-    if(sample)b.replaceChildren(make(sample,t(key)));
-    if(name==='subscript'||name==='superscript'){
-      const example=make('span');example.className='website-rich-sample';example.setAttribute('aria-hidden','true');
-      if(name==='subscript')example.append('H',make('sub','2'),'O');else example.append('Fe',make('sup','3+'));
-      b.prepend(example);
-    }
-    if(name==='insertUnorderedList'||name==='insertOrderedList'){
-      const marker=make('span',name==='insertUnorderedList'?'•':'1.');marker.className='website-rich-sample';marker.setAttribute('aria-hidden','true');b.prepend(marker);
-    }
+    b.classList.add('website-rich-tool');b.setAttribute('aria-label',t(key));b.title=t(key);
+    const sample={bold:['strong','B'],italic:['em','I'],underline:['u','U'],strikeThrough:['s','S'],highlight:['mark','ab'],inlineCode:['code','</>']}[name];
+    if(sample)b.replaceChildren(make(sample[0],sample[1]));
+    else if(name==='subscript'||name==='superscript'){const example=make('span');example.append('x',make(name==='subscript'?'sub':'sup','2'));b.replaceChildren(example);}
+    else if(icons[name])b.innerHTML=icons[name];
     if(['bold','italic','underline'].includes(name)){
-      const key={bold:'B',italic:'I',underline:'U'}[name];
-      b.setAttribute('aria-keyshortcuts','Control+'+key+' Meta+'+key);
+      const letter={bold:'B',italic:'I',underline:'U'}[name];
+      b.setAttribute('aria-keyshortcuts','Control+'+letter+' Meta+'+letter);
+      b.title=t(key)+' (Ctrl+'+letter+')';
     }
   }
   const heading=make('select');heading.setAttribute('aria-label',t('richHeading'));tools.append(heading);
