@@ -16,7 +16,12 @@ test('reader removal pins the reviewed revision, recovers uncertain replies and 
  record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Original observation '.repeat(80)}));
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),original=ResearchCatalogue.prototype.record,errors=[],reads=[],commands=[];
  ResearchCatalogue.prototype.record=()=>{throw Error('Reader removal reconstructed an original');};page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{const route=new URL(r.url()).pathname;if(/^\/api\/workspace\/read\/(selection|page)$/.test(route))reads.push(route);if(route==='/api/research/records/remove')commands.push(r.postDataJSON());});
- const dialog=page.getByRole('dialog',{name:'Remove record',exact:true}),open=()=>page.locator('.record-reader').getByRole('button',{name:'Remove record',exact:true}).click(),remove=()=>dialog.getByRole('button',{name:'Remove record',exact:true}).click();let release;
+ const dialog=page.getByRole('dialog',{name:'Remove record',exact:true}),open=async()=>{
+  // Removing a record is an editing action: Edit record, then Record actions.
+  const edit=page.getByRole('button',{name:'Edit record',exact:true});if(await edit.isVisible())await edit.click();
+  const actions=page.locator('details.record-actions');await expect(actions).toBeVisible();if(!await actions.evaluate(node=>node.open))await actions.locator('summary').click();
+  await actions.getByRole('button',{name:'Remove record',exact:true}).click();
+ },remove=()=>dialog.getByRole('button',{name:'Remove record',exact:true}).click();let release;
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await expect(page.locator('.record-reader h1')).toHaveText(record.title);
   await open();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect(commands).toEqual([]);
