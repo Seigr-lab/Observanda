@@ -51,6 +51,9 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   if(process.env.OBSERVANDA_WORKSPACE_SCREENSHOT)await page.screenshot({path:process.env.OBSERVANDA_WORKSPACE_SCREENSHOT});
   await tools.getByRole('button',{name:'Website menu',exact:true}).click();
   await expect(page.locator('.website-workspace-identity')).toContainText('Website menu');await expect(save).toHaveCount(0);
+  // A docked tool fits its panel: nothing scrolls sideways or runs past its edge.
+  const fits=()=>page.evaluate(()=>{const dock=document.querySelector('.website-files-dock'),edge=dock.getBoundingClientRect().right+1;return dock.scrollWidth<=dock.clientWidth+1&&[...dock.querySelectorAll('*')].every(el=>el.getBoundingClientRect().right<=edge);});
+  await expect.poll(fits).toBe(true);
   await page.locator('[data-action="website-files-menu-cancel"]').click();
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();
   await expect(page.frameLocator('#website-files-preview').getByText(/Check the reference slide\./)).toBeVisible();
