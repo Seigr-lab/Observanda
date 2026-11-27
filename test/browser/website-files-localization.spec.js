@@ -30,13 +30,14 @@ test('website editor labels and accessibility names follow the selected language
    await expect(page.locator('.preferences-heading')).toHaveAttribute('lang',locale);
    await page.evaluate(hash=>location.hash=hash,'#/websites/'+id+'/editor');await expect(paragraph).toBeVisible();
    await expect(page.locator('html')).toHaveAttribute('lang',locale);
-   await expect(page.getByRole('button',{name:text('save'),exact:true})).toBeDisabled();
-   await expect(page.getByRole('button',{name:text('preview'),exact:true})).toBeVisible();
-   // The editor bar: website and page pickers, and the Manage and publish menu.
+   // Bar buttons show a short word; their names keep the full label.
+   await expect(page.getByRole('button',{name:text('save'),exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:text('save'),exact:true})).toHaveText(text('saveShort'));
+   await expect(page.getByRole('button',{name:text('preview'),exact:true})).toBeVisible();await expect(page.getByRole('button',{name:text('preview'),exact:true})).toHaveText(text('previewShort'));
+   // The editor bar: website and page pickers, the Websites menu and Publish.
    for(const key of ['site','page'])await expect(commands.getByRole('combobox',{name:text(key),exact:true})).toBeVisible();
-   await expect(page.locator('[data-website-site-menu] summary')).toHaveText(text('manageAndPublish'));
+   await expect(page.locator('[data-website-site-menu="site"] summary')).toHaveAccessibleName(text('sitesMenu'));
    await expect(page.getByRole('navigation',{name:text('siteTools'),exact:true}).getByRole('button',{name:text('designThemes'),exact:true})).toBeVisible();
-   await expect(page.getByRole('button',{name:text('folderPublish'),exact:true})).toBeVisible();
+   await expect(page.getByRole('button',{name:text('publishOpen'),exact:true})).toBeVisible();
    // Formatting controls appear, with translated names, once the cursor is in the page.
    await paragraph.click();
    await expect(page.locator('[data-visual-command="subscript"]')).toHaveAccessibleName(text('richSubscript'));

@@ -3,6 +3,7 @@ import {defaultPublishing} from '../../src/publishing.js';
 import {githubFixture} from '../github-fixture.js';
 import {githubEditor} from './website-github-editor.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 const tree=remote=>remote.trees.get(remote.commits.get(remote.head).tree);
 async function destination(e,github){const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'main',pages:false},github);return e.request('/api/website-files/destination/save',{siteId:e.site.id,config,etag:'new'});}
@@ -15,7 +16,7 @@ test('an existing site blocks publishing until the website gets its own folder, 
  test.setTimeout(120000);const remote=githubFixture({branch:'main',initialFiles:{'index.html':'Existing home','news.html':'Existing news'}}),initial=remote.head,before=structuredClone(tree(remote)),e=await githubEditor(page,remote);
  try{
   await destination(e);await mountFilesEditor(page);
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   const review=page.locator('[data-website-files-review]');
   await expect(review).toContainText('The destination has conflicting files.');await expect(review.getByRole('button',{name:'Publish website'})).toHaveCount(0);
   expect(remote.calls.some(call=>call.method!=='GET')).toBe(false);
@@ -35,7 +36,7 @@ test('the first upload to main keeps the repository’s other files and turns on
  test.setTimeout(120000);const remote=githubFixture({branch:'main',initialFiles:{'README.md':'Keep this reference'}}),initial=remote.head,e=await githubEditor(page,remote);
  try{
   await destination(e,{pages:true});await mountFilesEditor(page);
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   const review=page.locator('[data-website-files-review]');await expect(review).toContainText('Unrelated files preserved: 1');
   expect(remote.head).toBe(initial);
   await approve(page,remote);
@@ -49,7 +50,7 @@ test('replacing an old application archives its branch first and keeps the domai
  const remote=githubFixture({branch:'main',initialFiles:{'index.html':'Old application','CNAME':'field.example\n','LICENSE.md':'Keep these terms',...Object.fromEntries(Array.from({length:12},(_,i)=>['old-app/file-'+i+'.js','Old application source']))}}),initial=remote.head,e=await githubEditor(page,remote);
  try{
   await destination(e);await mountFilesEditor(page);
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   const review=page.locator('[data-website-files-review]');await expect(review).toContainText('Conflicting files: 1');
   await review.getByText('Replace an existing website or application',{exact:true}).click();await review.getByLabel('Archive branch (optional)',{exact:true}).fill('previous-application');
   await review.getByRole('button',{name:'Review replacing existing destination files',exact:true}).click();
@@ -67,18 +68,18 @@ test('an earlier release is reopened from Releases, restored and published again
  const button=name=>page.getByRole('button',{name,exact:true}),home=()=>{const entry=tree(remote).find(item=>item.path==='index.html');return entry?remote.blobs.get(entry.sha).toString():'';};
  try{
   await destination(e);await mountFilesEditor(page);
-  const deliver=async()=>{await button('Publish update').click();await approve(page,remote);await button('Return to editing').click();};
+  const deliver=async()=>{await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();await approve(page,remote);await button('Return to editing').click();};
   await deliver();expect(home()).not.toContain('Second edition');
   await button('Page code (HTML)').click();const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
-  await html.fill((await html.inputValue()).replace('</main>','<p>Second edition</p></main>'));await button('Save website').click();
+  await html.fill((await html.inputValue()).replace('</main>','<p>Second edition</p></main>'));await button('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await deliver();expect(home()).toContain('Second edition');
   // Releases lists both deliveries; the earlier one opens its version from history.
-  const menu=page.locator('[data-website-site-menu]');if(!await menu.evaluate(node=>node.open))await menu.locator('summary').click();await menu.getByRole('button',{name:'Releases',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Releases',exact:true}).click();
   const entries=page.locator('[data-release-entry]');await expect(entries).toHaveCount(2);
   await entries.last().getByRole('button',{name:'Open this version'}).click();await button('Compare changes').click();
   await expect(page.locator('.website-version-diff pre').last()).toContainText('Second edition');await button('Restore as new version').click();
   await expect(page.frameLocator('#website-files-canvas').getByText('Second edition',{exact:true})).toHaveCount(0);
-  await button('Publish update').click();await approve(page,remote);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();await approve(page,remote);
   expect(home()).not.toContain('Second edition');expect(home()).toContain('Field atlas');
  }finally{await page.close();await e.close();}
 });

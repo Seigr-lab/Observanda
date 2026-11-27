@@ -9,7 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {createNotebook} from '../../src/model.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
-import {siteMenu} from './website-site-menu-helper.js';
+import {siteMenu,publishPanel} from './website-site-menu-helper.js';
 
 test('the editor moves, copies, archives and restores saved pages and sites offline, then publishes the reviewed site to a folder',async({page,browser})=>{
  test.setTimeout(120000);
@@ -42,7 +42,7 @@ test('the editor moves, copies, archives and restores saved pages and sites offl
   await expect(page.getByRole('heading',{name:'Station atlas',exact:true})).toBeVisible();
   await (await siteMenu(page)).getByRole('button',{name:'Manage website',exact:true}).click();await button('Archived websites').click();await button('Independent atlas').click();await apply();
   await expect(page.getByRole('heading',{name:'Independent atlas',exact:true})).toBeVisible();
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   expect(await readFile(path.join(folder,'index.html'),'utf8')).toContain('studies/2026/field.html#observations');

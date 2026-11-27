@@ -9,6 +9,7 @@ import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js'
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('configure reusable title fields, use visual main styling and publish a customized linked card with research offline',async({page,browser})=>{
  test.setTimeout(90000);page.setDefaultTimeout(8000);
@@ -43,7 +44,9 @@ test('configure reusable title fields, use visual main styling and publish a cus
   await canvas.getByText('Peak at 518 nm',{exact:true}).click();
   await b(library,'Frame the selected record').click();
   await expect(canvas.locator('article [data-observanda-source]')).toContainText('Peak at 518 nm');
-  await b(page,'Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  // Publishing tools open after the page is saved.
+  if(await b(page,'Save website').isEnabled()){await b(page,'Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');}
+  await b(await publishPanel(page),'Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await b(page,'Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await b(page,'Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(folder,'index.html')).href);
   await expect(reader.getByRole('heading',{name:'Excavation 12'})).toBeVisible();await expect(reader.locator('article').first()).toHaveCSS('font-size','24px');

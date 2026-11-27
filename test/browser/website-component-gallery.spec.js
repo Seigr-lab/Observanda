@@ -9,6 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('an authored gallery becomes a linked library section with edited pictures and a working published viewer on both pages',async({page,browser})=>{
  test.setTimeout(150000);
@@ -54,7 +55,9 @@ test('an authored gallery becomes a linked library section with edited pictures 
   await dialog.getByRole('button',{name:'Review component changes'}).click();
   await dialog.getByRole('button',{name:'Update all instances'}).click();await expect(dialog).not.toBeVisible();
   await expect(canvas.locator('[data-image-gallery] img').first()).toHaveAttribute('alt','Calibrated bead');
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  // Publishing tools open after the page is saved.
+  const save=page.getByRole('button',{name:'Save website',exact:true});if(await save.isEnabled()){await save.click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');}
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files'}).click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   reader=await browser.newPage();

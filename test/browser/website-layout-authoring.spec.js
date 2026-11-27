@@ -9,6 +9,7 @@ import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js'
 import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
 import {encryptedFixture} from './encrypted-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('author a named figure grid and position a scientific annotation visually in the published page',async({page,browser})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
@@ -62,7 +63,7 @@ test('author a named figure grid and position a scientific annotation visually i
   if(process.env.OBSERVANDA_LAYOUT_EDITOR_SCREENSHOT){await coords.scrollIntoViewIfNeeded();await page.screenshot({path:process.env.OBSERVANDA_LAYOUT_EDITOR_SCREENSHOT});}
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await page.reload();await expect(canvas.locator('[data-website-annotation]')).toHaveCSS('top',offsets[1]);await canvas.getByText('Converted observation').click();await expect(page.locator('.website-layout-inspector')).toBeHidden();
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);await page.getByRole('button',{name:'Review file changes',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);await page.getByRole('button',{name:'Review file changes',exact:true}).click();
   await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files',exact:true}).click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:45000});
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(out,'index.html')).href);

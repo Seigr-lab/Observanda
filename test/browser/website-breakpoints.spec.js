@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('author a 1100 px scientific grid, follow its cascade and independently read the published layout across widths',async({page,browser})=>{
  test.setTimeout(90000);page.setDefaultTimeout(8000);
@@ -26,13 +27,15 @@ test('author a 1100 px scientific grid, follow its cascade and independently rea
   const button=name=>page.getByRole('button',{name,exact:true}),canvas=page.frameLocator('#website-files-canvas'),grid=canvas.locator('#plates');
   const columns=layer=>layer.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(/\s+/).length);
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await expect(grid).toBeVisible();
-  await button('Screen sizes').first().click();const d=page.locator('dialog[data-website-ranges]');
+  // Screen width, zoom and screen sizes sit in the screen size menu.
+  const sizes=async(open=true)=>{const menu=page.locator('[data-website-site-menu="size"]');if(await menu.evaluate(node=>node.open)!==open)await menu.locator('summary').click();};
+  await sizes();await button('Screen sizes').click();const d=page.locator('dialog[data-website-ranges]');
   await d.getByRole('button',{name:'Add screen size',exact:true}).click();
   await d.getByLabel('Screen size name').fill('Instrument grid');await d.getByLabel('Through width (px)').fill('1100');
   await d.getByRole('button',{name:'Keep screen size'}).click();await d.getByRole('button',{name:'Review website changes'}).click();
   await expect(d).toContainText('0 stylesheets will change');await d.getByRole('button',{name:'Save website screen sizes'}).click();await expect(d).toHaveCount(0);
   const viewport=page.locator('[data-website-file-viewport]');
-  const option=viewport.locator('option').filter({hasText:'Instrument grid'}),breakpoint=await option.getAttribute('value');await viewport.selectOption(breakpoint);
+  const option=viewport.locator('option').filter({hasText:'Instrument grid'}),breakpoint=await option.getAttribute('value');await sizes();await viewport.selectOption(breakpoint);await sizes(false);
   await canvas.getByRole('heading',{name:'Characterization'}).click();
   const inspector=page.locator('.website-layout-inspector');await page.getByRole('tab',{name:'Layout',exact:true}).click();
   const field=key=>inspector.locator('[data-layout-property="'+key+'"]');
@@ -47,8 +50,8 @@ test('author a 1100 px scientific grid, follow its cascade and independently rea
   await trace.locator('summary').click();await trace.locator('select').selectOption('grid-template-columns');
   await expect(trace.locator('output')).toContainText('@media (max-width: 1100px)');
   const at=async value=>{
-   if(await viewport.inputValue()!=='custom')await viewport.selectOption('custom');
-   const width=page.locator('[data-viewport-width]');await width.fill(String(value));await width.press('Enter');
+   await sizes();if(await viewport.inputValue()!=='custom')await viewport.selectOption('custom');
+   const width=page.locator('[data-viewport-width]');await width.fill(String(value));await width.press('Enter');await sizes(false);
   };
   await at(1099);await expect(trace.locator('output')).toContainText('At 1099 px');await expect.poll(()=>columns(grid)).toBe(2);
   await at(1101);await expect(trace.locator('output')).toContainText('from .plates.');await expect.poll(()=>columns(grid)).toBe(4);
@@ -56,7 +59,7 @@ test('author a 1100 px scientific grid, follow its cascade and independently rea
   await field('order').fill('');await applyLayout.click();await expect(grid).toHaveCSS('order','0');await expect.poll(()=>columns(grid)).toBe(2);
   await button('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   const saved=await store.open(id);expect(saved.css).toContain(original);expect(saved.css).toContain('@media (max-width: 1100px)');expect(saved.css).toContain('clamp(6px, 2vw, 24px)');
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   expect(await readFile(path.join(folder,'style.css'),'utf8')).toContain(original);

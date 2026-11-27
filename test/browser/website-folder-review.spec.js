@@ -9,6 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {websiteFilesHttp} from '../../src/website-files-http.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('folder export reviews human-readable changes and binds keyboard approval to the current destination and plan',async({page},info)=>{
  test.setTimeout(90000);
@@ -32,7 +33,7 @@ test('folder export reviews human-readable changes and binds keyboard approval t
   const collision=path.join(destination,'sampling-design.html');await writeFile(collision,'Existing site-owner work',{flag:'wx'});
   await page.exposeFunction('filesAPI',(route,data)=>call(route.replace('/api/website-files/',''),data));await page.setViewportSize({width:1440,height:1000});await mountFilesEditor(page);
   for(const css of ['app','website','experience'])await page.addStyleTag({url:'/'+css+'.css'});
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).press('Enter');
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).press('Enter');
   const input=page.getByLabel('Destination folder',{exact:true}),choose=page.getByRole('button',{name:'Choose folder'}),review=page.getByRole('button',{name:'Review file changes'}),panel=page.locator('[data-folder-plan]');
   await expect(review).toBeDisabled();await choose.press('Enter');await expect(input).toHaveValue('');await choose.press('Enter');await expect(input).toHaveValue(destination);
   await review.press('Enter');await expect(panel.getByRole('alert')).toBeVisible();await expect(panel.getByRole('checkbox')).toHaveCount(0);

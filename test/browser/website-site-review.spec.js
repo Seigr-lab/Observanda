@@ -9,7 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
-import {siteMenu} from './website-site-menu-helper.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 const documentHTML=(title,body,css='style.css')=>'<!doctype html><html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="'+css+'"></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
 test('repair an ambiguous scientific target, describe a figure and follow the published reference with research offline',async({page,browser})=>{
@@ -28,25 +28,26 @@ test('repair an ambiguous scientific target, describe a figure and follow the pu
   page.setDefaultTimeout(15000);await page.goto(app.origin+'/?view=website#'+app.launchToken);
   const canvas=page.frameLocator('#website-files-canvas');
   await expect(canvas.getByRole('heading',{name:'Optics atlas'})).toBeVisible();
-  const guideButton=page.getByRole('button',{name:'Website guide',exact:true});await guideButton.click();
+  const guideButton=page.getByRole('button',{name:'Help',exact:true});await guideButton.click();
   const guide=page.getByRole('dialog').filter({has:page.locator('[data-context-help-close]')});
   await expect(guide.locator('article section')).toHaveCount(5);await expect(guide).toContainText('Choose which entries, writing sections and figures');
   await guide.locator('[data-context-help-close]').click();await expect(guideButton).toBeFocused();
   const selectPage=page.locator('[data-website-file-page]');
   await selectPage.selectOption('methods/assays.html');await expect(canvas.getByRole('heading',{name:'Calibration'})).toBeVisible();
-  await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const source=page.getByLabel('Page code (HTML)',{exact:true});
+  await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const source=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
   const targets=Array.from({length:90},(_,i)=>'<li id="run-'+i+'">Run '+i+'</li>').join('');
   const moved='<h2 id="calibration">First instrument</h2><h2 id="calibration">Second instrument</h2><ul>'+targets+'</ul><figure id="μ-526"><figcaption>Optical response at 526 nm<span hidden>Hidden caption canary</span></figcaption></figure><div hidden id="hidden-canary">Hidden calibration</div>';
   await source.fill((await source.inputValue()).replace('<h2 id="calibration">Calibration</h2>',moved));
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await selectPage.selectOption('index.html');await page.getByRole('button',{name:'Visual editor',exact:true}).click();
-  await page.getByRole('button',{name:'Check page',exact:true}).click();
+  await page.locator('[data-website-site-menu="size"] summary').click();await page.getByRole('button',{name:'Check page',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('draft/protocol.html');await page.getByRole('button',{name:'Cancel',exact:true}).click();
   const routes=[],record=r=>routes.push(new URL(r.url()));page.on('request',record);
-  const check=async()=>{await (await siteMenu(page)).getByRole('button',{name:'Check website',exact:true}).click();const d=page.getByRole('dialog',{name:'Check website'});await expect(d.getByRole('status',{name:'Check website'})).toContainText('findings');return d;};
+  const check=async()=>{await (await publishPanel(page)).getByRole('button',{name:'Check website',exact:true}).click();const d=page.getByRole('dialog',{name:'Check website'});await expect(d.getByRole('status',{name:'Check website'})).toContainText('findings');return d;};
   let d=await check();
   await expect(d.getByRole('status',{name:'Check website'})).toContainText('5 findings in 3 files');
-  expect(routes.some(url=>/spectrum\.svg$|absent\.png$/.test(url.pathname))).toBe(false);
+  // The check reads the saved edition without fetching missing images; the editor's own page preview is not part of it.
+  expect(routes.some(url=>!url.pathname.includes('/preview/')&&/spectrum\.svg$|absent\.png$/.test(url.pathname))).toBe(false);
   const indexFindings=d.getByRole('button',{name:'index.html (2)',exact:true});await indexFindings.press('Enter');await expect(indexFindings).toBeFocused();
   const bad=d.locator('li').filter({hasText:'More than one target has this identifier.'});
   await bad.getByText('Repair this finding',{exact:true}).click();
@@ -64,7 +65,7 @@ test('repair an ambiguous scientific target, describe a figure and follow the pu
   const destination='methods/assays.html#%CE%BC-526';
   await expect(address).toHaveValue(destination);await bad.getByRole('button',{name:'Apply in editor'}).click();
   await expect(canvas.getByRole('link',{name:'Instrument methods'})).toHaveAttribute('href',destination);
-  await page.getByRole('button',{name:'Save website',exact:true}).click();
+  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   d=await check();await expect(d.getByRole('status',{name:'Check website'})).toContainText('4 findings in 3 files');
   await d.getByRole('button',{name:'index.html (1)',exact:true}).click();
   const figure=d.locator('li').filter({hasText:'alternative text'});
@@ -90,7 +91,7 @@ test('repair an ambiguous scientific target, describe a figure and follow the pu
   await citation.click();expect(await page.evaluate(()=>window.previewExternal)).toEqual([['https://example.org/citations','_blank','noopener,noreferrer']]);
   await page.locator('[data-action="website-files-visual"]').click();
   const output=path.join(directory,'publication');await mkdir(output);
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(output);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(output);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files'}).click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(output,'index.html')).href);

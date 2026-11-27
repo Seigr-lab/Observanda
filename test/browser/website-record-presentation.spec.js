@@ -26,11 +26,12 @@ test('a full lab entry copy can leave out parts, choose a layout and speak the p
   const requests=[];page.on('request',r=>{const route=new URL(r.url()).pathname;if(route.startsWith('/api/'))requests.push(route);});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(siteId);
   const canvas=page.frameLocator('#website-files-canvas'),copy=canvas.locator('section[data-observanda-source="'+source.id+'"]');
-  const panel=page.locator('dialog[data-website-presentation]'),toolbar=page.locator('[data-action="website-files-presentation"]:not([data-placement-context])');
+  const panel=page.locator('dialog[data-website-presentation]'),contextual=page.locator('[data-placement-context]');
   await expect(copy).toHaveCount(1);
   // The record's own words already follow the page language.
   await expect(copy.locator('[data-observanda-part="metadata"] > span').last()).not.toHaveText(/^(draft|planned|in progress|completed)$/);
-  await expect(toolbar).toBeEnabled();await toolbar.click();await expect(panel).toBeVisible();
+  // Record presentation is offered beside the properties once a record copy is selected.
+  await expect(contextual).toBeHidden();await copy.locator('h1,h2,h3').first().click();await expect(contextual).toBeVisible();await contextual.click();await expect(panel).toBeVisible();
   const full=panel.getByRole('radio',{name:'Full record',exact:true});await expect(full).toBeChecked();
   const parts=panel.getByRole('group',{name:'Parts to show'});await expect(parts).toBeVisible();
   const details=parts.getByRole('checkbox',{name:'Type, date and status',exact:true}),sections=parts.getByRole('checkbox',{name:'Sections and template fields',exact:true});
@@ -43,7 +44,7 @@ test('a full lab entry copy can leave out parts, choose a layout and speak the p
   await expect(copy.locator('[data-observanda-part="metadata"]')).toHaveCount(0);await expect(copy).toContainText('the observer compared');
   // The section heading sits under the record title in the outline.
   await expect(copy.locator('[data-observanda-part^="section:"] > h3')).toHaveCount(1);
-  await toolbar.click();await expect(panel).toBeVisible();
+  await copy.locator('h1,h2,h3').first().click();await contextual.click();await expect(panel).toBeVisible();
   await expect(parts.getByRole('checkbox',{name:'Type, date and status',exact:true})).not.toBeChecked();
   await expect(panel.getByLabel('Layout',{exact:true})).toHaveValue('split');
   // Leaving out every part is not offered.

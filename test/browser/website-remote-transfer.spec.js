@@ -10,6 +10,7 @@ import {defaultPublishing} from '../../src/publishing.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {githubFixture} from '../github-fixture.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('the saved editor resumes a GitHub transfer, displays its receipt after reopen, and verifies the served website independently',async({page})=>{
  test.setTimeout(90000);
@@ -28,7 +29,7 @@ test('the saved editor resumes a GitHub transfer, displays its receipt after reo
   await request('/api/website-files/destination/save',{siteId:site.id,config,etag:'new'});
   await page.exposeFunction('filesAPI',async(route,data)=>{try{return await request(route,data);}catch(error){return {errorCode:error.code??'PUBLISH_REMOTE',message:error.message};}});
   await mountFilesEditor(page);
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   const review=page.locator('[data-website-files-review]');
   await expect(review).toContainText('example/notebook / main / atlas');
   await expect(review.getByRole('button',{name:'Publish website'})).toBeDisabled();
@@ -40,7 +41,7 @@ test('the saved editor resumes a GitHub transfer, displays its receipt after reo
   await expect(transfer).toContainText(remote.head);
   await expect(transfer).toContainText('Repository files uploaded and verified');
   await page.reload();
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   await expect(transfer).toContainText(remote.head);
   expect(requests.filter(route=>route.endsWith('/plan'))).toHaveLength(1);
   await transfer.getByRole('button',{name:'Verify live website'}).click();

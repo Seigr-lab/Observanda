@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
@@ -48,7 +49,7 @@ test('reorder a converted masthead, card and permitted entry from the canvas and
   await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(canvas.locator('body > header')).toHaveCount(1);
   await page.getByRole('button',{name:'Redo',exact:true}).click();await expect(canvas.locator('main header')).toHaveCount(1);
   await card.hover();await drag(page,grip,intro,'before',{capture:true});await expect(canvas.locator('#manifesto + header')).toHaveCount(1);
-  const list=page.locator('[data-website-files-structure]');await page.getByRole('searchbox',{name:'Filter page layers'}).fill('Spore count');
+  await pagePanel(page,'Layers');const list=page.locator('[data-website-files-structure]');await page.getByRole('searchbox',{name:'Filter page layers'}).fill('Spore count');
   const entryHandle=list.getByRole('button',{name:/^Drag Spore count to move/}).first();
   await drag(page,entryHandle,card,'after');await expect(canvas.locator('#manifesto + [data-observanda-source]')).toHaveCount(1);
   await source.locator('[data-observanda-part="body"]').hover();

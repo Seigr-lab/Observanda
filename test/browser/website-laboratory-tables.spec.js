@@ -14,11 +14,12 @@ import {convertPublicationRecord} from '../../src/publication-conversion-render.
 import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
 import {encryptedFixture} from './encrypted-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 const authored='<table id="chem"><caption>Calibration by station</caption><colgroup span="1"></colgroup><colgroup span="2"></colgroup><thead><tr><th rowspan="2" scope="col">Station</th><th colspan="2" scope="colgroup" id="group">Chemistry</th></tr><tr><th scope="col" id="acid">Acidity (mol dm<sup>−3</sup>)</th><th scope="col" id="ph">pH</th></tr></thead><tbody><tr><th scope="row">A</th><td headers="group acid">0.1000000000000000002</td><td headers="group ph">6.00<sup><a href="#limit">a</a></sup></td></tr><tr><th scope="row">B</th><td headers="group acid">0.2000</td><td headers="group ph">7.00</td></tr></tbody></table><p id="limit">a · Calibration drift.</p>';
 
 async function publish(page,output){
- await page.getByRole('button',{name:'Publish to folder',exact:true}).click();
+ await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();
  await page.getByLabel('Destination folder',{exact:true}).fill(output);
  await page.getByRole('button',{name:'Review file changes'}).click();
  await page.locator('[data-website-file-folder-confirm]').check();
@@ -82,7 +83,8 @@ test('edit and publish a grouped laboratory table alongside one permitted retain
   await expect(added.locator('td')).toHaveText(['1.25000000000000000003','6.7500']);
   await act('tableScrollOn').click();await expect(frame.locator('[role="region"][aria-label="Calibration by station"]')).toBeVisible();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  await page.locator('[data-action="website-files-presentation"]:not([data-placement-context])').click();
+  // Record presentation opens from beside the properties of the selected record copy.
+  await frame.locator('section[data-observanda-source="'+sourceId+'"]').first().click();await page.locator('[data-placement-context]').click();
   const dialog=page.locator('dialog[data-website-presentation]');await dialog.getByRole('radio',{name:'Section or results table'}).check();
   await dialog.getByLabel('Content to show').selectOption('table:'+result);await dialog.locator('[data-presentation-apply]').click();
   const linked=frame.locator('[data-observanda-display="section"] table');

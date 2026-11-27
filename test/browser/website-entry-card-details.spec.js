@@ -30,8 +30,10 @@ test('an entry card shows a chosen cover photograph and the entry date in the pa
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(siteId);
   const canvas=page.frameLocator('#website-files-canvas'),copy=canvas.locator('section[data-observanda-source="'+sourceId+'"]');
-  const panel=page.locator('dialog[data-website-presentation]'),toolbar=page.locator('[data-action="website-files-presentation"]:not([data-placement-context])');
-  await expect(copy).toHaveCount(1);await toolbar.click();await expect(panel).toBeVisible();
+  const panel=page.locator('dialog[data-website-presentation]'),contextual=page.locator('[data-placement-context]');
+  // Record presentation opens from beside the properties of the selected record copy.
+  const present=async()=>{await copy.locator('h1,h2,h3').first().click();await contextual.click();};
+  await expect(copy).toHaveCount(1);await present();await expect(panel).toBeVisible();
   await panel.getByRole('radio',{name:'Compact card',exact:true}).check();
   const details=panel.getByRole('group',{name:'Card details'});await expect(details).toBeVisible();
   await details.getByLabel('Cover image',{exact:true}).selectOption({label:'Capped brood'});
@@ -40,7 +42,7 @@ test('an entry card shows a chosen cover photograph and the entry date in the pa
   await expect(copy).toHaveAttribute('data-observanda-display','card');
   const cover=copy.locator('img.website-entry-cover');await expect(cover).toHaveAttribute('alt','Capped brood frame');
   await expect(copy.locator('time[datetime="2026-05-02"]')).toHaveText(/2026/);await expect(copy.locator('time[datetime="2026-05-02"]')).not.toHaveText('2026-05-02');
-  await toolbar.click();await expect(details.getByLabel('Cover image',{exact:true})).toHaveValue('media:'+photo);
+  await present();await expect(details.getByLabel('Cover image',{exact:true})).toHaveValue('media:'+photo);
   await expect(details.getByRole('checkbox',{name:"Show the record's date",exact:true})).toBeChecked();
   await panel.press('Escape');await expect(panel).not.toBeVisible();
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();

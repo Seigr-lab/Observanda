@@ -9,6 +9,7 @@ import {createNotebook} from '../../src/model.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('arrange six scientific panels by keyboard and mouse, keep narrow overrides and read the published geometry with research offline',async({page,browser})=>{
  test.setTimeout(75000);page.setDefaultTimeout(6500);
@@ -67,7 +68,7 @@ test('arrange six scientific panels by keyboard and mouse, keep narrow overrides
   await expect(canvas.locator('#peak')).toHaveCSS('left','172.5px');
   await canvas.locator('#inset').click();await open();await expect(inspector).toContainText('untransformed horizontal container');await expect(b(size,'Apply measurement')).toBeDisabled();
   await canvas.getByText('Granted measurement',{exact:true}).click();await expect(inspector).toBeHidden();await expect(canvas.locator('[data-observanda-editor="precision"]')).toHaveCount(0);
-  await b(page,'Save website').click();await b(page,'Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await b(page,'Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');await b(await publishPanel(page),'Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await b(page,'Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await b(page,'Write reviewed files').click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   reader=await browser.newPage({viewport:{width:1350,height:900}});await reader.goto(pathToFileURL(path.join(out,'index.html')).href);
   const published=reader.locator('#board');

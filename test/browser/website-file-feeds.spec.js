@@ -12,6 +12,7 @@ import {savedWebsiteSearches} from '../../src/website-saved-searches.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {answerConfirmation} from './confirm-helper.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test.use({screenshot:'off',trace:'off',video:'off'});
 async function checkFeedDialogLayout(page,dialog){
@@ -125,7 +126,7 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();
   const preview=page.frameLocator('#website-files-preview');await expect(preview.locator('.tide-plate')).toHaveCount(2);
   const more=await preview.locator('section[data-website-feed] a[rel=next]').first().getAttribute('href');
-  await mkdir(out);await page.getByRole('button',{name:'Publish to folder',exact:true}).click();
+  await mkdir(out);await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();
   await page.getByLabel('Destination folder',{exact:true}).fill(out);await page.getByRole('button',{name:'Review file changes'}).click();
   await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files'}).click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:60000});

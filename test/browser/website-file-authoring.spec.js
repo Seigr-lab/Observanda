@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 // Exercise the real browser document editor. No research service is provided;
 // the unrelated installed acceptance test must also qualify packaging/storage.
@@ -114,7 +115,7 @@ test('publish update shows the configured SSH site and its reviewed files before
   if(route.endsWith('/publish')){transfers.push(data);return {receipt:{status:'published'}};}
   throw Error('Unexpected route '+route);
  });
- await mountFilesEditor(page);await page.getByRole('button',{name:'Publish update',exact:true}).click();
+ await mountFilesEditor(page);await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
  const review=page.locator('[data-website-files-review]'),send=review.getByRole('button',{name:'Publish website'});
  await expect(review).toContainText('Lab server · research@lab.example:/srv/atlas/current');await review.locator('summary').click();
  await expect(review.getByText('index.html',{exact:true})).toBeVisible();await expect(send).toBeDisabled();
@@ -135,7 +136,7 @@ test('a pending grant hides the page and open review, then restores the current 
  const canvas=page.frameLocator('#website-files-canvas'),heading=canvas.getByRole('heading');
  await expect(heading).toHaveText('Original saved home');
  await heading.click();await page.keyboard.press('End');await page.keyboard.type(' with new writing');
- await page.getByRole('button',{name:'Check page',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();
+ await page.locator('[data-website-site-menu="size"] summary').click();await page.getByRole('button',{name:'Check page',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();
  pending=true;await page.clock.fastForward(5100);
  await expect(page.getByRole('alert')).toContainText('Checking whether this page can be shown');
  await expect(page.locator('#website-files-canvas')).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -290,7 +291,7 @@ test('visual edits preserve saved HTML, styles and placement and reject outdated
  await mountFilesEditor(page,{resource:url=>url.pathname.endsWith('.css')?css:html});const canvas=page.frameLocator('#website-files-canvas');await expect(canvas.locator('h1')).toHaveCSS('color','rgb(12, 34, 56)');
  const paragraph=canvas.locator('main > p');await paragraph.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');await page.keyboard.type('Edited on canvas');await expect(paragraph).toHaveText('Edited on canvas');
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');expect(html).toContain('<p>Edited on canvas</p>');expect(html).not.toMatch(/contenteditable|data-observanda-editor/);
- await page.getByRole('button',{name:'Style code (CSS)',exact:true}).click();await page.getByLabel('Style code (CSS)',{exact:true}).fill('p{font-weight:700}');await page.getByRole('button',{name:'Preview saved website'}).click();await expect(page.frameLocator('iframe').locator('main > p')).toHaveCSS('font-weight','700');
+ await page.getByRole('button',{name:'Style code (CSS)',exact:true}).click();await page.getByRole('textbox',{name:'Style code (CSS)',exact:true}).fill('p{font-weight:700}');await page.getByRole('button',{name:'Preview saved website'}).click();await expect(page.frameLocator('iframe').locator('main > p')).toHaveCSS('font-weight','700');
  await page.reload();await expect(canvas.locator('main > p')).toHaveText('Edited on canvas');
  const part=canvas.locator('[data-observanda-part="body"]');await part.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');await page.keyboard.type('My webpage wording');await expect(part).toHaveText('My webpage wording');
  const release=canvas.locator('[data-observanda-part="section-2"]');
@@ -298,7 +299,7 @@ test('visual edits preserve saved HTML, styles and placement and reject outdated
  await expect(release).toHaveText('Second release',{timeout:10000});await expect(canvas.getByText('First release',{exact:true})).toHaveCount(0);await expect(part).toHaveText('My webpage wording');
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');expect(html).toContain('My webpage wording');
  version++;html=html.replace('c'.repeat(64),'d'.repeat(64)).replace('<p data-observanda-part="body">My webpage wording</p>','');
- await expect(part).toHaveCount(0,{timeout:10000});await expect(canvas.getByText('My webpage wording',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const source=page.getByLabel('Page code (HTML)',{exact:true});await source.fill(html.replace('Edited on canvas','Uncommitted change'));version++;html=html.replace('Edited on canvas','Updated visibility');await expect(page.locator('[data-website-files-status]')).toContainText('Website content changed',{timeout:10000});
+ await expect(part).toHaveCount(0,{timeout:10000});await expect(canvas.getByText('My webpage wording',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const source=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});await source.fill(html.replace('Edited on canvas','Uncommitted change'));version++;html=html.replace('Edited on canvas','Updated visibility');await expect(page.locator('[data-website-files-status]')).toContainText('Website content changed',{timeout:10000});
  const review=page.locator('.website-merge-panel');
  await expect(review.getByRole('region',{name:'Your unsaved page'})).toContainText('Uncommitted change');
  await expect(page.getByRole('button',{name:'Preview saved website'})).toHaveCount(0);

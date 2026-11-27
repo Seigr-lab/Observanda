@@ -3,6 +3,7 @@ import {defaultPublishing} from '../../src/publishing.js';
 import {githubEditor} from './website-github-editor.js';
 import {repositoryFixture} from '../github-fixture.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 async function editor(page,remoteOptions){const remote=repositoryFixture(remoteOptions),e=await githubEditor(page,remote);return {...e,remote};}
 // From the destination panel, Review publication leads to the same reviewed transfer.
@@ -20,7 +21,7 @@ test('an empty GitHub repository is initialized from the website editor, then th
   await e.request('/api/website-files/destination/save',{siteId:e.site.id,config,etag:'new'});
   await mountFilesEditor(page);
   // Publishing to an empty repository opens the destination, ready to give it a first commit.
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   const panel=page.locator('[data-website-files-repository]');
   await expect(panel).toContainText('This repository is empty.');
   await panel.getByRole('button',{name:'Check repository',exact:true}).click();
@@ -39,8 +40,7 @@ test('a new GitHub repository is created from the website editor and the website
  test.setTimeout(120000);const e=await editor(page);
  try{
   await mountFilesEditor(page);
-  const menu=page.locator('[data-website-site-menu]');if(!await menu.evaluate(node=>node.open))await menu.locator('summary').click();
-  await menu.getByRole('button',{name:'Publishing destination',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publishing destination',exact:true}).click();
   const destination=page.locator('.website-files-publish');
   await destination.locator('[data-website-file-field="owner"]').fill('example');await destination.locator('[data-website-file-field="repository"]').fill('notebook');
   const panel=page.locator('[data-website-files-repository]');

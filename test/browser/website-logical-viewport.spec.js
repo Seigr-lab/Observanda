@@ -8,6 +8,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('fitted canvas, saved preview and a published website agree with an independent browser at each CSS breakpoint',async({page,browser})=>{
  test.setTimeout(120000);
@@ -23,11 +24,13 @@ test('fitted canvas, saved preview and a published website agree with an indepen
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
   const button=name=>page.getByRole('button',{name,exact:true}),canvas=page.frameLocator('#website-files-canvas');
+  // Screen width and zoom sit in the screen size menu; it is closed again so it covers nothing.
+  const sizes=async(open=true)=>{const menu=page.locator('[data-website-site-menu="size"]');if(await menu.evaluate(node=>node.open)!==open)await menu.locator('summary').click();};
   await expect(canvas.locator('#plots article')).toHaveCount(3);
   await expect(page.locator('.website-files-editor>aside').first()).toBeVisible();
   await expect(page.locator('.website-files-inspection')).toBeVisible();
   // Publish through the application, then load those exact files independently.
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   await page.reload();await expect(canvas.locator('#plots')).toBeVisible();
@@ -39,11 +42,13 @@ test('fitted canvas, saved preview and a published website agree with an indepen
    });
   }
   for(const [choice,width] of [['desktop',1440],['phone',375],['tablet',768],['custom',900],['custom',901],['custom',1124]]){
-   await page.locator('[data-website-file-viewport]').selectOption(choice);
+   await sizes();await page.locator('[data-website-file-viewport]').selectOption(choice);
    if(choice==='custom'){const field=page.locator('[data-viewport-width]');await field.fill(String(width));await field.press('Enter');await field.blur();}
+   await sizes(false);
    await expect.poll(()=>canvas.locator('body').evaluate(el=>el.ownerDocument.defaultView.innerWidth)).toBe(width);
-   await expect(page.locator('[data-viewport-readout]')).toContainText(width+' × ');
-   await expect(page.locator('[data-viewport-readout]')).toContainText(width<=600?'≤ 600 px':width<=900?'601–900 px':'> 900 px');
+   // The readout names the screen; its title gives the measured size and range.
+   const readout=page.locator('[data-viewport-readout]');await expect(readout).toHaveAttribute('title',new RegExp(width+' × '));
+   await expect(readout).toHaveAttribute('title',new RegExp(width<=600?'≤ 600 px':width<=900?'601–900 px':'> 900 px'));
    const logical=await geometry(canvas.locator('#plots'));
    await reader.setViewportSize({width,height:900});
    expect(logical).toEqual(await geometry(reader.locator('#plots')));
@@ -75,13 +80,13 @@ test('fitted canvas, saved preview and a published website agree with an indepen
   expect(await geometry(canvas.locator('#plots'))).toEqual(await geometry(reader.locator('#plots')));
   await page.setViewportSize({width:1024,height:900});
   await expect.poll(async()=>(await page.locator('#website-files-canvas').boundingBox()).width).toBe(startingWidth);
-  await page.locator('[data-viewport-zoom]').selectOption('actual');
+  await sizes();await page.locator('[data-viewport-zoom]').selectOption('actual');await sizes(false);
   await expect.poll(async()=>Math.round((await page.locator('#website-files-canvas').boundingBox()).width)).toBe(1124);
   const host=page.locator('[data-viewport-host]');
   await host.evaluate(el=>{el.scrollLeft=el.scrollWidth;});
   await expect.poll(()=>host.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
   await canvas.locator('#third').click();await expect(page.locator('[data-layer-trail] [aria-current]')).toHaveText('third');
-  await page.locator('[data-viewport-zoom]').selectOption('fit');
+  await sizes();await page.locator('[data-viewport-zoom]').selectOption('fit');await sizes(false);
   await expect.poll(()=>host.evaluate(el=>el.scrollLeft)).toBe(0);
   // Place the selected article using physical window coordinates while zoomed.
   await canvas.locator('#second').click();

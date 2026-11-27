@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('name a live website page design, use its scientific layout in a nested folder and read the independent publication',async({page,browser})=>{
  test.setTimeout(120000);
@@ -38,7 +39,9 @@ test('name a live website page design, use its scientific layout in a nested fol
   await expect(donor).toHaveCSS('letter-spacing','2px');
   await page.getByRole('tab',{name:'Layout',exact:true}).click();
   for(const [view,gap] of [['desktop','27px'],['tablet','19px'],['phone','7px']]){
-   await page.locator('[data-website-file-viewport]').selectOption(view);
+   // Screen width sits in the screen size menu; it is closed again so it covers nothing.
+   const sizes=page.locator('[data-website-site-menu="size"]');if(!await sizes.evaluate(node=>node.open))await sizes.locator('summary').click();
+   await page.locator('[data-website-file-viewport]').selectOption(view);if(await sizes.evaluate(node=>node.open))await sizes.locator('summary').click();
    if(view==='desktop'){
     await layout.locator('[data-layout-property="display"]').selectOption('grid');
     await layout.locator('[data-layout-property="grid-template-columns"]').fill('2');
@@ -83,7 +86,7 @@ test('name a live website page design, use its scientific layout in a nested fol
   await expect(canvas.locator('.website-columns')).toHaveCount(1);await expect(canvas.getByRole('table')).toBeVisible();
   await expect(canvas.getByRole('link')).toHaveAttribute('href','../../index.html');
   await expect(canvas.locator('body')).not.toContainText('PRIVATE COMPOSITION VALUE');
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();
   await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();
   await page.getByRole('button',{name:'Write reviewed files'}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();

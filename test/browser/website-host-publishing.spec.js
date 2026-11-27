@@ -13,6 +13,7 @@ import {serverLoginRequest} from '../../src/server-login-requests.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {memoryHost} from '../remote-host-fixture.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 // Shared hosting from the website editor. The server login is set up once for
 // the workspace with its password on this computer; each website chooses that
@@ -38,7 +39,7 @@ test('websites publish to one FTPS server login, each into its own folder, with 
   const {site}=await request('/api/website-files/create',{name:'Field atlas'});
   await page.exposeFunction('filesAPI',async(route,data)=>{try{return await request(route,data);}catch(error){return {errorCode:error.code??'PUBLISH_REMOTE',message:error.message};}});
   await mountFilesEditor(page);
-  await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   await page.getByRole('button',{name:'Publishing destination',exact:true}).click();
   const form=page.locator('.website-files-publish');
   await form.getByLabel('Publishing destination').selectOption('ftp');

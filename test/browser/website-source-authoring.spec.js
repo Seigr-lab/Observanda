@@ -9,6 +9,7 @@ import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js'
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('author scientific source, locate and repair a refused edit, undo a saved CSS value and independently open the published page',async({page,browser})=>{
  test.setTimeout(80000);page.setDefaultTimeout(8500);
@@ -54,7 +55,7 @@ test('author scientific source, locate and repair a refused edit, undo a saved C
   await b('Undo').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(24, 92, 81)');
   await b('Redo').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(83, 41, 73)');
   await page.reload();await expect(canvas.locator('#depth')).toHaveText('Depth at station 3. Verified.');
-  await b('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await b('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await b('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(out,'index.html')).href);

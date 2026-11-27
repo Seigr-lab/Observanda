@@ -10,6 +10,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {listWebsiteRecovery,readWebsiteRecovery} from '../../src/website-recovery.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 import {mediaFixtures} from '../media-fixtures.js';
 
 test('a terminated website renderer offers its confirmed draft, restores selection, styles and original gallery pixels, then publishes',async({context,browser})=>{
@@ -53,7 +54,7 @@ test('a terminated website renderer offers its confirmed draft, restores selecti
   await expect.poll(()=>canvas().getByAltText('Sampling frame').evaluate(el=>el.naturalWidth)).toBeGreaterThan(0);
   await button('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   expect((await listWebsiteRecovery(store)).items).toHaveLength(0);
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(folder,'index.html')).href);

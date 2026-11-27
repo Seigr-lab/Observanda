@@ -12,6 +12,7 @@ import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {testServer} from '../device-fixture.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 const revisedHeading = 'Salinity calibration protocol';
 const card = `<section id="sampling-card"><h2>Salinity calibration</h2>
@@ -134,7 +135,7 @@ test('an authored component is placed, edited once and published on two independ
   await expect(instance.getByRole('heading', {name:revisedHeading})).toBeVisible();
   await expect(instance.getByRole('link')).toHaveAttribute('href', '../method.html');
 
-  await page.getByRole('button', {name:'Publish to folder', exact:true}).click();
+  await (await publishPanel(page)).getByRole('button', {name:'Publish to folder', exact:true}).click();
   await page.getByLabel('Destination folder', {exact:true}).fill(output);
   await page.getByRole('button', {name:'Review file changes'}).click();
   await page.locator('[data-website-file-folder-confirm]').check();

@@ -9,6 +9,7 @@ import {LocalExport} from '../../src/local-export.js';
 import {clearVault} from '../../src/encryption.js';
 import {websiteLibraryState,websiteWithRecords} from './website-preparation-helper.js';
 import {navigate} from './preferences-helper.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 // Signing in discovers the records shared for websites. The author then places
 // them on a website made in the website editor; the folder export is one of its
@@ -21,7 +22,7 @@ async function signedIn(page,app,f,{website=true}={}){
 async function folderExport(page){
  await navigate(page,'Publishing');const files=page.locator('[data-website-files-app]');
  await files.getByRole('button',{name:'Return to editing',exact:true}).click({timeout:60000});
- await files.getByRole('button',{name:'Publish to folder',exact:true}).click({timeout:60000});
+ await expect(files.getByRole('button',{name:'Publish',exact:true})).toBeVisible({timeout:60000});await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();
  const panel=files.locator('[data-folder-review-panel]');await expect(panel).toBeVisible();return panel;
 }
 const confirm=panel=>panel.getByLabel('I have reviewed this pinned edition and approve these file additions, updates and removals in the selected folder.');
@@ -47,7 +48,7 @@ test('Publishing exports through folder review, preserves existing pages, and in
   // receipt now matches every reviewed file.
   await page.getByRole('button',{name:'Return to editing',exact:true}).click();await expect(panel).toHaveCount(0);
   await page.setViewportSize({width:1280,height:720});await page.evaluate(()=>document.documentElement.style.fontSize='');await page.reload();
-  await page.getByRole('button',{name:'Publish update',exact:true}).click({timeout:60000});await expect(folder).toHaveValue(destination,{timeout:60000});
+  await expect(page.getByRole('button',{name:'Publish',exact:true})).toBeVisible({timeout:60000});await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();await expect(folder).toHaveValue(destination,{timeout:60000});
   await expect(panel.getByText('Conflicts: 0',{exact:true})).toBeVisible({timeout:60000});await expect(panel.getByText(/^Unchanged: \d+$/)).toBeVisible();await expect(panel.getByText(/^Add: \d+$/)).toHaveCount(0);await expect(panel.getByText('No completed publication recorded',{exact:true})).toHaveCount(0);
   expect(await readFile(path.join(destination,'unrelated.html'),'utf8')).toBe('Unrelated page');
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
@@ -102,7 +103,7 @@ test('a delayed file review holds the editor until it arrives and a later review
   release();await expect(confirm(panel)).toBeEnabled({timeout:60000});await expect(confirm(panel)).not.toBeChecked();await expect(control(panel,'Write reviewed files')).toBeDisabled();await expect(panel.getByLabel('Destination folder',{exact:true})).toHaveValue(destination);
   await page.context().unroute('**/api/website-files/folder/plan');
   await page.getByRole('button',{name:'Return to editing',exact:true}).click();await expect(panel).toHaveCount(0);
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();panel=page.locator('[data-folder-review-panel]');await panel.getByLabel('Destination folder',{exact:true}).fill(destination);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();panel=page.locator('[data-folder-review-panel]');await panel.getByLabel('Destination folder',{exact:true}).fill(destination);
   await control(panel,'Review file changes').click();await expect(control(panel,'Write reviewed files')).toBeDisabled({timeout:60000});await expect(confirm(panel)).not.toBeChecked();await expect(panel.getByLabel('Destination folder',{exact:true})).toHaveValue(destination);
  }finally{release();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

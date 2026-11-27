@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 import {pagePanel} from './website-page-panel-helper.js';
 
 test('save, undo and redo writing, styling, order and owned media; withdraw a source before replay',async({page,browser})=>{
@@ -85,7 +86,7 @@ test('save, undo and redo writing, styling, order and owned media; withdraw a so
   await command('Redo').click();await expect(text).toHaveText('Exposure series revised pending');await expect(canvas.getByText('Withdrawable observations')).toHaveCount(0);await save();
   await expect(canvas.getByText('Withdrawable observations')).toHaveCount(0);await expect(canvas.getByRole('link',{name:'Field link'})).toHaveCount(0);
   const opened=await store.open(id);await expect(store.file(id,asset,{revision:opened.site.revision})).rejects.toMatchObject({code:'NOT_FOUND'});
-  await command('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await command('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await command('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(folder,'index.html')).href);

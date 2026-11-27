@@ -11,6 +11,7 @@ import {safeError} from '../../src/errors.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {githubFixture} from '../github-fixture.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test.use({screenshot:'off',trace:'off',video:'off'});
 test('remote review and publish stream measured progress and resume acknowledged work without reporting it twice',async({page})=>{
@@ -33,7 +34,7 @@ test('remote review and publish stream measured progress and resume acknowledged
   await post('destination/save',{siteId:site.id,config,etag:'new'});
   const gate=()=>{const value=Promise.withResolvers();gates.push(value);return value;};
   const reviewPause=gate();remote.setHook(async(row,phase)=>{if(phase==='before'&&row.route.includes('/git/trees/'))await reviewPause.promise;});
-  await mountFilesEditor(page,{httpOrigin:origin});await page.getByRole('button',{name:'Publish update',exact:true}).click();
+  await mountFilesEditor(page,{httpOrigin:origin});await (await publishPanel(page)).getByRole('button',{name:'Publish update',exact:true}).click();
   const progress=page.locator('.website-files-publish .operation-progress');await expect(progress.getByRole('heading')).toHaveText('Reading destination files');
   reviewPause.resolve();const review=page.locator('[data-website-files-review]');await expect(review.getByRole('checkbox')).toBeVisible();await expect(progress).toHaveCount(0);
   const uploadPause=gate();let firstBytes=0,posted=0,lost=false;

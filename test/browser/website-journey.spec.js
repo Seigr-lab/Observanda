@@ -10,6 +10,7 @@ import {listWebsiteRecovery} from '../../src/website-recovery.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 // J3: design, reuse, save, deliberate inclusion, renderer recovery and an
 // independently read publication, all through the ordinary website editor.
@@ -30,8 +31,10 @@ test('a designed page is reused in a nested folder, a private page is included a
   const button=label=>page.getByRole('button',{name:label,exact:true}),canvas=()=>page.frameLocator('#website-files-canvas'),pages=page.locator('[data-website-file-page]');
   const status=page.locator('[data-website-files-status]'),form=page.locator('[data-website-files-form]');
   const save=async()=>{await button('Save website').click();await expect(status).toHaveText('Website saved.');};
+  // Screen width sits in the screen size menu; it is closed again so it covers nothing.
+  const screen=async view=>{const menu=page.locator('[data-website-site-menu="size"]');if(!await menu.evaluate(node=>node.open))await menu.locator('summary').click();await page.locator('[data-website-file-viewport]').selectOption(view);if(await menu.evaluate(node=>node.open))await menu.locator('summary').click();};
   const publish=async()=>{
-   await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+   await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
    await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();
    await button('Write reviewed files').click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
    await button('Return to editing').click();
@@ -46,11 +49,11 @@ test('a designed page is reused in a nested folder, a private page is included a
   await expect(plates).toHaveCSS('letter-spacing','2px');
   await page.getByRole('tab',{name:'Layout',exact:true}).click();
   for(const [view,gap] of [['desktop','24px'],['phone','6px']]){
-   await page.locator('[data-website-file-viewport]').selectOption(view);
+   await screen(view);
    if(view==='desktop'){await layout.locator('[data-layout-property="display"]').selectOption('grid');await layout.locator('[data-layout-property="grid-template-columns"]').fill('2');}
    await layout.locator('[data-layout-property="gap"]').fill(gap);await layout.getByRole('button',{name:'Apply layout',exact:true}).click();
   }
-  await page.locator('[data-website-file-viewport]').selectOption('desktop');await expect(plates).toHaveCSS('gap','24px');
+  await screen('desktop');await expect(plates).toHaveCSS('gap','24px');
   await save();
 
   // Undo and redo keep the draft boundary around a text change.
@@ -89,7 +92,7 @@ test('a designed page is reused in a nested folder, a private page is included a
   await expect(page.getByRole('button',{name:'Recover draft',exact:true})).toBeVisible();await page.getByRole('button',{name:'Recover draft',exact:true}).click();
   await expect(page.frameLocator('#website-files-canvas').locator('main > p')).toHaveText('Welcome to the station. Open daily.');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await page.getByRole('button',{name:'Review file changes',exact:true}).click();await page.locator('[data-website-file-folder-confirm]').check();
   await page.getByRole('button',{name:'Write reviewed files',exact:true}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
 

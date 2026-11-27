@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {createNotebook} from '../../src/model.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('name, reopen, compare and restore a website version with current permissions before a separate reviewed publication',async({page,browser})=>{
  test.setTimeout(120000);
@@ -31,8 +32,8 @@ test('name, reopen, compare and restore a website version with current permissio
   await expect(page.locator('[data-versions=version] option:checked')).toContainText('Site review');
   await button('Back to the page').click();await button('Page code (HTML)').click();
   const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
-  await html.fill((await html.inputValue()).replace('Earlier observations','Later observations'));await button('Save website').click();
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  await html.fill((await html.inputValue()).replace('Earlier observations','Later observations'));await button('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   const deliver=async()=>{await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();};
   await deliver();expect(await readFile(path.join(folder,'index.html'),'utf8')).toContain('Later observations');
   await page.goto('about:blank');await app.close();app=null;
@@ -46,7 +47,7 @@ test('name, reopen, compare and restore a website version with current permissio
   await button('Restore as new version').click();await expect(canvas.getByText('Earlier observations',{exact:true})).toBeVisible();
   expect(await readFile(path.join(folder,'index.html'),'utf8')).toContain('Later observations');
   await button('Preview saved website').click();await expect(page.frameLocator('#website-files-preview').getByText('Earlier observations',{exact:true})).toBeVisible();
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);await deliver();
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);await deliver();
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(folder,'index.html')).href);
   await expect(reader.getByText('Earlier observations',{exact:true})).toBeVisible();await expect(reader.locator('body')).not.toContainText('Restricted site coordinates');
   expect(await reader.locator('h1').evaluate(el=>getComputedStyle(el).color)).toBe('rgb(0, 0, 128)');

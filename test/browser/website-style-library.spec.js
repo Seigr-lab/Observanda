@@ -11,6 +11,7 @@ import {websiteStyleBook} from '../../src/website-style-book.js';
 import {componentOperation} from '../../src/website-component-storage.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 async function servePublication(folder){
  const inventory=JSON.parse(await readFile(path.join(folder,'publication.json'),'utf8'));
@@ -80,7 +81,7 @@ test('author reusable typography, inspect a local override, publish a licensed f
   await p.click();await open();await d.locator('summary').filter({hasText:'Why does'}).click();
   await d.getByLabel('Inspect property').selectOption('font-size');await expect(d.locator('output')).toContainText('23px · Field report body · Website');await close();
   const publish=async()=>{
-   await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+   await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
    await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();
    await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   };
@@ -148,7 +149,9 @@ test('assign interaction styles to a control and a marked phrase, clear only par
   await inside('Clear this assignment').click();await closed();
   await expect(p.locator('span[class*="ow-token-"]')).toHaveText(['un ','dur','io']);
   await expect(p).toHaveText('Run duration in seconds');
-  await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
+  // Publishing tools open once the page is saved.
+  await button('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   web=await servePublication(folder);reader=await browser.newPage();await reader.goto(web.origin+'/index.html');

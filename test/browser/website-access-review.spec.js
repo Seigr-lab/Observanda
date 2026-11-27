@@ -9,6 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {publishPanel} from './website-site-menu-helper.js';
 
 test('repair rendered accessibility findings, then read and operate the exported research report using the keyboard',async({page,browser})=>{
  test.setTimeout(150000);
@@ -26,6 +27,8 @@ test('repair rendered accessibility findings, then read and operate the exported
   const canvas=page.frameLocator('#website-files-canvas'),check=page.getByRole('button',{name:'Check page',exact:true});
   await expect(canvas.getByRole('heading',{name:'Transect report'})).toBeVisible();
   async function review(width=768){
+   // Check page sits in the screen size menu.
+   const size=page.locator('[data-website-site-menu="size"]');if(!await size.evaluate(node=>node.open))await size.locator('summary').click();
    await check.focus();await check.press('Enter');const panel=page.getByRole('dialog',{name:'Check page'});
    await expect(panel).toBeVisible();await panel.getByLabel('Preview width in pixels').selectOption(String(width));
    await expect(panel.getByRole('status')).toContainText('at '+width+' px');return panel;
@@ -57,7 +60,7 @@ test('repair rendered accessibility findings, then read and operate the exported
   await page.locator('[data-action=website-files-gallery-close]').click();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await page.reload();await expect(canvas.getByRole('img',{name:'Dissolved oxygen at three stations'})).toBeVisible();
-  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await (await publishPanel(page)).getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files'}).click();
   await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   expect(await readFile(path.join(out,'index.html'),'utf8')).not.toMatch(/data-observanda-editor|website-access-measure/);

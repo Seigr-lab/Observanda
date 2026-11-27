@@ -39,10 +39,10 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   const save=page.getByRole('button',{name:'Save website',exact:true});await expect(save).toBeEnabled();await save.click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   expect((await store.open(id)).html).toContain('Check the reference slide.');
   await expect(tools.getByRole('button',{name:'Themes',exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Publish to folder',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish',exact:true})).toBeVisible();
   // Less frequent tasks wait in one menu, which Escape closes.
-  const menu=await siteMenu(page);await expect(menu.getByRole('button',{name:'Releases',exact:true})).toBeVisible();
-  await page.keyboard.press('Escape');await expect(menu.getByRole('button',{name:'Releases',exact:true})).toBeHidden();await expect(menu.locator('summary')).toBeFocused();
+  const menu=await siteMenu(page);await expect(menu.getByRole('button',{name:'Manage website',exact:true})).toBeVisible();
+  await page.keyboard.press('Escape');await expect(menu.getByRole('button',{name:'Manage website',exact:true})).toBeHidden();await expect(menu.locator('summary')).toBeFocused();
   for(const width of [1148,1440]){
    await page.setViewportSize({width,height:width===1148?759:900});
    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);

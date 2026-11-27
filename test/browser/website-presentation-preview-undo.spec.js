@@ -26,8 +26,10 @@ test('a presentation is previewed live, undone and redone, and a block takes an 
   const requests=[];page.on('request',r=>{const route=new URL(r.url()).pathname;if(route.startsWith('/api/'))requests.push(route);});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(siteId);
   const canvas=page.frameLocator('#website-files-canvas'),copy=canvas.locator('section[data-observanda-source="'+source.id+'"]');
-  const panel=page.locator('dialog[data-website-presentation]'),toolbar=page.locator('[data-action="website-files-presentation"]:not([data-placement-context])');
-  await expect(copy).toHaveCount(1);await toolbar.click();await expect(panel).toBeVisible();
+  const panel=page.locator('dialog[data-website-presentation]'),contextual=page.locator('[data-placement-context]');
+  await expect(copy).toHaveCount(1);
+  // Record presentation opens from beside the properties of the selected record copy.
+  await copy.locator('h1,h2,h3').first().click();await contextual.click();await expect(panel).toBeVisible();
   // Live preview follows the choice before anything is saved.
   const live=panel.getByRole('region',{name:'Live preview of this page'});await expect(live).toBeVisible();
   const preview=panel.frameLocator('iframe');

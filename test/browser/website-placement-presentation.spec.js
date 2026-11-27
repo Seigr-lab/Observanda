@@ -27,9 +27,10 @@ test('one saved lab entry can be a full entry, card and selected section on diff
   const requests=[];page.on('request',r=>{const route=new URL(r.url()).pathname;if(route.startsWith('/api/'))requests.push(route);});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(siteId);
   const canvas=page.frameLocator('#website-files-canvas'),copies=canvas.locator('section[data-observanda-source="'+source.id+'"]');
-  const panel=page.locator('dialog[data-website-presentation]'),toolbar=page.locator('[data-action="website-files-presentation"]:not([data-placement-context])');
+  const panel=page.locator('dialog[data-website-presentation]'),contextual=page.locator('[data-placement-context]');
   const formats=panel.getByRole('group',{name:'Display as'}),preview=panel.getByRole('region',{name:'Preview',exact:true});
-  async function enter(){await expect(toolbar).toBeEnabled();await toolbar.focus();await expect(toolbar).toBeFocused();await toolbar.press('Enter');await expect(panel).toBeVisible();}
+  // Record presentation opens from beside the properties of a selected record copy.
+  async function enter(){await expect(contextual).toBeHidden();await copies.first().locator('h1,h2,h3').first().click();await expect(contextual).toBeVisible();await contextual.focus();await expect(contextual).toBeFocused();await contextual.press('Enter');await expect(panel).toBeVisible();}
   async function apply(){const button=panel.getByRole('button',{name:'Apply to this copy',exact:true});await button.focus();await button.press('Enter');await expect(panel).not.toBeVisible();}
   await expect(copies).toHaveCount(2);
   await enter();await panel.getByLabel('Record copy on this page').selectOption('1');
@@ -41,7 +42,7 @@ test('one saved lab entry can be a full entry, card and selected section on diff
   await expect(copies.nth(1)).toContainText('Field measurements');await expect(copies.nth(1)).not.toContainText('Sampling method');
   await expect(copies.first()).toContainText('Sampling method');
   await page.locator('[data-website-file-page]').selectOption('methods.html');await expect(copies).toHaveCount(1);
-  await copies.locator('h1,h2,h3').first().click();const contextual=page.locator('[data-placement-context]');await expect(contextual).toBeVisible();
+  await copies.locator('h1,h2,h3').first().click();await expect(contextual).toBeVisible();
   await contextual.click();await formats.getByRole('radio',{name:'Section or results table',exact:true}).check();
   await panel.getByLabel('Content to show').selectOption('section:'+source.sectionId);
   await expect(preview).toContainText('the observer compared');await expect(panel.getByRole('button',{name:/^(Previous|Next)$/})).toHaveCount(0);
