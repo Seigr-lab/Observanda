@@ -70,10 +70,14 @@ function preparationMessage(preparation){
  return completed?tr('stageCompleted',{stage,completed}):stage;
 }
 
+// Each docked tool's own close: what it holds is kept or discarded as that close decides.
+const DOCK_CLOSE={menu:'menu-cancel',regions:'regions-close',exchange:'exchange-close',pages:'pages-close',versions:'versions-close',releases:'releases-close',discovery:'discovery-close',review:'review-close',gallery:'gallery-close'};
 export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSite=()=>{},onSession=()=>{},state=null,field:formField=null,access=operation=>operation(),address=hash=>history.replaceState(history.state,'',hash)}){
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let remoteEdition='website';
+ // The page editor's left column shows one panel at a time: adding, the page's layers, or lab book content.
+ let leftPanel='add';
  let visual=null,selected=null,anchor='',trail=[],step=-1;
  const viewport=websiteFileViewport({esc,t:tr,getRanges:()=>opened?.site.breakpoints??defaultBreakpoints(),changed:()=>visual?.viewportChanged()});
  let awaitingAccess=false,conflictingPage=null;
@@ -296,6 +300,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const hierarchy=websiteHierarchy({t:tr,site:()=>opened,enabled:()=>!!opened&&!stale&&!form,available:()=>!busy,
   snapshot:()=>{flushCanvas();return html;},read:()=>websiteHTML(html),edit:documentChange,button,escape:esc,
   elements:()=>elementGroups.flatMap(([,keys])=>keys).map(key=>({name:tr('element_'+key),run:()=>void action({dataset:{action:'website-files-add-block',block:key}})})),
+  // Found by name from any panel: each opens its panel, then itself.
+  panelTools:()=>[['componentLibrary','add','component-browse'],['pickerBrowse','content','picker-open']].map(([key,panel,operation])=>({name:tr(key),run:()=>void(async()=>{
+   if(mode!=='visual'||leftPanel!==panel)await action({dataset:{action:'website-files-left-'+panel}});
+   await action({dataset:{action:'website-files-'+operation}});
+  })()})),
   openPage:path=>run(async()=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}}),
   selectLayer:path=>{if(mode==='visual'&&visual){visual.select(path);return;}void run(async()=>{if(await beforeLeave(true)){mode='visual';selected=path;render();}});},
   retainSelection:path=>{selected=path;},notify:()=>notify(tr('layerMoveUnavailable'),true)});
@@ -853,14 +862,16 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes=viewport.controls()+button('breakpointManage','breakpoints');
   const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div>'+(mode==='visual'&&!panel?'<div class="website-command-set">'+button('placementTitle','presentation')+'</div>':'')+'<div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'||panel?sizes:'')+'</div></div>';
-  if(mode!=='visual'&&!panel)return toolbar+'<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools')})+'<div>'+sourcePane.view(mode)+'</div></div>';
+  if(mode!=='visual'&&!panel)return toolbar+'<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+'<div>'+sourcePane.view(mode)+'</div></div>';
   const blocks=library.view();
   // An open site tool takes the left column; the page stays in view beside it.
   // One way back from a docked tool: its own close, which keeps or discards what it holds.
-  const close={menu:'menu-cancel',regions:'regions-close',exchange:'exchange-close',pages:'pages-close',versions:'versions-close',releases:'releases-close',discovery:'discovery-close',review:'review-close',gallery:'gallery-close'}[mode]??'visual';
+  const close=DOCK_CLOSE[mode]??'visual';
   const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head">'+button('closePanel',close)+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
-   :'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+blocks+components.tabs()+components.view()+'<section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside>';
-  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools')})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
+   :leftPanel==='layers'?'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'"><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section></aside>'
+   :leftPanel==='content'?'<aside tabindex="0" aria-label="'+esc(tr('railContent'))+'">'+library.labBookView()+picker.view()+'</aside>'
+   :'<aside tabindex="0" aria-label="'+esc(tr('elementLibrary'))+'">'+blocks+components.opener()+components.view()+'</aside>';
+  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}
@@ -1055,6 +1066,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(recoveringSource&&!['html','css','discard','reopen','undo','redo'].includes(operation)){
    try{await request('recovery/validate',{siteId:siteId(),path:opened.path,expectedRevision:opened.site.revision,html,css},{signal:controller.signal});recoveringSource=false;}
    catch(reason){if(['AUTH','ACCESS_LOCKED','CONFLICT'].includes(reason.code))hideUnverifiedPage(true);else notify(tr('recoverySourceCorrect'),true);return true;}
+  }
+  // Add, Layers and Lab book content close an open docked tool the way its own close does, then show their panel.
+  if(operation.startsWith('left-')){
+   const next=operation.slice(5);if(!['add','layers','content'].includes(next))return true;
+   if(mode!=='visual'){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});if(mode!=='visual')return true;}
+   leftPanel=next;render();return true;
   }
   if(operation==='check-access'){await poll();return true;}
   if(operation==='resume-preparation'){const result=await request('preparation/resume',{},{signal:controller.signal});session.preparation=result.preparation?.state==='cancelled'?{...result.preparation,state:'preparing'}:result.preparation;render();waitForPreparation();return true;}

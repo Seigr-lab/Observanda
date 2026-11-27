@@ -48,6 +48,11 @@ export function websiteElementLibrary({t,esc}){
    elementGroups.map(([group,keys])=>'<section class="element-group" data-element-group><h3>'+esc(t('elementGroup_'+group))+'</h3><div class="element-grid">'+keys.map(card).join('')+'</div></section>').join('')+
    '<p class="hint" data-element-none hidden>'+esc(t('elementNone'))+'</p></section>';
  }
+ // Lab book content: the elements built from lab book records, beside the records themselves.
+ function labBookView(){
+  const keys=elementGroups.find(([group])=>group==='labBook')[1];
+  return '<section class="panel element-library" aria-label="'+esc(t('elementGroup_labBook'))+'"><h2>'+esc(t('elementGroup_labBook'))+'</h2><div class="element-grid">'+keys.map(card).join('')+'</div></section>';
+ }
  function filter(root){
   const words=query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);let shown=0;
   for(const group of root.querySelectorAll('[data-element-group]')){
@@ -59,7 +64,7 @@ export function websiteElementLibrary({t,esc}){
  function bind(root){
   const host=root.querySelector('.element-library');if(!host)return;
   const input=host.querySelector('[data-element-search-input]');
-  input.oninput=()=>{query=input.value;filter(host);};filter(host);
+  if(input){input.oninput=()=>{query=input.value;filter(host);};filter(host);}
   host.ondragstart=e=>{const key=e.target.closest?.('[data-block]')?.dataset.block;if(!key)return;e.dataTransfer.setData(dragType,key);e.dataTransfer.setData('text/plain',text(key));e.dataTransfer.effectAllowed='copy';};
  }
  // Dropping on the page places the element before or after the top-level part
@@ -85,5 +90,5 @@ export function websiteElementLibrary({t,esc}){
    if(icons[key])place(key,node,where);
   });
  }
- return {view,bind,bindCanvas,dragType};
+ return {view,labBookView,bind,bindCanvas,dragType};
 }

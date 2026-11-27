@@ -1,6 +1,12 @@
 // Site tools in a rail beside the page, each with a picture and its name, so an
 // author reaches pages, menus, design and media without leaving the page.
 const icon=paths=>'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+paths+'</svg>';
+// Add, Layers and Lab book content choose the page editor's own left panel.
+const PAGE_PANELS=[
+ ['left-add','railAdd',icon('<path d="M12 5v14M5 12h14"/>')],
+ ['left-layers','railLayers',icon('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>')],
+ ['left-content','railContent',icon('<path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M17 7h2v13H8M8 9h6M8 13h6"/>')]
+];
 const TOOLS=[
  ['pages','pagePanel',icon('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>')],
  ['menu','menu',icon('<path d="M4 6h16M4 12h16M4 18h16"/>')],
@@ -18,9 +24,9 @@ const TOOLS=[
 const PANEL={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'};
 
 export function websiteToolRail({t,esc}){
- function view({mode,label}){
-  return '<nav class="website-tool-rail" aria-label="'+esc(label)+'">'+TOOLS.map(([action,key,picture])=>{
-   const current=PANEL[action]&&PANEL[action]===mode;
+ function view({mode,label,left}){
+  return '<nav class="website-tool-rail" aria-label="'+esc(label)+'">'+[...PAGE_PANELS,...TOOLS].map(([action,key,picture])=>{
+   const current=action.startsWith('left-')?mode==='visual'&&action==='left-'+left:PANEL[action]&&PANEL[action]===mode;
    return '<button type="button" class="website-tool" data-action="website-files-'+action+'"'+(current?' aria-current="true"':'')+'>'+picture+'<span>'+esc(t(key))+'</span></button>';
   }).join('')+'</nav>';
  }

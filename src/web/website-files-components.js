@@ -23,7 +23,8 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
  function pageChange(sameSite){
   const keep=sameSite&&opened,term=query;reset();if(keep){opened=true;query=term;}
  }
- function tabs(){return '<nav class="component-rail-tabs" aria-label="'+esc(tr('componentPanels'))+'">'+button('structure','close','aria-pressed="'+!opened+'"')+button('componentLibrary','browse','aria-pressed="'+opened+'" aria-controls="website-component-library"')+'</nav>';}
+ // In the Add panel: one button opens and closes the saved components.
+ function opener(){return '<div class="component-browse">'+button('componentLibrary',opened?'close':'browse','aria-expanded="'+opened+'" aria-controls="website-component-library"')+'</div>';}
  function view(){
   return '<section class="panel website-files-components" data-website-components id="website-component-library"'+(opened?'':' hidden')+'>'+body()+'</section>';
  }
@@ -257,5 +258,5 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   await save();const pin=local(),value=await request('components/main',{...pin,instance});
   if(site()?.site.revision===value.revision&&site().site.id===pin.siteId)editor(value,pin);
  }
- return {tabs,view,bind,bindCanvas,action,input,selection,pageChange,reset,openInstance};
+ return {opener,view,bind,bindCanvas,action,input,selection,pageChange,reset,openInstance};
 }

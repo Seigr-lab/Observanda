@@ -1,14 +1,15 @@
 import {foldLayerText} from './website-layer-model.js';
 
 const cap=8;
-const tools=new Set(['visual','html','css','pages','new-page','menu','regions','themes','appearance','styles','preview','check-page','check-website','galleries','media','feeds','exchange','versions','presentation','folder','destination','publish-update','save','download','picker-open','component-browse']);
+const tools=new Set(['visual','html','css','left-add','left-layers','left-content','pages','new-page','menu','regions','themes','appearance','styles','preview','check-page','check-website','galleries','media','feeds','exchange','versions','presentation','folder','destination','publish-update','save','download','picker-open','component-browse']);
 
 // Elements come from the editor's own list, so they are found whichever panel is open.
-export function finderGroups({site,root,rows,t,openPage,selectLayer,elements=[]}){
+// panelTools: tools inside a left panel, found and opened whichever panel is showing.
+export function finderGroups({site,root,rows,t,openPage,selectLayer,elements=[],panelTools=[]}){
  const groups=[];
  const commands=[...root.querySelectorAll('button[data-action^="website-files-"]')].filter(node=>
   tools.has(node.dataset.action.slice(14))&&!node.matches(':disabled,[hidden]')&&!node.closest('[hidden]'));
- const named=new Map();for(const node of commands){const name=node.textContent.trim();if(name&&!named.has(name))named.set(name,()=>node.click());}
+ const named=new Map(panelTools.map(tool=>[tool.name,tool.run]));for(const node of commands){const name=node.textContent.trim();if(name&&!named.has(name))named.set(name,()=>node.click());}
  groups.push({title:t('finderTools'),items:[...named].map(([name,run])=>({name,run}))});
  if(elements.length)groups.push({title:t('finderElements'),items:elements});
  groups.push({title:t('finderPages'),items:function*(){
