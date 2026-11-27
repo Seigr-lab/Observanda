@@ -29,7 +29,6 @@
 .website-files-app [data-viewport-width] { width:6em }
 .website-files-app [data-viewport-readout] { color:var(--muted,CanvasText);font-variant-numeric:tabular-nums;font-size:.83em }
 /* The readout changes with every resize: a fixed share of the row keeps it from rewrapping the toolbar and moving the page. */
-.website-files-app .website-canvas-tools [data-viewport-readout] { flex:1 1 11rem;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
 .website-files-structure li[draggable=true] { cursor:grab }
 .website-files-structure li[data-level="1"] { padding-inline-start:.6rem }
 .website-files-structure li:is([data-level="2"],[data-level="3"]) { padding-inline-start:1.2rem }
@@ -74,21 +73,43 @@
 .website-workspace-utilities { border-inline-start:1px solid var(--border,var(--ui-border)); padding-inline-start:.55rem }
 .website-files-app .website-workspace-utilities .button,.website-files-app .website-site-menu-list .button,.website-files-app .website-command-set .button,.website-files-app .website-canvas-tools .button { border-color:transparent; background:transparent; min-height:1.9rem; padding:.2rem .4rem; font-size:.85rem }
 .website-files-app :is(.website-workspace-utilities,.website-command-set,.website-canvas-tools) .button:not(:disabled):hover { color:var(--accent,var(--ui-accent)); border-color:var(--border,var(--ui-border)); background:var(--surface,var(--ui-surface)) }
-.website-files-app .website-primary-actions [data-action="website-files-save"]:not(:disabled),.website-files-app .website-primary-actions:has([data-action="website-files-save"]:disabled) [data-action="website-files-publish-update"]:not(:disabled) { color:var(--on-accent,var(--ui-on-accent)); background:var(--accent,var(--ui-accent)); border-color:var(--accent,var(--ui-accent)) }
-/* One editor bar: website and page, save state, publishing, and a menu for the rest. */
-.website-files-app .website-editor-bar { flex-wrap:wrap; row-gap:.4rem; padding-block:.3rem .55rem; border-block-end:1px solid var(--border,var(--ui-border)); margin-block-end:.5rem }
-@media(min-width:761px){
- .website-files-app .website-editor-bar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:'identity status utilities' 'places places actions'; align-items:center; column-gap:.75rem }
- .website-editor-bar>.website-workspace-identity { grid-area:identity }
- .website-editor-bar>.website-files-status { grid-area:status }
- .website-editor-bar>.website-workspace-utilities { grid-area:utilities; border:0; padding:0 }
- .website-editor-bar>.website-page-controls { grid-area:places }
- .website-editor-bar>.website-primary-actions { grid-area:actions; justify-content:flex-end }
-}
+.website-files-app .website-primary-actions [data-action="website-files-save"]:not(:disabled),.website-files-app .website-primary-actions:has([data-action="website-files-save"]:disabled) [data-action="website-files-publish-panel"]:not(:disabled) { color:var(--on-accent,var(--ui-on-accent)); background:var(--accent,var(--ui-accent)); border-color:var(--accent,var(--ui-accent)) }
+/* One editor bar: website and page on the left; page view, undo and screen size in the
+   middle; save state, help, saving, preview and publishing on the right. */
+.website-files-app .website-editor-bar { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem .4rem; padding-block:.25rem .45rem; border-block-end:1px solid var(--border,var(--ui-border)); margin-block-end:.5rem }
+.website-editor-bar>.website-page-controls { order:1 }
+.website-editor-bar>.website-authoring-tools { order:2; flex:0 1 auto }
+.website-editor-bar>.website-workspace-utilities { order:4; border:0; padding:0 }
+.website-editor-bar>.website-primary-actions { order:5 }
+.website-editor-bar>.website-leave { order:0 }
+.website-editor-bar>.website-workspace-identity { order:0 }
+.website-editor-bar>.website-hidden-identity,.website-files-app .website-hidden-label { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
 .website-editor-bar .website-page-controls { display:flex; padding:0; margin:0!important; border:0; background:none; min-width:0 }
 .website-bar-places { display:flex; flex-wrap:wrap; gap:.3rem; align-items:center; min-width:0 }
-.website-bar-places .website-file-select { max-width:14rem; min-height:1.9rem; height:2rem; font-size:.88rem }
-.website-editor-bar .website-files-status { flex:1 1 8rem; font-size:.85rem }
+.website-bar-places .website-file-select { max-width:12rem; min-height:1.9rem; height:2rem; font-size:.88rem }
+.website-bar-places .website-site-menu-list { inset-inline:0 auto }
+/* The save state takes the room left in the row; a long message ends in an ellipsis and shows whole as a
+   tooltip, and with too little room it shows only as the tooltip. An error takes a row of its own. */
+.website-editor-bar>.website-status-slot { order:3; flex:1 1 0; min-width:0; container-type:inline-size }
+.website-editor-bar>.website-status-slot:has(.website-files-error) { flex-basis:100% }
+@container (max-width:5.5rem) { .website-status-slot .website-files-status:not(.website-files-error) { visibility:hidden } }
+.website-editor-bar .website-files-status { margin:0; font-size:.8rem; text-align:end; color:var(--muted,var(--ui-muted)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.website-editor-bar .website-authoring-tools { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; border:0; padding:0; min-width:0 }
+.website-editor-bar .website-canvas-tools { margin:0 }
+/* The screen size control: the screen and zoom, opening width, zoom, screen sizes and the page check. */
+.website-files-app .website-size-control>summary { font-size:.86rem; white-space:nowrap }
+.website-size-panel { display:grid; gap:.5rem; min-width:15rem; padding:.25rem }
+.website-size-panel label { display:grid; gap:.2rem; font-size:.84rem }
+.website-files-app .website-sites-menu>summary { min-width:2.3rem; padding-inline:.45rem; justify-content:center }
+.website-sites-menu>summary::after { display:none }
+/* The Publish panel: each step with what it does. */
+.website-publish-panel h2 { margin-block-end:.25rem }
+.website-publish-group { margin-block-start:1rem }
+.website-publish-group h3 { margin:0 0 .35rem; font-size:.78rem; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--ui-muted) }
+.website-publish-group ul { list-style:none; margin:0; padding:0; display:grid; gap:.55rem }
+.website-publish-group li { display:grid; gap:.15rem }
+.website-files-app .website-publish-group .button { justify-self:start }
+.website-publish-group .hint { margin:0; font-size:.84rem }
 .website-site-menu { position:relative }
 .website-site-menu>summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; gap:.35rem }
 .website-site-menu>summary::-webkit-details-marker { display:none }
@@ -259,6 +280,7 @@
  }
  .website-files-editor { flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch;grid-template-columns:minmax(16rem,18%) minmax(0,1fr) minmax(13rem,20%) }
  .website-files-editor>aside { min-height:0;max-height:none;overflow-y:auto;overscroll-behavior-y:contain }
+ .website-files-editor>.website-tool-rail,.website-files-code-layout>.website-tool-rail { max-height:none;min-height:0;align-self:stretch }
  .website-files-viewport,.website-files-stage .website-files-canvas { height:100%;min-height:0 }
  .website-file-controls>.website-files-viewport { flex:1;height:0;min-height:0 }
 }
@@ -280,7 +302,6 @@
  .website-files-canvas { height:53vh; min-height:240px }
 }
 .component-rail-tabs { display:flex; gap:.15rem; background:var(--background,var(--ui-surface)); position:sticky; top:0; z-index:1; padding:.25rem 0 .4rem }
- .website-files-editor>.website-tool-rail,.website-files-code-layout>.website-tool-rail { max-height:none;min-height:0;align-self:stretch }
 .component-rail-tabs button { flex:1; min-width:0; padding:.35rem .4rem; font-size:.87em }
 .component-rail-tabs [aria-pressed=true] { border-color:var(--accent,var(--ui-accent)); color:var(--accent,var(--ui-accent)); font-weight:650 }
 .website-files-editor>aside:has(>[data-website-components]:not([hidden]))>:not(.component-rail-tabs,[data-website-components]) { display:none }
@@ -452,6 +473,12 @@
 .website-tool:hover,.website-tool:focus-visible { color:var(--ui-accent); background:var(--ui-tint) }
 .website-tool[aria-current=true] { color:var(--ui-accent); background:var(--ui-tint); border-color:var(--ui-accent) }
 .website-tool svg { width:1.25rem; height:1.25rem }
+/* Groups: a line between them, so building, style, media and site tools read apart; each is named for assistive technology. */
+.website-tool-group { display:grid; gap:.1rem }
+.website-tool-group+.website-tool-group { border-block-start:1px solid var(--ui-border); padding-block-start:.3rem }
+.website-tool-group-name { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
+/* More tools below: the rail's lower edge fades until it is scrolled to the end. */
+.website-tool-rail[data-more] { mask-image:linear-gradient(to bottom,#000 calc(100% - 2.5rem),transparent); }
 /* Narrower windows keep every column, slimmer; the stacked layout below 62rem lays the rail out as a row. */
 @media (max-width:1100px){ .website-files-editor { grid-template-columns:4.75rem minmax(13rem,24%) minmax(0,1fr) minmax(12rem,20%) } .website-files-editor[data-panel-open] { grid-template-columns:4.75rem minmax(18rem,38%) minmax(0,1fr) } .website-tool { font-size:.75rem } }
 /* The docked content library takes the library column; the rail keeps its own. */
@@ -473,9 +500,11 @@
 @media(min-width:62rem) and (min-height:38rem) {
  .main>.website-files-app:is(:has(.website-source-gallery),:has(.website-files-editor,#website-files-preview)) { height:calc(100dvh - var(--shell-content-top,64px) - 2rem) }
 }
-/* Groups: a line between them, so building, style, media and site tools read apart; each is named for assistive technology. */
-.website-tool-group { display:grid; gap:.1rem }
-.website-tool-group+.website-tool-group { border-block-start:1px solid var(--ui-border); padding-block-start:.3rem }
-.website-tool-group-name { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
-/* More tools below: the rail's lower edge fades until it is scrolled to the end. */
-.website-tool-rail[data-more] { mask-image:linear-gradient(to bottom,#000 calc(100% - 2.5rem),transparent); }
+.website-files-app .website-icon-button { min-width:2.3rem; padding-inline:.45rem; justify-content:center }
+.website-files-app .website-icon-button svg { display:block }
+.website-files-app .website-editor-bar .button { padding-inline:.5rem }
+.website-files-app .website-editor-bar .website-icon-button,.website-files-app .website-editor-bar .website-sites-menu>summary { padding-inline:.4rem }
+.website-files-app:has(.website-editor-bar) { padding:.75rem 1rem 1rem }
+.website-editor-bar .website-files-status.website-files-error { white-space:normal; text-align:start }
+/* Inside the application frame the page already has its margins. */
+.main .website-files-app,.main .website-files-app:has(.website-editor-bar) { padding:0; max-width:none }

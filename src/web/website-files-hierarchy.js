@@ -153,8 +153,10 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   hostEvents=new AbortController();hostEvents.signal.addEventListener('abort',()=>{observer?.disconnect();observer=null;},{once:true});bindKeys(doc);
   const trail=root.querySelector('[data-layer-trail]');if(trail)trail.onclick=event=>{const at=event.target.closest('[data-layer-ancestor]');if(at)choose(at.dataset.layerAncestor,true);};
   const header=root.querySelector('.website-workspace-utilities')??root.querySelector('header');if(!header)return;
+  // The application's title bar has its own Find, which opens this search: the editor shows no second one.
   let trigger=header.querySelector('[data-website-finder]');
-  if(!trigger){trigger=node('button',t('finderOpen'));trigger.type='button';trigger.dataset.websiteFinder='';trigger.className='button';trigger.setAttribute('aria-haspopup','dialog');trigger.setAttribute('aria-keyshortcuts','Control+K Meta+K');header.append(trigger);}
+  if(doc.querySelector('[data-action="find-anything"]')){trigger?.remove();return;}
+  if(!trigger){trigger=node('button');trigger.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>';trigger.setAttribute('aria-label',t('finderOpen'));trigger.title=t('finderOpen')+' (Ctrl K)';trigger.type='button';trigger.dataset.websiteFinder='';trigger.className='button website-icon-button';trigger.setAttribute('aria-haspopup','dialog');trigger.setAttribute('aria-keyshortcuts','Control+K Meta+K');header.append(trigger);}
   trigger.onclick=()=>openFinder();
  }
  function bindList(host){
@@ -274,5 +276,7 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   signal.addEventListener('abort',stop,{once:true});
  }
  const canvasDrag={canMove:reorderableWebsiteLayer,bindGrip};
- return {bindHost,bindKeys,bindCanvas,bindList,paint,selection,reset,canvasDrag};
+ // Find in the application's title bar opens this search when the page can be searched.
+ function find(){if(!root||!ready())return false;openFinder();return true;}
+ return {find,bindHost,bindKeys,bindCanvas,bindList,paint,selection,reset,canvasDrag};
 }

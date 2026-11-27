@@ -174,7 +174,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
- const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc}),siteMenu=websiteSiteMenu({esc}),pageStarters=websitePageStarters({t:tr,esc});
+ const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc}),siteMenu=websiteSiteMenu({esc}),sizeMenu=websiteSiteMenu({esc,name:'size'}),pageStarters=websitePageStarters({t:tr,esc});
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -225,7 +225,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function checkSavedSite(trigger){
   const site=opened.site;
   reviewSavedWebsite({site,directory:directory(site.revision,'edition'),request,signal:controller.signal,t:tr,trigger,
-   onError:reason=>{if(['ACCESS_LOCKED','AUTH','WEBSITE_CHANGED','CONFLICT','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);},
+   // A check of a website that changed since closes; the page reopens in the page editor, not in the Publish panel.
+   onError:reason=>{if(['ACCESS_LOCKED','AUTH','WEBSITE_CHANGED','CONFLICT','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code)){if(mode==='publish')mode='visual';hideUnverifiedPage(true);}else notify(reason.message||tr('failed'),true);},
    edit:(path,issue,repair)=>run(async()=>{
     if(siteId()!==site.id||stale||opened.site.revision!==site.revision)throw Object.assign(Error(tr('changed')),{code:'CONFLICT'});
     if(!await beforeLeave(true))return;
@@ -342,6 +343,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return tr(dirty||figures.dirty()||recordings.dirty()?'unsaved':'saved');
  }
  function button(key,action,extra=''){return '<button type="button" class="button" data-action="website-files-'+action+'" '+extra+'>'+esc(tr(key))+'</button>';}
+ // The editor bar shows short words; each button's name and tooltip keep the full label, which contains them.
+ function brief(key,shortKey,action,extra=''){const full=esc(tr(key));return '<button type="button" class="button" data-action="website-files-'+action+'" aria-label="'+full+'" title="'+full+'" '+extra+'>'+esc(tr(shortKey))+'</button>';}
+ const HISTORY_ICONS={addPage:'<path d="M12 5v14M5 12h14"/>',undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'};
+ function iconButton(key,action,extra=''){const full=esc(tr(key));return '<button type="button" class="button website-icon-button" data-action="website-files-'+action+'" aria-label="'+full+'" title="'+full+'" '+extra+'><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+HISTORY_ICONS[key]+'</svg></button>';}
  const field=(key,value,extra='')=>'<label>'+esc(tr(key))+'<input data-website-file-field="'+key+'" value="'+esc(value)+'" '+extra+'></label>';
  function flushCanvas(){
   clearTimeout(canvasTimer);canvasTimer=null;if(!pendingCanvas)return;
@@ -354,7 +359,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(resume)resume.hidden=!stale||awaitingAccess||Boolean(conflictingPage);
   const host=document.querySelector('[data-website-files-status]');
   if(host){
-   host.textContent=status();host.hidden=!host.textContent;
+   host.textContent=status();host.hidden=!host.textContent;host.title=host.textContent;
    host.setAttribute('role',error||stale?'alert':'status');
    host.classList.toggle('website-files-error',!!error||stale);
   }
@@ -504,7 +509,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   feeds.clear();
   figures.reset();
   conflictingPage=null;awaitingAccess=false;conflicts.select(null);
-  clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();siteMenu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
+  clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();siteMenu.reset();sizeMenu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
  }
  function historyEntry(){return {html,css,sourceStamp:opened?.sourceStamp,selection:canvasSelection(document.getElementById('website-files-canvas')?.contentDocument)};}
  function checkpoint(force=false){const now=Date.now();if(force||now-lastCheckpoint>350||!undo.length){flushCanvas();undo.push(historyEntry());historyBytes+=html.length+css.length;while(undo.length>50||historyBytes>8*1024*1024&&undo.length>1){const oldest=undo.shift();historyBytes-=oldest.html.length+oldest.css.length;}lastCheckpoint=now;}redo=[];gallery.trimHistory(html,undo.toReversed());}
@@ -665,13 +670,22 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function siteToolbar(){
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
-  return '<div class="website-bar-places">'+siteSelector(true)+page+button('addPage','new-page')+'</div>';
+  return '<div class="website-bar-places">'+siteSelector(true)+siteMenuView()+page+iconButton('addPage','new-page')+'</div>';
  }
+ // Creating and managing websites; publishing has its own panel.
  function siteMenuView(){
-  return siteMenu.view({label:tr('manageAndPublish'),groups:[
-   {label:tr('site'),items:button('create','new')+button('lifeManageSite','manage-site')},
-   {label:tr('siteReleaseTools'),items:button('reviewTitle','review')+button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('download','download','data-website-file-requires-clean')}
-  ]});
+  const dots='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
+  return siteMenu.view({label:tr('sitesMenu'),summary:dots,icon:true,className:'website-sites-menu',groups:[{label:tr('site'),items:button('create','new')+button('lifeManageSite','manage-site')}]});
+ }
+ // Every publishing step in one docked panel, in the order they are taken.
+ function publishPanelView(){
+  const step=(key,operation,text,extra='')=>'<li>'+button(key,operation,extra)+'<p class="hint">'+esc(tr(text))+'</p></li>';
+  const group=(title,rows)=>'<section class="website-publish-group"><h3>'+esc(tr(title))+'</h3><ul>'+rows+'</ul></section>';
+  return '<section class="panel website-publish-panel"><h2>'+esc(tr('publishOpen'))+'</h2><p class="hint">'+esc(tr('publishPanelHelp'))+'</p>'+
+   group('publishGroupWhere',step('destination','destination','destinationText'))+
+   group('publishGroupCheck',step('checkWebsite','check-website','checkWebsiteText')+step('reviewTitle','review','reviewText')+step('discoveryTitle','discovery','discoveryText'))+
+   group('publishGroupSend',step('publishUpdate','publish-update','publishUpdateText','data-website-file-requires-clean')+step('folderPublish','folder','folderPublishText')+step('download','download','downloadText','data-website-file-requires-clean'))+
+   group('publishGroupHistory',step('releasesTitle','releases','releasesText'))+'</section>';
  }
  function unopenedView(){
   const state=session.preparation?.state;
@@ -684,18 +698,21 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return '<section class="panel"><p>'+esc(tr('noWebsite'))+'</p>'+button('create','new')+'</section>';
  }
  // The name of the task on screen, for the heading and an open tool panel.
- function taskLabel(){return ({menu:'menu',regions:'regions',exchange:'designExchange',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';}
- function view(){
+ function taskLabel(){return ({publish:'publishOpen',menu:'menu',regions:'regions',exchange:'designExchange',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';}
+ function view({leave=false}={}){
   flushCanvas();
-  if(!session)return '<p role="status">'+esc(tr('loading'))+'</p>';
+  // Without the application's title bar (the editor opened on its own), the bar holds the way back.
+  const back=leave?'<button type="button" class="button subtle website-leave" data-action="website-files-back" aria-label="'+esc(tr('workspace'))+'" title="'+esc(tr('workspace'))+'"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>':'';
+  if(!session)return back+'<p role="status">'+esc(tr('loading'))+'</p>';
   const title=opened?.site.name??tr('title');
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
   const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','regions','exchange','destination','folder'].includes(mode);
   const currentTask=taskLabel();
-  const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+button('folderPublish','folder')+'</div>':'';
-  const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
-  let body;
+  // Save, preview and one way to publish: the Publish panel holds every publishing step.
+  const headerActions=authoring?'<div class="website-primary-actions">'+brief('save','saveShort','save','data-website-file-requires-clean')+brief('preview','previewShort','preview','data-website-file-requires-clean')+button('publishOpen','publish-panel','aria-pressed="'+(mode==='publish')+'"')+'</div>':'';
+  const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide title="'+esc(tr('websiteGuide'))+'">'+esc(tr('help'))+'</button>';
+  let body,tools='';
   if(stale)body=conflictingPage?conflicts.view():awaitingAccess?'<section class="panel"><h2>'+esc(tr('savedPageWaiting'))+'</h2><p>'+esc(tr('savedPageWaitingDetail'))+'</p>'+button('retry','check-access')+'</section>':'';
   else if(form)body=formView();
   else if(mode==='lifecycle')body=lifecycle.view();
@@ -703,16 +720,16 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='folder')body=button('closePreview','visual')+folder.view();
   else if(choosingTarget)body=publishUpdateView();
   else if(mode==='destination')body=destinationView();
-  else if(docked())body=editorView(panelView());
+  else if(docked()){body=editorView(panelView());tools=editorTools(true);}
   else if(composing)body=figures.view(picker.view());
   else if(mode==='preview')body='<div class="website-files-toolbar">'+button('prevPage','preview-back',step>0?'':'disabled')+button('nextPage','preview-forward',step<trail.length-1?'':'disabled')+button('closePreview','visual')+viewport.controls()+'</div>'+viewport.frame('website-files-preview',tr('preview'));
-  else body=editorView();
-  // While authoring, one bar holds the website, the page, the save state,
-  // publishing and a menu for everything else.
+  else{body=editorView();tools=editorTools(false);}
+  // While authoring, one bar holds the website and page, the page tools, the save
+  // state, search and help, and saving, preview and publishing.
   const places=authoring?'<nav class="website-page-controls" aria-label="'+esc(tr('site'))+'">'+siteToolbar()+'</nav>':'';
-  const utilities=(authoring?siteMenuView():'')+guideButton;
+  const utilities=guideButton;
   const toolbar=!authoring&&!opened&&!form?siteSelector():'';
-  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading'+(authoring?' website-editor-bar':'')+'"><div class="website-workspace-identity"><span class="website-task-label">'+esc(tr(currentTask))+'</span><h1>'+esc(title)+'</h1></div>'+places+'<p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'<div class="website-workspace-utilities">'+utilities+'</div></header>'+
+  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading'+(authoring||tools?' website-editor-bar':'')+'">'+back+'<div class="website-workspace-identity'+(authoring?' website-hidden-identity':'')+'"><span class="website-task-label">'+esc(tr(currentTask))+'</span><h1>'+esc(title)+'</h1></div>'+places+tools+(authoring||tools?'<div class="website-status-slot">':'')+'<p class="website-files-status" role="status" data-website-files-status></p>'+(authoring||tools?'</div>':'')+'<div class="website-workspace-utilities">'+utilities+'</div>'+headerActions+'</header>'+
    (toolbar?'<nav class="website-files-toolbar website-page-controls" aria-label="'+esc(tr('site'))+'">'+toolbar+'</nav>':'')+
    (opened&&!stale&&!form?'<div data-website-recovery></div>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
@@ -801,12 +818,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  // Site tools open in a panel beside the page instead of replacing it, so the
  // author never loses the page they are building. The page is shown read-only
  // while a tool is open, because tools such as the menu and pages write into it.
- const DOCKED=new Set(['menu','regions','exchange','pages','versions','releases','discovery','review','media','gallery']);
+ const DOCKED=new Set(['menu','regions','exchange','pages','publish','versions','releases','discovery','review','media','gallery']);
  function docked(){return DOCKED.has(mode)&&!!opened&&!form&&!stale;}
  // The editor's screens, for history: the editor itself, each docked tool and each full screen.
  // Switching between visual, HTML and CSS editing is a view of the same screen.
  const SCREENS=new Set([...DOCKED,'destination','folder','publish-review','publish-choose','lifecycle','preview','source-gallery']);
- const SCREEN_OPENERS={destination:'destination',versions:'versions',releases:'releases',review:'review',discovery:'discovery',preview:'preview',pages:'pages',regions:'regions',exchange:'exchange',menu:'menu'};
+ const SCREEN_OPENERS={publish:'publish-panel',destination:'destination',versions:'versions',releases:'releases',review:'review',discovery:'discovery',preview:'preview',pages:'pages',regions:'regions',exchange:'exchange',menu:'menu'};
  function screen(){if(!session||stale)return null;if(form)return 'form';if(!opened)return mode==='lifecycle'?'lifecycle':'sites';return SCREENS.has(mode)?mode:'editor';}
  const command=operation=>action({dataset:{action:'website-files-'+operation}});
  // Back and Forward within one website: close the current screen, then open the requested one.
@@ -828,6 +845,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='regions')return regions.view();
   else if(mode==='exchange')return exchange.view();
   else if(mode==='pages')return pagesPanel.view();
+  else if(mode==='publish')return publishPanelView();
   else if(mode==='versions')return versions.view();
   else if(mode==='releases')return releases.view();
   else if(mode==='discovery')return discovery.view();
@@ -860,12 +878,17 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  // A Logos block shows this page's logos or the website's (the home page's).
  function logoChoices(){return [['auto',tr('logosAuto')],['home',tr('logosHome')]];}
+ // The page tools in the editor bar: how the page is shown, undo and redo, and the screen size.
+ function editorTools(panel){
+  const shortKey={visual:'viewVisualShort',html:'viewHtmlShort',css:'viewCssShort'};
+  const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>brief(key,shortKey[key],key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+brief('splitSource','viewSplitShort','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';
+  const history=iconButton('undo','undo',undo.length?'':'disabled')+iconButton('redo','redo',redo.length?'':'disabled')+brief('discard','discardShort','discard');
+  // Screen width, zoom, screen sizes and the page check open from one control that names the screen.
+  const size=mode==='visual'||panel?sizeMenu.view({label:tr('screenSize'),className:'website-size-control',summary:'<span class="website-hidden-label">'+esc(tr('screenSize'))+' </span><span data-viewport-readout></span>',body:'<div class="website-size-panel">'+viewport.controls({readout:false})+button('breakpointManage','breakpoints')+button('checkPage','check-page')+'</div>'}):button('checkPage','check-page');
+  return '<div class="website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+'</div><div class="website-canvas-tools">'+size+'</div></div>';
+ }
  function editorView(panel=''){
-  const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+button('splitSource','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';
-  const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
-  const sizes=viewport.controls()+button('breakpointManage','breakpoints');
-  const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div>'+(mode==='visual'&&!panel?'<div class="website-command-set">'+button('placementTitle','presentation')+'</div>':'')+'<div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'||panel?sizes:'')+'</div></div>';
-  if(mode!=='visual'&&!panel)return toolbar+'<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+'<div>'+sourcePane.view(mode)+'</div></div>';
+  if(mode!=='visual'&&!panel)return '<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+'<div>'+sourcePane.view(mode)+'</div></div>';
   const blocks=library.view();
   // An open site tool takes the left column; the page stays in view beside it.
   // One way back from a docked tool: its own close, which keeps or discards what it holds.
@@ -874,7 +897,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    :leftPanel==='layers'?'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'"><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section></aside>'
    :leftPanel==='content'?'<aside tabindex="0" aria-label="'+esc(tr('railContent'))+'">'+library.labBookView()+picker.view()+'</aside>'
    :'<aside tabindex="0" aria-label="'+esc(tr('elementLibrary'))+'">'+blocks+components.opener()+components.view()+'</aside>';
-  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
+  return '<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}
@@ -896,6 +919,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function bind(){
   recovery.paint();
   viewport.bind();
+  // A rail with more tools below its edge fades there until it is scrolled to the end.
+  railObserver?.disconnect();railObserver=null;
+  const rail=document.querySelector('.website-tool-rail');
+  if(rail){const edge=()=>rail.toggleAttribute('data-more',rail.scrollTop+rail.clientHeight<rail.scrollHeight-4);rail.onscroll=edge;railObserver=new ResizeObserver(edge);railObserver.observe(rail);edge();}
   sourcePane.bind();
   visual?.destroy();visual=null;
   const designFilter=document.querySelector('[data-website-file-field="designSearch"]');
@@ -903,7 +930,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions','website-files-starters']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
-  siteMenu.bind(document);paintStarterPreviews();paintPageStarters();hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
+  siteMenu.bind(document);sizeMenu.bind(document);paintStarterPreviews();paintPageStarters();hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
   if(mode==='menu')menu.bind();
   if(mode==='regions')regions.bind();
   if(mode==='exchange')exchange.bind();
@@ -919,10 +946,6 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      const item=doc.querySelector('section[data-website-feed="'+CSS.escape(entry.feedId)+'"] [data-website-feed-source="'+CSS.escape(entry.sourceId)+'"]');
      if(!item){notify(tr('changed'),true);return;}
      // The preview remains inert until its binding callback returns.
-  // A rail with more tools below its edge fades there until it is scrolled to the end.
-  railObserver?.disconnect();railObserver=null;
-  const rail=document.querySelector('.website-tool-rail');
-  if(rail){const edge=()=>rail.toggleAttribute('data-more',rail.scrollTop+rail.clientHeight<rail.scrollHeight-4);rail.onscroll=edge;railObserver=new ResizeObserver(edge);railObserver.observe(rail);edge();}
      requestAnimationFrame(()=>{
       if(!preview.isConnected||preview.contentDocument!==doc)return;
       item.tabIndex=-1;item.focus({preventScroll:true});item.scrollIntoView({block:'center'});
@@ -1080,6 +1103,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(mode!=='visual'){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});if(mode!=='visual')return true;}
    leftPanel=next;render();return true;
   }
+  // The open tool's rail button closes it, exactly as the tool's own close does.
+  const railMode={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'}[operation];
+  if(railMode&&railMode===mode&&element.closest?.('.website-tool-rail')){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});return true;}
   if(operation==='check-access'){await poll();return true;}
   if(operation==='resume-preparation'){const result=await request('preparation/resume',{},{signal:controller.signal});session.preparation=result.preparation?.state==='cancelled'?{...result.preparation,state:'preparing'}:result.preparation;render();waitForPreparation();return true;}
   // A pending source check holds the editor busy, so a second click waits visibly
@@ -1103,9 +1129,6 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='discovery'&&await beforeLeave(true)){mode='discovery';discovery.reset();render();await discovery.open();render();discovery.focus();}
    else if(operation==='discovery-close'&&mode==='discovery'){discovery.reset();mode='visual';render();}
    else if(operation.startsWith('discovery-')&&mode==='discovery'){await discovery.action(operation.slice(10));render();discovery.focus();}
-  // The open tool's rail button closes it, exactly as the tool's own close does.
-  const railMode={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'}[operation];
-  if(railMode&&railMode===mode&&element.closest?.('.website-tool-rail')){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});return true;}
    else if(operation.startsWith('versions-')&&mode==='versions')await versions.action(operation.slice(9));
    else if(operation==='save'){await saveAuthoring();render();}
    else if((operation==='undo'||operation==='redo')&&(operation==='undo'?undo:redo).at(-1)?.presentation){
@@ -1175,6 +1198,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
 
    else if(operation==='form-cancel'){form=null;render();}
    else if(operation==='pages'){if(await beforeLeave(true)){mode='pages';pagesPanel.open();}}
+   else if(operation==='publish-panel'){if(mode==='publish')mode='visual';else if(await beforeLeave(true))mode='publish';render();}
    else if(operation.startsWith('pages-'))await pagesPanel.handle(operation,element);
    else if(operation==='regions'){if(await beforeLeave(true)){await regions.open();mode='regions';render();}}
    else if(operation.startsWith('regions-'))await regions.handle(operation,element);
@@ -1381,5 +1405,5 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(siteId()!==row.owner.websiteId||opened?.path!==row.documentKey)await open(row.owner.websiteId,row.documentKey);
   await recovery.select(row.owner.websiteId,row.documentKey,row.id);
  }
- return {load,clear,view,bind,screen,showScreen,route:()=>opened?fileRoute(opened.site.id):null,openRecovery,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
+ return {load,clear,view,bind,find:()=>hierarchy.find(),screen,showScreen,route:()=>opened?fileRoute(opened.site.id):null,openRecovery,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
 }

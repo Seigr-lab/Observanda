@@ -1,13 +1,13 @@
-// One menu in the editor's top bar for the website's less frequent tasks
-// (other websites, review, releases, checks, destination, download),
-// so the bar itself shows only the website, the page, the save state and
-// publishing. Choosing a task, pressing Escape or clicking elsewhere closes it;
-// a redraw of the editor keeps it as the author left it.
-export function websiteSiteMenu({esc}){
- const selector='[data-website-site-menu]';let open=false;
- function view({label,groups}){
-  const content=groups.filter(group=>group.items).map(group=>'<div class="website-site-menu-group" role="group"'+(group.label?' aria-label="'+esc(group.label)+'"':'')+'>'+(group.label?'<span class="website-task-label" aria-hidden="true">'+esc(group.label)+'</span>':'')+group.items+'</div>').join('');
-  return '<details class="website-site-menu" data-website-site-menu'+(open?' open':'')+'><summary class="button">'+esc(label)+'</summary><div class="website-site-menu-list">'+content+'</div></details>';
+// A menu in the editor's top bar: the websites menu (other websites, managing this one)
+// and the screen size control. Choosing a task, pressing Escape or clicking elsewhere
+// closes it; a redraw of the editor keeps it as the author left it.
+// summary: markup for the button that opens it (label when absent), named by label when it
+// is an icon; body: its own content instead of groups of tasks.
+export function websiteSiteMenu({esc,name='site'}){
+ const selector='[data-website-site-menu="'+name+'"]';let open=false;
+ function view({label,groups=[],summary=null,icon=false,body=null,className=''}){
+  const content=body??groups.filter(group=>group.items).map(group=>'<div class="website-site-menu-group" role="group"'+(group.label?' aria-label="'+esc(group.label)+'"':'')+'>'+(group.label?'<span class="website-task-label" aria-hidden="true">'+esc(group.label)+'</span>':'')+group.items+'</div>').join('');
+  return '<details class="website-site-menu'+(className?' '+className:'')+'" data-website-site-menu="'+name+'"'+(open?' open':'')+'><summary class="button"'+(icon?' aria-label="'+esc(label)+'" title="'+esc(label)+'"':'')+'>'+(summary??esc(label))+'</summary><div class="website-site-menu-list">'+content+'</div></details>';
  }
  function close(doc=document,{focus=false}={}){
   open=false;const menu=doc.querySelector(selector+'[open]');if(!menu)return;

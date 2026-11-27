@@ -17,7 +17,7 @@ export function websiteFrameGeometry(frame){
 
 export function websiteFileViewport({esc,t,changed,getRanges=defaultBreakpoints}){
  let preset='desktop',width=presets.desktop,zoom='fit',custom=1024,observer=null;
- function controls(){
+ function controls({readout=true}={}){
   const option=(key,text,current)=>'<option value="'+key+'"'+(key===current?' selected':'')+'>'+esc(text)+'</option>';
   const named=getRanges().filter(r=>!Object.hasOwn(presets,r.id));
   if(preset!=='custom'&&!Object.hasOwn(presets,preset)&&!named.some(r=>r.id===preset)){preset='custom';custom=width;}
@@ -25,7 +25,7 @@ export function websiteFileViewport({esc,t,changed,getRanges=defaultBreakpoints}
   return '<label>'+esc(t('viewport'))+' <select data-website-file-viewport>'+choices+option('custom',t('viewportCustom'),preset)+'</select></label>'+
    '<label data-viewport-custom'+(preset==='custom'?'':' hidden')+'><input type="number" required min="1" max="16384" step="1" value="'+custom+'" aria-label="'+esc(t('viewportPixels'))+'" data-viewport-width> px</label>'+
    '<label>'+esc(t('viewportZoom'))+' <select data-viewport-zoom>'+option('fit',t('viewportFit'),zoom)+option('actual','100%',zoom)+'</select></label>'+
-   '<output data-viewport-readout></output>';
+   (readout?'<output data-viewport-readout></output>':'');
  }
  function frame(id,title){
   return '<div class="website-files-viewport" data-viewport-host><div data-viewport-surface><iframe id="'+id+'" class="website-files-canvas" title="'+esc(title)+'" sandbox="allow-same-origin"></iframe></div></div>';
@@ -40,9 +40,10 @@ export function websiteFileViewport({esc,t,changed,getRanges=defaultBreakpoints}
   const range=breakpoint(width);
   const applicable=getRanges().filter(r=>matchesWidth(r,width)),customRanges=applicable.some(r=>!Object.hasOwn(presets,r.id));
   const label=customRanges?applicable.map(r=>breakpointLabel(r,t)+' '+breakpointCondition(r)).join(', '):range==='desktop'?'> '+websiteLayoutWidths.tablet+' px':range==='phone'?'≤ '+websiteLayoutWidths.phone+' px':(websiteLayoutWidths.phone+1)+'–'+websiteLayoutWidths.tablet+' px';
-  const text=t('viewportMeasured',{width,height,percent:Math.round(scale*100),range:label});
-  const readout=document.querySelector('[data-viewport-readout]');
-  if(readout&&readout.textContent!==text){readout.textContent=text;readout.title=text;}
+  // The readout names the screen and the zoom; the exact measurement is its tooltip.
+  const percent=Math.round(scale*100),detail=t('viewportMeasured',{width,height,percent,range:label});
+  const name=Object.hasOwn(presets,preset)?t(preset):getRanges().find(r=>r.id===preset)?.name??width+' px',text=t('viewportBrief',{name,percent});
+  for(const readout of document.querySelectorAll('[data-viewport-readout]')){if(readout.textContent!==text)readout.textContent=text;readout.title=detail;readout.closest('summary')?.setAttribute('title',detail);}
  }
  function change(input){
   if(input.matches('[data-website-file-viewport]')){

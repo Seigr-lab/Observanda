@@ -756,7 +756,8 @@ async function action(button){
   if(removingRecord)return;
   const fileAction=button.dataset.action;
   if(fileAction==='shell-back'){if(routeIndex>0)history.back();return;}
-  if(fileAction==='find-anything'){finder.open(button);return;}
+  // In the website editor, Find searches the editor: its tools, elements, pages and layers.
+  if(fileAction==='find-anything'){if(state.filesMode&&websiteFiles?.find())return;finder.open(button);return;}
   if(state.filesMode){
     if(fileAction==='context-help'&&button.hasAttribute('data-saved-website-guide')){await taskHelp.open('publishing',button,['project-websites','design','appearance','local-export','release']);return;}
     // A place chosen in the navigation leaves the editor, after its unsaved work is settled.
@@ -1319,14 +1320,15 @@ let workspaceLoadTask=null;
 function renderWebsiteFiles(){
   workspaceLive.bind();
   const text=(key,fallback)=>websiteFiles?t('websiteFiles',key):fallback;
-  const view=state.fileError?'<p role="alert">'+esc(state.fileError)+'</p><button type="button" class="button" data-action="website-files-retry">'+esc(text('retry',appText('workspace')))+'</button>':websiteFiles?.view()??'<p role="status">'+esc(text('loading',t('supportEditors','moduleOpening')))+'</p>';
+  const view=state.fileError?'<p role="alert">'+esc(state.fileError)+'</p><button type="button" class="button" data-action="website-files-retry">'+esc(text('retry',appText('workspace')))+'</button>':websiteFiles?.view({leave:!state.book})??'<p role="status">'+esc(text('loading',t('supportEditors','moduleOpening')))+'</p>';
   // The editor is a page of the application frame: the same navigation, menu button and Back.
   // Before a workspace is open there is no navigation, so the editor stands alone with a way to it.
   // While the editor is open it is the current page, even if a workspace load that began
   // before it finishes later.
   state.page='website';
   if(state.book){appShell.showWorkspace(()=>'<div class="website-files-app" data-website-files-app>'+view+'</div>');shellMenu.apply('website');}
-  else appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
+  // On its own, the editor's bar holds the way back to the workspace.
+  else appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app>'+(websiteFiles&&!state.fileError?'':'<nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(text('workspace',appText('workspace')))+'</button></nav>')+view+'</main>');
   document.documentElement.dataset.appMode='website';document.title=text('title',appText('saveWebsite'))+' · Observanda';if(!state.fileError)websiteFiles?.bind();
   recordWebsiteScreen();
 }
