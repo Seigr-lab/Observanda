@@ -10,11 +10,12 @@ import {writingValueRevision} from './record-section-commands.js';
 import {withRecordDocument} from './record-document.js';
 import {recordReadingHeader,validHeaderWindows} from './record-reading-header.js';
 import {resultAnchorId} from './record-result-document.js';
+import {RECORD_SECTION_WINDOW} from './web/record-header-windows.js';
 import {materialRecordSummary} from './material-record-summary.js';
 // A reading window holds up to twelve sections, so most records show whole, and stops early once it
 // holds about 240 000 characters, so a record of very long sections still pages in pieces. The
 // next window starts where this one ended.
-const RECORD_SECTION_WINDOW=12,RECORD_SECTION_BUDGET=240000;
+const RECORD_SECTION_BUDGET=240000;
 export async function sectionWindow(page,offset){
  let window=await page(offset),size=JSON.stringify(window.values).length;
  while(window.values.length<RECORD_SECTION_WINDOW&&size<RECORD_SECTION_BUDGET&&window.offset+window.values.length<window.total){

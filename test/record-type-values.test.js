@@ -12,6 +12,7 @@ import {RecordValues} from '../src/record-values.js';
 import {RecordValueDrafts} from '../src/record-value-drafts.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {RecordContent} from '../src/record-content.js';
+import {RECORD_SECTION_WINDOW} from '../src/web/record-header-windows.js';
 import {RecordQueryDocuments} from '../src/record-query-documents.js';
 import {createRun} from '../src/web/record-workflow.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
@@ -47,7 +48,7 @@ test('record type changes preserve content and history, update queries and enfor
  await assert.rejects(f.values.read(f.target(f.templated.id)),{code:'INVALID'});
  await assert.rejects(f.values.save({...f.target(f.templated.id),expectedRevision:digest(serialize({value:f.templated.type})),value:{value:'analysis'}}),{code:'INVALID'});
  const current=await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true});
- assert.equal(current.header.type,'observation');assert.equal(current.header.title,'Reclassified observations');assert.deepEqual(current.sections.values,f.record.sections.slice(0,4));
+ assert.equal(current.header.type,'observation');assert.equal(current.header.title,'Reclassified observations');assert.deepEqual(current.sections.values,f.record.sections.slice(0,RECORD_SECTION_WINDOW));
  const old=await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,snapshotId:etag,pagedHeader:true});assert.equal(old.header.type,'note');
  await f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),row=await store.member(snapshot,f.record.id);assert.equal(row.type,'observation');
