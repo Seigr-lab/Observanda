@@ -44,7 +44,8 @@ test('author named themes on a folder and one section and open the styled public
   await canvas.locator('#traces').click({position:{x:3,y:3}});
   await themes.click();await dialog.getByRole('combobox',{name:'Theme library',exact:true}).selectOption('');await dialog.getByLabel('Theme name').fill('Instrument panel');
   await dialog.getByRole('combobox',{name:'Palette',exact:true}).selectOption('night');await dialog.getByRole('combobox',{name:'Apply to',exact:true}).selectOption('section');
-  await expect(dialog.frameLocator('iframe').locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
+  // The theme is tried on the page itself while it is chosen.
+  await expect(canvas.locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
   if(process.env.OBSERVANDA_THEME_PROOF)await dialog.screenshot({path:process.env.OBSERVANDA_THEME_PROOF});
   await apply.click();await expect(dialog).not.toBeVisible();await page.reload();await page.locator('[data-website-file-page]').selectOption(methods);
   await expect(canvas.locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
@@ -52,6 +53,8 @@ test('author named themes on a folder and one section and open the styled public
   const folder=new LocalExport(websitePublicationMetadata(store.publicationWorkspace(id)),{fileOwner:{locked:(_dir,work)=>store.withSite(id,revision,work),candidate:async()=>candidate}});
   const plan=await folder.plan({reviewId:candidate.reviewId,directory:out});await folder.apply({id:plan.id,reviewed:true});
   reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(out,methods)).href);await expect(reader.locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
+  // The marker of a theme tried on the page while choosing it never reaches the website.
+  expect(await readFile(path.join(out,methods),'utf8')).not.toContain('data-observanda-editor-theme');
   await expect(reader.locator('body')).toHaveCSS('background-color','rgb(250, 246, 238)');await reader.goto(pathToFileURL(path.join(out,maps)).href);
   await expect(reader.locator('body')).toHaveCSS('background-color','rgb(250, 246, 238)');await reader.goto(pathToFileURL(path.join(out,'index.html')).href);
   await expect(reader.locator('body')).not.toHaveAttribute('data-website-page-theme',/.+/);
