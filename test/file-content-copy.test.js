@@ -14,11 +14,13 @@ async function fixture(t){
  t.after(async()=>{await clearVault(source.vault);await clearVault(target.vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-file-copy-'));await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  return {root,source,target,file,destination,bytes,content};
 }
+// What a copy publishes; the workspace keeps its own bookkeeping in .observanda.
+const published=async root=>(await readdir(root)).filter(name=>name!=='.observanda');
 test('owned encrypted transfer reads the source once and publishes only authenticated content',async t=>{
  const f=await fixture(t),progress=[],updates=[];
  const result=await withOperationProgress(p=>updates.push(p),()=>f.content.copyTo(f.target,f.destination,{onProgress:(done,total)=>{assert.equal(total,f.bytes.length);progress.push(done);}}));
  assert.deepEqual(result,{size:f.bytes.length,sha256:digest(f.bytes)});assert.deepEqual(await f.target.readFile(f.destination),f.bytes);
- assert.notDeepEqual(await readFile(f.destination),await readFile(f.file));assert.deepEqual(await readdir(f.target.root),['original']);
+ assert.notDeepEqual(await readFile(f.destination),await readFile(f.file));assert.deepEqual(await published(f.target.root),['original']);
  assert.equal(progress[0],0);assert.equal(progress.at(-1),f.bytes.length);assert.equal(progress.length,5);
  // Operation byte accounting includes one source read and one destination
  // write. A preliminary verify/read pass would increase this measured count.
@@ -27,9 +29,10 @@ test('owned encrypted transfer reads the source once and publishes only authenti
 });
 test('invalid or changed originals and cancelled transfers never publish a partial destination',async t=>{
  const f=await fixture(t),original=await readFile(f.file),tampered=Buffer.from(original);tampered[tampered.length-1]^=1;await writeFile(f.file,tampered);
- await assert.rejects(f.content.copyTo(f.target,f.destination),{code:'ENCRYPTION_DAMAGED'});assert.deepEqual(await readdir(f.target.root),[]);await writeFile(f.file,original);
- const wrong=new FileContent(f.source,f.file,f.content.size,'0'.repeat(64));await assert.rejects(wrong.copyTo(f.target,f.destination),{code:'MEDIA_INVALID'});assert.deepEqual(await readdir(f.target.root),[]);
- await assert.rejects(f.content.copyTo(f.target,f.destination,{onProgress:async done=>{if(done===f.bytes.length){const date=new Date(Date.now()+5000);await utimes(f.file,date,date);}}}),{code:'MEDIA_INVALID'});assert.deepEqual(await readdir(f.target.root),[]);
- const abort=new AbortController();await assert.rejects(f.content.copyTo(f.target,f.destination,{signal:abort.signal,onProgress:done=>{if(done>0)abort.abort();}}),{name:'AbortError'});assert.deepEqual(await readdir(f.target.root),[]);
- const plaintext=new Workspace(f.target.root);await assert.rejects(f.content.copyTo(plaintext,f.destination),{code:'INVALID'});assert.deepEqual(await readdir(f.target.root),[]);
+ await assert.rejects(f.content.copyTo(f.target,f.destination),{code:'ENCRYPTION_DAMAGED'});assert.deepEqual(await published(f.target.root),[]);await writeFile(f.file,original);
+ const wrong=new FileContent(f.source,f.file,f.content.size,'0'.repeat(64));await assert.rejects(wrong.copyTo(f.target,f.destination),{code:'MEDIA_INVALID'});assert.deepEqual(await published(f.target.root),[]);
+ await assert.rejects(f.content.copyTo(f.target,f.destination,{onProgress:async done=>{if(done===f.bytes.length){const date=new Date(Date.now()+5000);await utimes(f.file,date,date);}}}),{code:'MEDIA_INVALID'});assert.deepEqual(await published(f.target.root),[]);
+ const abort=new AbortController();await assert.rejects(f.content.copyTo(f.target,f.destination,{signal:abort.signal,onProgress:done=>{if(done>0)abort.abort();}}),{name:'AbortError'});assert.deepEqual(await published(f.target.root),[]);
+ // A target without its content key is refused before anything is read or written.
+ const plaintext=new Workspace(f.target.root);await assert.rejects(f.content.copyTo(plaintext,f.destination),{code:'ACCESS_LOCKED'});assert.deepEqual(await published(f.target.root),[]);
 });
