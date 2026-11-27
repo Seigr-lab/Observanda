@@ -20,7 +20,7 @@ import {navigate,preferences} from './preferences-helper.js';
 test('workspace projects and lab books remain usable with every optional type disabled',async({page})=>{
  test.setTimeout(600000);page.setDefaultTimeout(12000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-hierarchy-ui-')),book=sampleNotebook();
- book.title='Creative collective';book.projects=[];book.notebooks=[];book.entries=[];book.website.navigation=[];book.branding=[];book.website.layouts=[];
+ book.title='Creative collective';book.projects=[];book.notebooks=[];book.entries=[];
  // Projects and lab books are created in an encrypted workspace, each with its own store.
  const owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
  const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});

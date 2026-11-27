@@ -9,7 +9,7 @@ import {startServer} from '../../src/server.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {navigate} from './preferences-helper.js';
 let app,root,book,errors,fixture;
-test.beforeEach(async({page})=>{errors=[];page.on('pageerror',e=>errors.push(e.message));root=await mkdtemp(path.join(os.tmpdir(),'observanda-redesign-'));book=sampleNotebook();book.website.description='';fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);});
+test.beforeEach(async({page})=>{errors=[];page.on('pageerror',e=>errors.push(e.message));root=await mkdtemp(path.join(os.tmpdir(),'observanda-redesign-'));book=sampleNotebook();fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);});
 test.afterEach(async()=>{await app?.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
 test('dashboard editing uses the selected card and keeps its layout separate from research',async({page})=>{
  const before=(await fixture.workspace.read()).book.entries;await navigate(page,'Dashboard');await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();const inspector=page.locator('.desk-inspector');

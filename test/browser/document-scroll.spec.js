@@ -18,7 +18,7 @@ const noInnerScroll=async locator=>{
 const noPanels=async page=>expect(await page.evaluate(()=>[...document.querySelectorAll('.dashboard-panel,.dashboard-panel>div,#main-navigation,.workspace-tree')].filter(el=>el.getClientRects().length&&el.scrollHeight>el.clientHeight+1&&/auto|scroll/.test(getComputedStyle(el).overflowY)).map(el=>el.className))).toEqual([]);
 test.beforeEach(async({page})=>{
  directory=await mkdtemp(path.join(os.tmpdir(),'observanda-scroll-'));const book=sampleNotebook();
- book.title='Field studies';book.website.home.sections=[{id:randomUUID(),kind:'text',title:'Notes from the river',show:true,body:Array.from({length:9},(_,i)=>`Observation ${i+1}. The river changed after the rain. We recorded water levels, photographed the bank and compared notes from the same location.`).join('\n\n')},{id:randomUUID(),kind:'text',title:'Follow-up work',show:true,body:'Return after the next rainfall and compare the measurements.'}];
+ book.title='Field studies';
  book.entries=Array.from({length:12},(_,i)=>({...book.entries[0],id:randomUUID(),title:`River observation ${i+1}`,body:'A record of conditions along the river bank.',figures:[]}));
  fixture=await encryptedFixture(directory,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});await page.goto(app.url);
 });

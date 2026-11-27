@@ -23,7 +23,7 @@ test('people define their structure and every lab uses the same notebook and rec
  test.setTimeout(900000);page.setDefaultTimeout(12000);
  const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-unified-structure-'));
  const book=sampleNotebook();
- book.title='Structure';book.description='';book.projects=[];book.notebooks=[];book.entries=[];book.website.navigation=[];book.branding=[];book.website.layouts=[];
+ book.title='Structure';book.description='';book.projects=[];book.notebooks=[];book.entries=[];
  // Projects and lab books are created in an encrypted workspace, each with its own store.
  const owner=new WorkspaceDatabases({directory:path.join(dir,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
  const f=await encryptedFixture(dir,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(dir,'preferences.json')});
