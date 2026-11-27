@@ -16,12 +16,12 @@ const TOOLS=[
  ['styles','styleLibrary',icon('<path d="M5 19L19 5M7 5h4M5 7v4M13 19h6v-6"/>')],
  ['galleries','gallery',icon('<rect x="3" y="5" width="18" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 18l5-5 4 4 3-3 4 4"/>')],
  ['media','recordings',icon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>')],
- ['feeds','feedEditor',icon('<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>')],
  ['exchange','designExchange',icon('<path d="M7 7h11l-3-3M17 17H6l3 3"/>')],
  ['versions','versionsTitle',icon('<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>')]
 ];
-// The rail in groups: building the page, its style, media and the whole site.
-const GROUPS=[['railBuild',['left-add','left-layers','left-content','pages','menu','feeds']],['railStyle',['appearance','themes','styles','regions']],['railMedia',['galleries','media']],['railSite',['exchange','versions']]];
+// The rail in groups: building the page, its style, media and the whole site. A record list is an element
+// in Add and Lab book content; a placed one is edited from its own button when selected.
+const GROUPS=[['railBuild',['left-add','left-layers','left-content','pages','menu']],['railStyle',['appearance','themes','styles','regions']],['railMedia',['galleries','media']],['railSite',['exchange','versions']]];
 const BY_ACTION=new Map([...PAGE_PANELS,...TOOLS].map(entry=>[entry[0],entry]));
 // Tools whose open state is a docked panel are marked as the current tool.
 const PANEL={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'};
