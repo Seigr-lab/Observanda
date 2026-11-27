@@ -7,8 +7,10 @@ import {RecordDraftReview} from '../src/record-draft-review.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {verifyRecordDraftEdits} from '../src/record-draft-edits.js';
 import {proseText} from '../src/web/prose-model.js';
+import {MediaStore} from '../src/media.js';
+import {createFigure} from '../src/web/figure-model.js';
 
-const media={get:async()=>{throw Error('Unexpected media');}};
+const pixel=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jk1sAAAAASUVORK5CYII=','base64');
 const target=plan=>({id:plan.id,workspaceId:plan.workspaceId,expectedRevision:plan.revision});
 
 // A new record of a built-in type is a server draft until its first Save. It is read the
@@ -28,7 +30,7 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  const missingBook=randomUUID(),missingRecord=randomUUID();
  await assert.rejects(seed.seed({...command,id:randomUUID(),recordId:missingRecord,notebookId:missingBook,record:{...record,id:missingRecord,notebookId:missingBook}}),{code:'NOT_FOUND'});
 
- const review=new RecordDraftReview(f.workspace,media);
+ const media=new MediaStore(f.workspace.root,f.workspace.vault),review=new RecordDraftReview(f.workspace,media);
  const plan=await review.prepare({id:receipt.draft.id,workspaceId:f.book.id,expectedRevision:receipt.revision});
  assert.equal(plan.newRecord,true);assert.equal(plan.recordId,recordId);
 
@@ -51,6 +53,18 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  await write('tag:0',{value:'river'});await write('tag:1',{value:'survey'});
  await assert.rejects(write('tag:5',{value:'far'}),{code:'MISSING'});
  const contributor=randomUUID();await write('contributor:'+contributor,{value:{name:'Field assistant',role:'Observer'}});
+ // Files the workspace holds are attached, ordered and removed; a file it lacks, or of another kind, is refused.
+ const first=await media.import(pixel,'image'),second=await media.import(pixel,'image');
+ await write('attachments',{action:'attach',mediaId:first.id,kind:'image'});await write('attachments',{action:'attach',mediaId:second.id,kind:'image'});
+ await assert.rejects(write('attachments',{action:'attach',mediaId:first.id,kind:'image'}),{code:'INVALID'});
+ await assert.rejects(write('attachments',{action:'attach',mediaId:randomUUID(),kind:'image'}),{code:'MISSING'});
+ await assert.rejects(write('attachments',{action:'attach',mediaId:randomUUID(),kind:'audio'}),{code:'MISSING'});
+ await assert.rejects(write('attachments',{action:'attach',mediaId:second.id,kind:'audio'}),{code:'MEDIA_INVALID'});
+ await write('attachments',{action:'move',mediaId:second.id,position:0});
+ const spare=await media.import(pixel,'image');await write('attachments',{action:'attach',mediaId:spare.id,kind:'image'});await write('attachments',{action:'remove',mediaId:spare.id});
+ await write('media:'+first.id,{value:{caption:'Bank edge',alt:'Eroded bank',transcript:'',share:false}});
+ // A figure is added under a new identity.
+ const figure=createFigure();figure.title='Water level';figure.kind='scatter';figure.series[0].points=[{x:1,y:2,error:null},{x:2,y:3,error:null}];await write('figure:'+figure.id,{value:figure});
  // Every recorded edit, the new kinds included, replays to the same draft.
  await f.workspace.catalogue(store=>verifyRecordDraftEdits(store));
  const draft=(await new ResearchDrafts(f.workspace).list({workspaceId:f.book.id})).drafts.find(item=>item.id===receipt.draft.id);assert.ok(draft);
@@ -62,5 +76,7 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  const entry=(await f.workspace.read()).book.entries.find(item=>item.id===recordId);
  assert.equal(entry.title,'River bank survey');assert.equal(entry.type,'observation');assert.equal(entry.template,undefined);
  assert.deepEqual(entry.sections.map(section=>[section.title,proseText(section.body)]),[['Notes',''],['Observation',''],['Methods','Transect walk.']]);
- assert.deepEqual(entry.tags,['river','survey']);assert.deepEqual(entry.contributors.map(person=>[person.id,person.name,person.role]),[[contributor,'Field assistant','Observer']]);
+ assert.deepEqual(entry.tags,['river','survey']);
+ assert.deepEqual(entry.attachments.map(item=>[item.id,item.kind,item.caption]),[[second.id,'image',''],[first.id,'image','Bank edge']]);
+ assert.deepEqual(entry.figures.map(item=>[item.id,item.title]),[[figure.id,'Water level']]);assert.deepEqual(entry.contributors.map(person=>[person.id,person.name,person.role]),[[contributor,'Field assistant','Observer']]);
 });

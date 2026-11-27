@@ -144,7 +144,15 @@ export class RecordDraftReview{
    return {workspaceId:plan.workspaceId,recordId:plan.recordId,figureId:null,editRevision,offset,total,nextOffset:offset+4<total?offset+4:null,items};
   },{signal});
  }
- async editWrite(command){return this.workspace.withLock(()=>this.editWriteLocked(command));}
+ async editWrite(command){
+  // A file is attached only when the workspace holds it with the kind the edit names,
+  // as a saved record's attach checks; Save checks every attachment again.
+  if(command?.field==='attachments'&&command.value?.action==='attach'&&researchId(command.value.mediaId)){
+   const file=await this.media.get(command.value.mediaId,{streamed:true,includeHeader:false}).catch(error=>{if(error.code==='ENOENT')throw new AppError('MISSING');throw error;});
+   if(file.kind!==command.value.kind)throw new AppError('MEDIA_INVALID');
+  }
+  return this.workspace.withLock(()=>this.editWriteLocked(command));
+ }
  async editWriteLocked(command){return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
   const edits=new RecordDraftEdits(store),retry=await edits.replay(plan,command);if(retry)return retry;
   if(plan.saved)throw new AppError('DRAFT_CHANGED');

@@ -7,6 +7,7 @@ import {validRecordValue,validRecordValueField,recordValueFields} from './web/re
 import {validWritingValue} from './web/record-writing-model.js';
 import {researchId} from './web/research-reference.js';
 import {digest,serialize} from './storage-format.js';
+import {placedFigures} from './web/book-selectors.js';
 export const draftEditGroups={details:null,writing:['sections'],custom:['template','fields'],contributors:['contributors'],relations:['relations'],media:['attachments'],figures:['figures'],preparations:['attempt','preparations'],events:['attempt','events'],assessments:['attempt','assessments'],results:['results','statements'],tags:['tags']};
 const fieldPrefix={contributors:'contributor',relations:'relation',media:'media',figures:'figure',preparations:'attempt:preparation',events:'attempt:event',assessments:'attempt:assessment',results:'result'};
 export async function draftEditFields(document,group,offset,{signal}={}){
@@ -36,10 +37,20 @@ const validSectionEdit=value=>{
  if(value.action==='remove')return Object.keys(value).sort().join()==='action,sectionId';
  return value.action==='move'&&Object.keys(value).sort().join()==='action,position,sectionId'&&Number.isSafeInteger(value.position)&&value.position>=0;
 };
+// A draft's files, attached, moved and removed as a saved record's are
+// (record-media-commands.js); its revision is the order of the attachment identities.
+async function attachmentIds(document,{signal}={}){const ids=[];for await(const item of document.items(['attachments'],{signal}))ids.push((await document.tree.selected(item.value,['id'])).value);return ids;}
+const validAttachmentEdit=value=>{
+ if(!value||typeof value!=='object'||!researchId(value.mediaId))return false;
+ if(value.action==='attach')return Object.keys(value).sort().join()==='action,kind,mediaId'&&['image','audio','video'].includes(value.kind);
+ if(value.action==='remove')return Object.keys(value).sort().join()==='action,mediaId';
+ return value.action==='move'&&Object.keys(value).sort().join()==='action,mediaId,position'&&Number.isSafeInteger(value.position)&&value.position>=0;
+};
 export async function selectDraftEdit(document,field,{signal}={}){
  if(validRecordValueField(field))return selectedRecordValue(document,field,{signal});
  let path,definition=null,value;
  if(field==='sections'){path=['sections'];value={ids:await sectionIds(document,{signal})};}
+ else if(field==='attachments'){path=['attachments'];value={ids:await attachmentIds(document,{signal})};}
  else if(field==='body'){path=['body'];value={body:(await document.field(path,{signal})).value};}
  else if(typeof field==='string'&&field.startsWith('section:')&&researchId(field.slice(8))){
   for await(const item of document.items(['sections'],{signal}))if((await document.tree.selected(item.value,['id'])).value===field.slice(8)){path=['sections',String(item.index)];break;}
@@ -55,6 +66,7 @@ export async function selectDraftEdit(document,field,{signal}={}){
 export function validDraftEdit(field,value){
  if(validRecordValueField(field))return validRecordValue(value,field);
  if(field==='sections')return validSectionEdit(value);
+ if(field==='attachments')return validAttachmentEdit(value);
  if(field==='body'||field?.startsWith('section:'))return validWritingValue(value,field==='body'?null:field.slice(8));
  return /^tag:(0|[1-9][0-9]*)$/.test(field)&&value&&Object.keys(value).join()==='value'&&(value.value===null||typeof value.value==='string');
 }
@@ -74,6 +86,21 @@ export async function replaceDraftEdit(document,field,value,selected){
   const before=value.position+(value.position>index?1:0);if(before===index||before===index+1)return document;
   const section=(await document.field(['sections',String(index)])).value,removed=await document.splice(['sections'],index,1,[]);
   return removed.splice(['sections'],index<before?before-1:before,0,[section]);
+ }
+ if(field==='attachments'){
+  const ids=selected.value.ids,index=ids.indexOf(value.mediaId);
+  if(value.action==='attach'){if(index>=0)throw new AppError('INVALID');return document.splice(['attachments'],ids.length,0,[{id:value.mediaId,kind:value.kind,caption:'',alt:'',transcript:'',share:false}]);}
+  if(index<0)throw new AppError('MISSING');
+  if(value.action==='remove'){
+   // A file placed in the summary or a section stays until it is taken out of the writing.
+   const inUse=body=>placedFigures({body}).has(value.mediaId);
+   if(inUse((await document.field(['body'])).value))throw new AppError('MEDIA_IN_USE');
+   for await(const item of document.items(['sections']))if(inUse((await document.tree.selected(item.value,['body'])).value))throw new AppError('MEDIA_IN_USE');
+   return document.splice(['attachments'],index,1,[]);
+  }
+  if(value.position>=ids.length)throw new AppError('INVALID');if(value.position===index)return document;
+  const item=(await document.field(['attachments',String(index)])).value;
+  return (await document.splice(['attachments'],index,1,[])).splice(['attachments'],value.position,0,[item]);
  }
  if(field.startsWith('tag:')&&selected.definition?.added){if(value.value===null)throw new AppError('INVALID');return document.splice(['tags'],Number(field.slice(4)),0,[value.value]);}
  if(field==='body')return document.replace(['body'],value.body);
