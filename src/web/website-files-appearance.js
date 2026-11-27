@@ -6,8 +6,8 @@ import {showSideSheet} from './website-side-sheet.js';
 
 const colors={background:'sectionBackground',text:'sectionText',accent:'appearanceAccent',surface:'appearanceSurface',border:'appearanceBorder'};
 const fontLabels={sans:'sectionSans',serif:'sectionSerif',mono:'sectionMono'};
-// canvas: the editor's live page. Site appearance previews there, beside the tool; a theme keeps its own
-// preview, since trying one on a section would mark the live page.
+// canvas: the editor's live page. Site appearance and themes preview there, beside the tool. A theme marks
+// its target with an editor-only attribute that saving removes; without a canvas the tool has its own preview.
 export async function editWebsiteAppearance({opened,directory,request,t,signal,current,apply,trigger,themes=false,blockPath=null,sectionTitle='',canvas=null}){
  const pin={siteId:opened.site.id,path:opened.path,expectedRevision:opened.site.revision};
  const initial=await request(themes?'themes/read':'appearance/read',themes?{...pin,blockPath}:pin,{signal});if(!current()||initial.revision!==pin.expectedRevision)return;
@@ -17,7 +17,7 @@ export async function editWebsiteAppearance({opened,directory,request,t,signal,c
  const button=(parent,key)=>{const node=el('button',parent,t(key));node.type='button';node.className='button';return node;};
  const form=el('form',dialog),title=el('h2',form,t(themes?'designThemes':'siteAppearance'));title.id='website-appearance-title';dialog.setAttribute('aria-labelledby',title.id);
  el('p',form,t(themes?'designThemesHelp':'appearanceHelp'));const columns=el('div',form);columns.className='website-appearance-columns';
- const live=!themes&&canvas?.head?canvas:null;if(live)dialog.classList.add('website-appearance-live');
+ const live=canvas?.head?canvas:null,mark=live?'data-observanda-editor-theme':'data-website-theme';if(live)dialog.classList.add('website-appearance-live');
  const settings=el('div',columns),preview=live?null:el('div',columns);if(preview){el('h3',preview,t('appearancePreview'));el('code',preview,opened.path);}
  const frame=preview?el('iframe',preview):null;if(frame){frame.title=t('appearancePreview');frame.setAttribute('sandbox','allow-same-origin');}
  function option(parent,value,key){const node=el('option',parent,t(key));node.value=value;}
@@ -36,14 +36,16 @@ export async function editWebsiteAppearance({opened,directory,request,t,signal,c
  option(presets,'','appearanceCustom');for(const key of Object.keys(appearancePresets))option(presets,key,'appearance'+key[0].toUpperCase()+key.slice(1));
  let draft={...original},sheet=null,submitting=false;
  const controls=new Map();
+ // Restores the previous target's own marking when the preview moves to another one or the tool closes.
+ function unmark(next=null){if(previewTarget&&previewTarget.node!==next){if(previewTarget.value===null)previewTarget.node.removeAttribute(mark);else previewTarget.node.setAttribute(mark,previewTarget.value);previewTarget=null;}}
  function paint(){
   if(sheet){
    if(themes){
     const doc=sheet.ownerDocument,target=scope.value==='section'?websiteLayerAt(doc,blockPath):doc.body;
-    if(previewTarget&&previewTarget.node!==target){if(previewTarget.value===null)previewTarget.node.removeAttribute('data-website-theme');else previewTarget.node.setAttribute('data-website-theme',previewTarget.value);previewTarget=null;}
-    if(target&&!previewTarget)previewTarget={node:target,value:target.getAttribute('data-website-theme')};
-    const id=theme?.id??previewId;if(target)target.setAttribute('data-website-theme',id);
-    sheet.textContent=scopedAppearanceCSS(id,draft);
+    unmark(target);
+    if(target&&!previewTarget)previewTarget={node:target,value:target.getAttribute(mark)};
+    const id=theme?.id??previewId;if(target)target.setAttribute(mark,id);
+    const css=scopedAppearanceCSS(id,draft);sheet.textContent=live?css.replaceAll('[data-website-theme="'+id+'"]','['+mark+'="'+id+'"]'):css;
    }else sheet.textContent=Object.keys(draft).length?appearanceCSS(draft):'';
   }
   presets.value=Object.keys(appearancePresets).find(key=>Object.keys(appearancePresets[key]).every(field=>appearancePresets[key][field]===draft[field]))??'';
@@ -92,10 +94,11 @@ export async function editWebsiteAppearance({opened,directory,request,t,signal,c
   choose();
  }
  const dismiss=()=>dialog.close();dialog.addEventListener('cancel',event=>{if(submitting)event.preventDefault();});
- // On the live page the preview is an editor-owned style, never saved, and the saved appearance is set aside until the tool closes.
- const setAside=live?[...live.querySelectorAll('link[data-website-appearance]')]:[];
- if(live){sheet=live.createElement('style');sheet.dataset.observandaEditor='appearance-preview';if(setAside.length)setAside.at(-1).after(sheet);else live.head.append(sheet);for(const link of setAside)link.disabled=true;}
- dialog.addEventListener('close',()=>{if(live){sheet?.remove();for(const link of setAside)link.disabled=false;}signal.removeEventListener('abort',dismiss);dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
+ // On the live page the preview is an editor-owned style, never saved. Site appearance sets the saved appearance
+ // aside until the tool closes; a theme adds to it, as a saved theme would.
+ const links=live?[...live.querySelectorAll('link[data-website-appearance]')]:[],setAside=themes?[]:links;
+ if(live){sheet=live.createElement('style');sheet.dataset.observandaEditor='appearance-preview';if(links.length)links.at(-1).after(sheet);else live.head.append(sheet);for(const link of setAside)link.disabled=true;}
+ dialog.addEventListener('close',()=>{if(live){unmark();sheet?.remove();for(const link of setAside)link.disabled=false;}signal.removeEventListener('abort',dismiss);dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
  signal.addEventListener('abort',dismiss,{once:true});
  frame?.addEventListener('load',()=>{
   if(!dialog.open||!current()||!frame.contentDocument||frame.contentDocument.URL==='about:blank')return;

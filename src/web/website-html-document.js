@@ -56,6 +56,8 @@ export function websiteCanvasValue(document,original,normalized){
   meta.setAttribute('http-equiv',meta.dataset.observandaEditorHttpEquiv);meta.removeAttribute('data-observanda-editor-http-equiv');
  }
  for(const node of copy.querySelectorAll('[data-observanda-editor]'))node.remove();
+ // A theme tried on the page while choosing it is never saved.
+ for(const node of copy.querySelectorAll('[data-observanda-editor-theme]'))node.removeAttribute('data-observanda-editor-theme');
  for(const node of copy.querySelectorAll('[data-observanda-editor-stylesheet]')){node.setAttribute('href',node.dataset.observandaEditorStylesheet);node.removeAttribute('data-observanda-editor-stylesheet');}
  for(const node of copy.querySelectorAll('[data-observanda-editor-editable]')){
   const value=node.dataset.observandaEditorEditable;if(value==='absent')node.removeAttribute('contenteditable');else node.setAttribute('contenteditable',value);node.removeAttribute('data-observanda-editor-editable');
