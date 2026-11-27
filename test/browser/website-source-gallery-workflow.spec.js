@@ -119,7 +119,7 @@ async function session(browser,fixture,directory,website,run){
   page.on('pageerror',error=>errors.push(error.message));
   context.on('request',request=>{
    const route=new URL(request.url()).pathname;
-   if(website&&route.startsWith('/api/')&&!route.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/interface','/api/language'].includes(route))unexpected.push(route);
+   if(website&&route.startsWith('/api/')&&!route.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/interface','/api/language','/api/website-record-updates/check','/api/website-analysis/check'].includes(route))unexpected.push(route);
   });
   await page.goto(website?app.origin+'/?view=website#'+app.launchToken:app.url);
   if(website){

@@ -652,9 +652,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         preparation:()=>websitePreparation(selectedContext).status(),
         preparationControl:{cancel:()=>websitePreparation(selectedContext).cancel(),resume:async()=>{prepareWebsites(selectedContext,client,{retry:true,resume:true});return websitePreparation(selectedContext).status();}}});
       }
-      if(client.filesOnly){await ensureWorkspaceIdentity(selectedContext);client.filesOnly=false;startJobs(selectedContext);}
+      const reopenResearch=async()=>{if(client.filesOnly){await ensureWorkspaceIdentity(selectedContext);client.filesOnly=false;startJobs(selectedContext);}};
+      // The website editor's checks of placed lab book records open research
+      // only when the website places records; a website without them stays files-only.
+      const placedRecordCheck=req.method==='POST'&&['/api/website-record-updates/check','/api/website-analysis/check'].includes(url.pathname);
+      if(!placedRecordCheck)await reopenResearch();
       const historyProjects=projectApplication(selectedContext);
-      const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
+      const researchReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter});
+      const sourceReader=placedRecordCheck?async options=>{await reopenResearch();return researchReader(options);}:researchReader,comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       {
       // Checks the analyses behind an editor website's placed research before it is published.
       // Lab book records placed on an editor website that changed after the

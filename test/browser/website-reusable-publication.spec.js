@@ -167,7 +167,9 @@ test('an authored component is placed, edited once and published on two independ
   expect(errors).toEqual([]);
   expect(catalogue.mock.callCount()).toBe(0);
   const sessionRoutes = new Set(['/api/session', '/api/access/status', '/api/language', '/api/interface']);
-  expect(operations.filter(p => !p.startsWith('/api/website-files/') && !sessionRoutes.has(p))).toEqual([]);
+  // Before publishing, the editor checks its placed lab book records; with none placed, research stays closed.
+  const recordChecks = new Set(['/api/website-record-updates/check', '/api/website-analysis/check']);
+  expect(operations.filter(p => !p.startsWith('/api/website-files/') && !sessionRoutes.has(p) && !recordChecks.has(p))).toEqual([]);
  } finally {
   if (publicServer) await new Promise(resolve => publicServer.close(resolve));
   try { await app?.close(); } finally {

@@ -27,7 +27,8 @@ test('a record edited after it was placed updates its website copy only when the
  const styled=await store.save(siteId,{path:placed.path,expectedRevision:placed.site.revision,html:placed.html,css:'p{color:teal}'});
 
  app=await testServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
+ // The website editor's own session starts with research closed; checking placed records opens it.
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken,filesOnly:true})});
  const cookie=session.headers.get('x-observanda-session').split(';')[0],headers={Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json'};
  const context=(await (await fetch(app.origin+'/api/storage',{headers})).json()).contextId;
  const post=(route,data)=>fetch(app.origin+route,{method:'POST',headers:{...headers,'X-Observanda-Workspace':context},body:JSON.stringify(data)});
