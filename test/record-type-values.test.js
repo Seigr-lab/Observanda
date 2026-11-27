@@ -58,19 +58,18 @@ test('record type changes preserve content and history, update queries and enfor
  });
 });
 test('recoverable type changes atomically guard their format and survive ordinary and fresh-key copying',async t=>{
- // A workspace catalogue is created past generation 13 (its settings); a lab
- // book catalogue stays below it until its first recoverable type change.
+ // A lab book catalogue is created with record type drafts available (generation 13 or later);
+ // a type change keeps its generation, and a catalogue lowered below 13 is refused as damaged.
  const book=sampleNotebook(),record=book.entries[2];record.type='note';record.status='draft';record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained observation '+i}));
  const f=await labBookFixture(t,{book}),storage=f.storage,generation=(owner=storage)=>owner.catalogue(store=>catalogueFormat(store.db));
- const base=await new RecordValues(storage).read({workspaceId:book.id,recordId:record.id,field:'type'}),drafts=new RecordValueDrafts(storage),before=await generation();assert.ok(Number.isSafeInteger(before)&&before<13);
+ const base=await new RecordValues(storage).read({workspaceId:book.id,recordId:record.id,field:'type'}),drafts=new RecordValueDrafts(storage),before=await generation();assert.ok(Number.isSafeInteger(before)&&before>=13);
  const command={id:randomUUID(),workspaceId:book.id,recordId:record.id,expectedRevision:null,selection:{field:'type',revision:base.revision,storageRevision:base.storageRevision},value:{value:'analysis'}};
  const write=storage.writeMetadata.bind(storage);t.mock.method(storage,'writeMetadata',async(name,...rest)=>{if(name==='.observanda/drafts/'+command.id+'.json')throw Error('Interrupted checkpoint');return write(name,...rest);});
  await assert.rejects(drafts.write(command),/Interrupted checkpoint/);assert.equal(await generation(),before);assert.equal(await new ResearchDrafts(storage).read(command.id,{header:true}),null);storage.writeMetadata.mock.restore();
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Type recovery reconstructed an entire record');});
- // requireRecordTypeDrafts raises an older catalogue to exactly generation 13.
- const receipt=await drafts.write(command);assert.deepEqual(await drafts.write(command),receipt);assert.equal(await generation(),13);
+ const receipt=await drafts.write(command);assert.deepEqual(await drafts.write(command),receipt);assert.equal(await generation(),before);
  const lookup={id:command.id,workspaceId:book.id,expectedRevision:receipt.revision};assert.deepEqual((await drafts.read(lookup)).value,command.value);
- await assert.rejects(storage.withLock(()=>storage.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await new ResearchDrafts(storage).read(command.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});assert.equal(await generation(),13);
+ await assert.rejects(storage.withLock(()=>storage.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await new ResearchDrafts(storage).read(command.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});assert.equal(await generation(),before);
  ResearchCatalogue.prototype.record.mock.restore();
  const destination=path.join(f.workspace.root,'type-copy','project');await mkdir(path.dirname(destination));const copied=await copyProjectLocation(storage,destination,{id:randomUUID()});
  const access=await createWorkspaceAccess('','synthetic type recovery password',new TestDeviceStore({file:path.join(f.root,'type-recovery-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
@@ -81,8 +80,8 @@ test('recoverable type changes atomically guard their format and survive ordinar
 });
 
 test('whole-record checkpoint type corrections are guarded, recoverable and retain template ownership',async t=>{
- // The lab book catalogue holds a retained draft (generation 10) and is still
- // below generation 13 when the first type correction is checkpointed.
+ // The lab book catalogue holds a retained draft and admits type corrections from creation
+ // (generation 13 or later); checkpointing one keeps its generation.
  const source=sampleNotebook(),record=source.entries[2];record.type='note';record.status='draft';record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained observation '+i}));
  const templatedId=randomUUID();source.entries.push(createRun(source,source.entries[0]),{...structuredClone(record),id:templatedId,sections:[],template:{id:randomUUID(),profileId:null,label:'Saved template',description:'',fields:[],values:{}}});
  const f=await labBookFixture(t,{book:source}),storage=f.storage,generation=()=>storage.catalogue(store=>catalogueFormat(store.db));
@@ -92,19 +91,19 @@ test('whole-record checkpoint type corrections are guarded, recoverable and reta
  const target=p=>({id:p.id,workspaceId:p.workspaceId,expectedRevision:p.revision});
  assert.ok((await review.editFields({...target(plan),group:'details',offset:0})).items.some(i=>i.field==='type'));
  const selected=await review.editRead({...target(plan),field:'type'}),command={...target(plan),field:'type',value:{value:'analysis'},valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()},before=await generation(),put=ResearchCatalogue.prototype.putObject;
- assert.ok(Number.isSafeInteger(before)&&before>=10&&before<13);
+ assert.ok(Number.isSafeInteger(before)&&before>=13);
  t.mock.method(ResearchCatalogue.prototype,'putObject',async function(id,value){await put.call(this,id,value);if(id.startsWith('record-draft-edit-operation:'))throw Error('Interrupted type correction');});
  await assert.rejects(review.editWrite(command),/Interrupted type correction/);ResearchCatalogue.prototype.putObject.mock.restore();
  assert.equal(await generation(),before);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,original.type);
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Checkpoint correction reconstructed a complete record');});
- const corrected=await review.editWrite(command);assert.deepEqual(await review.editWrite(command),corrected);assert.equal(await generation(),13);
- await assert.rejects(storage.withLock(()=>storage.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await verifyRecordDraftReviews(store);})),{code:'CATALOGUE_DAMAGED'});assert.equal(await generation(),13);
+ const corrected=await review.editWrite(command);assert.deepEqual(await review.editWrite(command),corrected);assert.equal(await generation(),before);
+ await assert.rejects(storage.withLock(()=>storage.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await verifyRecordDraftReviews(store);})),{code:'CATALOGUE_DAMAGED'});assert.equal(await generation(),before);
  plan=await review.prepare(prepare);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,'analysis');await storage.catalogue(store=>verifyRecordDraftReviews(store));
  ResearchCatalogue.prototype.record.mock.restore();
  const access=await createWorkspaceAccess('','synthetic corrected type password',new TestDeviceStore({file:path.join(f.root,'corrected-type-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const descriptor=await storage.readFile(await workspaceFile(storage.root),'utf8'),copied=new ProjectStorage(path.join(await f.receivingWorkspace(),'project'),f.projectId,vault);
  await mkdir(path.join(copied.root,'.observanda'),{recursive:true});await atomicWrite(path.join(copied.root,'.observanda/access.json'),serialize(access));await copied.writeFile(await workspaceFile(copied.root),descriptor);await rekeyCatalogue(storage,copied,JSON.parse(descriptor));
- const restored=new RecordDraftReview(copied,media);assert.equal(await copied.catalogue(store=>catalogueFormat(store.db)),13);
+ const restored=new RecordDraftReview(copied,media);assert.equal(await copied.catalogue(store=>catalogueFormat(store.db)),before);
  assert.deepEqual(await restored.prepare(prepare),plan);await restored.apply(target(plan));
  const result=(await copied.read()).book.entries.find(r=>r.id===original.id);assert.equal(result.type,'analysis');assert.equal(result.title,mine.title);assert.deepEqual(result.sections,original.sections);await copied.catalogue(store=>store.verifySnapshot(undefined,book.id));
  const templated=book.entries.find(r=>r.id===templatedId),templateDraft=await retainedDraft(storage,book.id,templated,{...templated,title:'Template draft'}),templatePlan=await review.prepare({workspaceId:book.id,id:templateDraft.draft.id,expectedRevision:templateDraft.revision});
