@@ -44,7 +44,7 @@ test('people define their structure and every lab uses the same notebook and rec
  // A project card opens from its name.
  const location=async name=>{await navigate(page,'Projects');await main.locator('.project-card').getByRole('button',{name,exact:true}).click();await expect(main.getByRole('heading',{name,level:1,exact:true})).toBeVisible({timeout:30000});};
  const addLocation=async(name,kind='Wing')=>{
-  await main.getByRole('button',{name:/^New (sub)?project$/}).click();await dialog.getByLabel('Name',{exact:true}).fill(name);if(kind==='Project')await dialog.getByLabel('Project type',{exact:true}).selectOption('none');else{await dialog.getByLabel('Project type',{exact:true}).selectOption('custom');await dialog.getByLabel('Custom project type',{exact:true}).fill(kind);}
+  await main.getByRole('button',{name:'New project',exact:true}).click();await dialog.getByLabel('Name',{exact:true}).fill(name);if(kind==='Project')await dialog.getByLabel('Project type',{exact:true}).selectOption('none');else{await dialog.getByLabel('Project type',{exact:true}).selectOption('custom');await dialog.getByLabel('Custom project type',{exact:true}).fill(kind);}
   // A project gets its own encrypted store, which takes longer than an ordinary save.
   await click(dialog,'Create project');await expect(dialog).not.toBeVisible({timeout:60000});
  };
@@ -83,7 +83,8 @@ test('people define their structure and every lab uses the same notebook and rec
   await page.evaluate(()=>{document.querySelectorAll('.tree-project').forEach(n=>n.open=true);window.keptNodes=[...document.querySelectorAll('.tree-project')];});
   if(await page.getByRole('button',{name:'Dismiss',exact:true}).isVisible())await click(page,'Dismiss');
   await page.screenshot({path:path.join(dir,'structure.png')});
-  await location('Nature Archive');await addLocation('EP One','Release');await addNotebook('Recording sessions',['Arts & creative practice']);
+  // Projects sit at the top level of a workspace: a release is a project of its own.
+  await navigate(page,'Projects');await addLocation('EP One','Release');await addNotebook('Recording sessions',['Arts & creative practice']);
   // Saving the new lab book opens it.
   await expect(main.getByRole('heading',{name:'Recording sessions',exact:true})).toBeVisible();
   await click(main,'New record');
@@ -116,20 +117,18 @@ test('people define their structure and every lab uses the same notebook and rec
   await click(dialog,'Cancel');await click(page.locator('#leave-dialog'),'Discard changes');
   await expect(dialog).not.toBeVisible();await expect(main.getByRole('heading',{name:'Recording sessions',exact:true})).toBeVisible();
   // Records of a project's own lab books are listed by their Observanda reference, so each opens from its own store.
-  // Recent records of the project and its subprojects load from their own stores.
-  await location('Nature Archive');await expect(main.getByRole('link',{name:'First session',exact:true})).toBeVisible({timeout:30000});
-  // The subproject is listed as a project card; its name also appears beside its record.
-  await expect(main.locator('.project-card').getByRole('button',{name:'EP One',exact:true})).toBeVisible();
+  // A project's recent records load from its own store.
+  await location('EP One');await expect(main.getByRole('link',{name:'First session',exact:true})).toBeVisible({timeout:30000});
   await click(main,'All records here');
   await page.getByLabel('Filter by record type',{exact:true}).selectOption('note');
   await expect(main.getByRole('link',{name:'First session',exact:true})).toHaveCount(0,{timeout:30000});
   await page.getByLabel('Filter by record type',{exact:true}).selectOption('template:'+record.template.id);
   await expect(main.getByRole('link',{name:'First session',exact:true})).toBeVisible({timeout:30000});
-  // A new record starts in a lab book of the current project; a subproject's lab books are one project choice away.
-  await click(main,'New record');await expect(dialog.getByLabel('Project',{exact:true}).locator('option:checked')).toHaveText('Nature Archive');
-  await expect(dialog.getByRole('button',{name:/Music practice/})).toBeVisible({timeout:30000});
-  await dialog.getByLabel('Project',{exact:true}).selectOption({label:'Nature Archive / EP One'});
+  // A new record starts in a lab book of the current project; another project's lab books are one project choice away.
+  await click(main,'New record');await expect(dialog.getByLabel('Project',{exact:true}).locator('option:checked')).toHaveText('EP One');
   await expect(dialog.getByRole('button',{name:/Recording sessions/})).toBeVisible({timeout:30000});
+  await dialog.getByLabel('Project',{exact:true}).selectOption({label:'Nature Archive'});
+  await expect(dialog.getByRole('button',{name:/Music practice/})).toBeVisible({timeout:30000});
   await click(dialog,'Cancel');
   // Another project's recent records finish loading without this record.
   await location('Field Lab');await expect(main.locator('#project-recent-records [role="status"]')).toHaveCount(0,{timeout:30000});await expect(main.getByRole('link',{name:'First session',exact:true})).toHaveCount(0);
@@ -145,8 +144,7 @@ test('people define their structure and every lab uses the same notebook and rec
   await settings.getByLabel('Record type name',{exact:true}).fill('Sound ideas');
   await click(settings,'Save changes');await expect(settings.locator('[data-type-settings-status]')).toHaveText('No unsaved changes',{timeout:90000});
   await expect(settings.locator('[data-command="section-select"]').filter({hasText:'Sound ideas'})).toBeVisible();
-  // A subproject card opens from its name.
-  await location('Nature Archive');await main.locator('.project-card').getByRole('button',{name:'EP One',exact:true}).click();await expect(main.getByRole('heading',{name:'EP One',level:1,exact:true})).toBeVisible({timeout:30000});
+  await location('EP One');
   await click(main,'Open lab book');await expect(main.getByRole('heading',{name:'Recording sessions',level:1,exact:true})).toBeVisible({timeout:30000});await click(main,'Lab book settings');
   // The lab book's record types load from its own store after the settings open.
   await dialog.getByRole('button',{name:/Rehearsals & recordings/}).click({timeout:30000});
@@ -178,7 +176,7 @@ test('people define their structure and every lab uses the same notebook and rec
   if(await page.getByRole('button',{name:'Dismiss',exact:true}).isVisible())await click(page,'Dismiss');
   await page.screenshot({path:path.join(dir,'music-wing.png')});
   // Lab book settings opened from a project page leave that page showing its own project's records.
-  await main.locator('.project-card').getByRole('button',{name:'EP One',exact:true}).click();await expect(main.getByRole('heading',{name:'EP One',level:1,exact:true})).toBeVisible({timeout:30000});
+  await location('EP One');
   await main.locator('.project-notebook').getByRole('button',{name:'Lab book settings',exact:true}).click();await expect(dialog.getByLabel('Lab book name',{exact:true})).toHaveValue('Recording sessions',{timeout:30000});
   await click(dialog,'Cancel');await expect(dialog).not.toBeVisible();
   await expect(main.locator('#project-recent-records').getByRole('link',{name:'First session',exact:true})).toBeVisible({timeout:30000});await expect(main.locator('#project-recent-records [role="alert"]')).toHaveCount(0);
