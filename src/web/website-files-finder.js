@@ -1,17 +1,16 @@
 import {foldLayerText} from './website-layer-model.js';
 
 const cap=8;
-const tools=new Set(['visual','html','css','pages','new-page','menu','themes','appearance','preview','check-page','check-website','galleries','media','feeds','presentation','folder','destination','publish-update','save','download','picker-open','component-browse']);
+const tools=new Set(['visual','html','css','pages','new-page','menu','regions','themes','appearance','styles','preview','check-page','check-website','galleries','media','feeds','exchange','versions','presentation','folder','destination','publish-update','save','download','picker-open','component-browse']);
 
-export function finderGroups({site,root,rows,t,openPage,selectLayer}){
+// Elements come from the editor's own list, so they are found whichever panel is open.
+export function finderGroups({site,root,rows,t,openPage,selectLayer,elements=[]}){
  const groups=[];
  const commands=[...root.querySelectorAll('button[data-action^="website-files-"]')].filter(node=>
   tools.has(node.dataset.action.slice(14))&&!node.matches(':disabled,[hidden]')&&!node.closest('[hidden]'));
- groups.push({title:t('finderTools'),items:commands.map(node=>({name:node.textContent.trim(),run:()=>node.click()}))});
- const blockSelect=root.querySelector('select[data-website-file-block]'),add=root.querySelector('[data-action="website-files-add-block"]');
- if(blockSelect&&add&&!add.disabled)groups.push({title:t('finderElements'),items:[...blockSelect.options].map(option=>({
-  name:option.textContent.trim(),run:()=>{blockSelect.value=option.value;add.click();}
- }))});
+ const named=new Map();for(const node of commands){const name=node.textContent.trim();if(name&&!named.has(name))named.set(name,()=>node.click());}
+ groups.push({title:t('finderTools'),items:[...named].map(([name,run])=>({name,run}))});
+ if(elements.length)groups.push({title:t('finderElements'),items:elements});
  groups.push({title:t('finderPages'),items:function*(){
   for(const page of site.pages)yield {name:page.draft?t('draftPage',{title:page.title||page.path}):page.title||page.path,detail:page.path,run:()=>openPage(page.path)};
  }});

@@ -4,7 +4,7 @@ import {websiteFrameGeometry} from './website-file-viewport.js';
 export {websiteLayerAt,movableWebsiteLayer,websiteLayerMove} from './website-layer-model.js';
 
 const pageSize=48,dragType='application/x-observanda-website-layer';
-export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,button,escape,openPage,selectLayer,retainSelection,notify}){
+export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,button,escape,openPage,selectLayer,retainSelection,notify,elements}){
  let root,list,controls,model,observer,chosen=null,query='',offset=0,expanded=new Set(),drag=null,marker,line,closeDialog,hostEvents;
  let scope='';
  const siteKey=()=>{const entry=site();return entry?[entry.site.id,entry.site.revision,entry.path].join('|'):'';};
@@ -135,7 +135,7 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
    groups=['inside','before','after'].map(position=>({title:t('layer'+position[0].toUpperCase()+position.slice(1)),items:function*(){
     for(const row of index.rows)yield {name:row.label,detail:row.node.localName+' · '+row.path,allowed:()=>!!websiteLayerMove(moving.node,row.node,position),run:()=>dispatchMove(pin,from,row.path,position)};
    }}));
-  }else groups=finderGroups({site:site().site,root,rows:index.rows,t,openPage,selectLayer:path=>choose(path,true)});
+  }else groups=finderGroups({site:site().site,root,rows:index.rows,t,openPage,selectLayer:path=>choose(path,true),elements:elements?.()??[]});
   closeDialog=openWebsiteFinder({doc:root.ownerDocument,title:t(from?'layerMove':'finderOpen'),groups,t,valid:()=>current(pin),onClose:()=>{closeDialog=null;}});
  }
  function bindKeys(doc){

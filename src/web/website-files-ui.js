@@ -12,7 +12,7 @@ import {downloadResource} from './session-download.js';
 import {destinationPlanRows,destinationConflictCount} from './publication-review.js';
 import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-remote-receipt.js';
 import {createBlock,duplicateBlock} from './website-files-blocks.js';
-import {websiteElementLibrary} from './website-element-library.js';
+import {websiteElementLibrary,elementGroups} from './website-element-library.js';
 import {websiteToolRail} from './website-tool-rail.js';
 import {websiteSiteMenu} from './website-site-menu.js';
 import {websitePageStarters} from './website-page-starters.js';
@@ -295,6 +295,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  });
  const hierarchy=websiteHierarchy({t:tr,site:()=>opened,enabled:()=>!!opened&&!stale&&!form,available:()=>!busy,
   snapshot:()=>{flushCanvas();return html;},read:()=>websiteHTML(html),edit:documentChange,button,escape:esc,
+  elements:()=>elementGroups.flatMap(([,keys])=>keys).map(key=>({name:tr('element_'+key),run:()=>void action({dataset:{action:'website-files-add-block',block:key}})})),
   openPage:path=>run(async()=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}}),
   selectLayer:path=>{if(mode==='visual'&&visual){visual.select(path);return;}void run(async()=>{if(await beforeLeave(true)){mode='visual';selected=path;render();}});},
   retainSelection:path=>{selected=path;},notify:()=>notify(tr('layerMoveUnavailable'),true)});
