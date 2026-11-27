@@ -1103,6 +1103,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='discovery'&&await beforeLeave(true)){mode='discovery';discovery.reset();render();await discovery.open();render();discovery.focus();}
    else if(operation==='discovery-close'&&mode==='discovery'){discovery.reset();mode='visual';render();}
    else if(operation.startsWith('discovery-')&&mode==='discovery'){await discovery.action(operation.slice(10));render();discovery.focus();}
+  // The open tool's rail button closes it, exactly as the tool's own close does.
+  const railMode={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'}[operation];
+  if(railMode&&railMode===mode&&element.closest?.('.website-tool-rail')){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});return true;}
    else if(operation.startsWith('versions-')&&mode==='versions')await versions.action(operation.slice(9));
    else if(operation==='save'){await saveAuthoring();render();}
    else if((operation==='undo'||operation==='redo')&&(operation==='undo'?undo:redo).at(-1)?.presentation){
