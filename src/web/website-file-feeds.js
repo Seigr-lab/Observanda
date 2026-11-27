@@ -9,7 +9,8 @@ export function websiteFileFeeds({t,request,refresh,report}){
  function close(){if(current){const dialog=current;current=null;dialog.close();}}
  function suspend(){if(current?.authorDraft)recovery=current.authorDraft();close();}
  function clear(){recovery=null;close();}
- async function open({site,page,blocks,feedId,trigger}){
+ // place: where a new list goes ('start', 'end' or the index of the block it goes before), from where it was dropped or the selection.
+ async function open({site,page,blocks,feedId,trigger,place='end'}){
   close();
   const pin={siteId:site.id,expectedRevision:site.revision,path:page};
   const data=await request('feed/read',pin);
@@ -153,7 +154,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    searchEpoch++;selected=id;list.value=id;selectedCriteria=hasFilter(feed?.criteria)?feed.criteria:null;filterName='';
    heading.value=feed?.heading??'';scope.set(selectedCriteria?'filtered':'all');template.set(feed?.template??'full');layout.set(feed?.layout??'list');setCardFields(feed?.cardFields);
    capacity.hidden=feed?.unavailable!=='capacity';capacity.textContent=capacity.hidden?'':t('feedCapacity');
-   size.value=String(feed?.pageSize??12);position.options[0].disabled=!id;position.value=id?'keep':'end';
+   size.value=String(feed?.pageSize??12);position.options[0].disabled=!id;position.value=id?'keep':[...position.options].some(o=>o.value===place)?place:'end';
    item.set(feed?.itemHTML);find.value='';cursors=[];after=null;saved.replaceChildren();dirty=false;fillRule();showCriteria();message();
    if(selectedCriteria&&presets.open)await loadSearches(null,true);
   }

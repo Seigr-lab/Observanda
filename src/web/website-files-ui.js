@@ -214,10 +214,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   refresh:value=>{adoptRelated(value);render();document.querySelector('[data-action="website-files-presentation"]')?.focus();},
   onError:reason=>{if(['ACCESS_LOCKED','AUTH','CONFLICT','NOT_FOUND','WEBSITE_CHANGED','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);}});
  const feeds=websiteFileFeeds({t:tr,request,refresh:value=>{adoptRelated(value);render();document.querySelector('[data-action="website-files-feeds"]')?.focus();},report:reason=>notify(reason.message||tr('failed'),true)});
- async function openFeed(trigger,newFeed=false){
-  await save();const doc=websiteHTML(opened.html);
+ async function openFeed(trigger,newFeed=false,where='after'){
+  await save();const doc=websiteHTML(opened.html),blocks=structure(doc);
   const id=newFeed?null:blockAt(doc,selected)?.closest('[data-website-feed]')?.dataset.websiteFeed;
-  await feeds.open({site:opened.site,page:opened.path,blocks:structure(doc).map(label),feedId:id,trigger});
+  // A new list goes where it was dropped, or after the selected part, like every other element.
+  const at=newFeed&&selected!=null?blockAt(doc,selected):null,index=at?blocks.findIndex(block=>block===at||block.contains(at)):-1;
+  const place=index<0?'end':where==='before'?String(index):index+1<blocks.length?String(index+1):'end';
+  await feeds.open({site:opened.site,page:opened.path,blocks:blocks.map(label),feedId:id,trigger,place});
  }
  function checkSavedSite(trigger){
   const site=opened.site;
@@ -841,7 +844,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  // dropped. Elements made in a tool (pictures, recordings, feeds...) open that tool there.
  async function addElement(type,element,{node=null,where=null}={}){
   if(node)selected=layerPath(node);
-  if(type==='feed'){await openFeed(element,true);return;}
+  if(type==='feed'){await openFeed(element,true,where??'after');return;}
   if(type==='download'){downloadDialog();return;}
   if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
   if(type==='logos'){blockDialog(options=>editLogos({...options,choices:logoChoices()}));return;}
