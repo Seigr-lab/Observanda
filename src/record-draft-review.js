@@ -27,6 +27,8 @@ import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {RecordDraftEdits,verifyRecordDraftEdits} from './record-draft-edits.js';
 import {draftEditFields,selectDraftEdit} from './record-draft-edit-values.js';
 import {resultFigureRootTarget,resultFigureTargetPage} from './record-result-values.js';
+import {sectionWindow} from './record-content.js';
+import {recordReadingHeader,validHeaderWindows} from './record-reading-header.js';
 
 const prefix='record-draft-review:',natural=value=>Number.isSafeInteger(value)&&value>=0;
 const indexFor=store=>new ObjectIndex(store,{namespace:prefix+'index:',immutable:true});
@@ -157,6 +159,21 @@ export class RecordDraftReview{
    const mine=new RecordDocument(document.blocks,plan.roots.mine),title=(await mine.field(['title'],{signal})).value;
    const body=command.offset===0?(await mine.field(['body'],{signal})).value:null,sections=await mine.tree.page(mine.root,['sections'],{offset:command.offset,limit:4});
    signal?.throwIfAborted();return {id:plan.draftId,workspaceId:plan.workspaceId,revision:plan.draftRevision,recordId:plan.recordId,title,body,sections};
+  }));
+ }
+ // A draft read the way the record page reads a saved record: the same header, collection
+ // windows and section window, so a new record is written on the same page as every record.
+ async reading(command,{signal}={}){
+  if(!command||typeof command!=='object'||Object.keys(command).some(key=>!['id','workspaceId','expectedRevision','offset','windows'].includes(key)))invalid();
+  const offset=command.offset??0;
+  if(!natural(offset)||command?.windows!==undefined&&!validHeaderWindows(command.windows))invalid();
+  return this.workspace.catalogue(store=>this.context(store,{id:command.id,workspaceId:command.workspaceId,expectedRevision:command.expectedRevision},async(plan,document)=>{
+   const mine=new RecordDocument(document.blocks,plan.roots.mine),total=await mine.tree.arrayLength(mine.root,['sections']);
+   const sections=await sectionWindow((at,limit=4)=>{signal?.throwIfAborted();return mine.tree.page(mine.root,['sections'],{offset:at,limit});},Math.min(offset,Math.max(0,total-1)));
+   const notebookId=(await mine.field(['notebookId'],{signal})).value;
+   const paged=await recordReadingHeader(store,{id:plan.recordId,notebookId},mine,sections.values,{windows:command.windows??{},signal});
+   signal?.throwIfAborted();
+   return {workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:plan.draftId,draftRevision:plan.draftRevision,planRevision:revision(plan),newRecord:plan.storageRevision===null,sections,...paged};
   }));
  }
  async selectedPlan(store,command,{retryChoice=false}={}){

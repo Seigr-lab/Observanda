@@ -15,7 +15,7 @@ import {materialRecordSummary} from './material-record-summary.js';
 // holds about 240 000 characters, so a record of very long sections still pages in pieces. The
 // next window starts where this one ended.
 const RECORD_SECTION_WINDOW=12,RECORD_SECTION_BUDGET=240000;
-async function sectionWindow(page,offset){
+export async function sectionWindow(page,offset){
  let window=await page(offset),size=JSON.stringify(window.values).length;
  while(window.values.length<RECORD_SECTION_WINDOW&&size<RECORD_SECTION_BUDGET&&window.offset+window.values.length<window.total){
   const next=await page(window.offset+window.values.length,Math.min(4,RECORD_SECTION_WINDOW-window.values.length));if(!next.values.length)break;

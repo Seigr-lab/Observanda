@@ -1,5 +1,7 @@
-// Starting a configured record retains its selected schema under the book key.
-// The normal draft editor and Save command own all subsequent changes.
+// Starting a new record keeps it as a server draft until its first Save: a configured record
+// retains its selected schema under the book key; a record of a built-in type has none
+// (configurationPin and sectionId are null). The draft editor and Save command own all
+// subsequent changes.
 import {createHash} from 'node:crypto';
 import {ConfigurationCommands} from './configuration-commands.js';
 import {RecordBlockStore} from './record-block-store.js';
@@ -37,7 +39,8 @@ export class RecordConfigurationSeed{
  constructor(workspace){this.workspace=workspace;}
  async seed(command){return this.workspace.withLock(()=>this.seedLocked(command));}
  async seedLocked(command){
-  if(!command||Object.keys(command).sort().join()!=='configurationPin,id,notebookId,record,recordId,sectionId,workspaceId'||![command.id,command.workspaceId,command.recordId,command.notebookId,command.sectionId].every(researchId)||!validDraftRecord(command.record)||command.record.id!==command.recordId||command.record.notebookId!==command.notebookId||command.record.template!=null)invalid();
+  const configured=command?.configurationPin!==null;
+  if(!command||Object.keys(command).sort().join()!=='configurationPin,id,notebookId,record,recordId,sectionId,workspaceId'||![command.id,command.workspaceId,command.recordId,command.notebookId].every(researchId)||(configured?!researchId(command.sectionId):command.sectionId!==null)||!validDraftRecord(command.record)||command.record.id!==command.recordId||command.record.notebookId!==command.notebookId||command.record.template!=null)invalid();
   const request=digest(serialize(command)),workspace=this.workspace;
   return workspace.catalogue(async store=>{
    const snapshot=await store.snapshot();if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -50,18 +53,24 @@ export class RecordConfigurationSeed{
     return {draft:prior.draft,revision:prior.revision,record:prior.record,configurationPin:command.configurationPin};
    }
    if(await store.member(snapshot,command.recordId)||await drafts.read(command.id,{header:true,expand:false}))throw new AppError('EXISTS');
-   const pin=command.configurationPin;if(pin?.workspaceId!==command.workspaceId||pin.notebookId!==command.notebookId||pin.slot!=='configuration')invalid();
-   const context=await new ConfigurationCommands(workspace).context(store,{...pin,configurationPin:pin}),section=await context.reader.sectionReference({id:command.sectionId});
-   if(!section||!section.value.enabled)throw new AppError('NOT_FOUND');
-   if(section.value.profileId!==null&&!(await context.reader.item({collection:'profiles',key:section.value.profileId}))?.value.enabled)throw new AppError('NOT_FOUND');
+   const pin=command.configurationPin;let context=null,section=null;
+   if(configured){
+    if(pin?.workspaceId!==command.workspaceId||pin.notebookId!==command.notebookId||pin.slot!=='configuration')invalid();
+    context=await new ConfigurationCommands(workspace).context(store,{...pin,configurationPin:pin});section=await context.reader.sectionReference({id:command.sectionId});
+    if(!section||!section.value.enabled)throw new AppError('NOT_FOUND');
+    if(section.value.profileId!==null&&!(await context.reader.item({collection:'profiles',key:section.value.profileId}))?.value.enabled)throw new AppError('NOT_FOUND');
+   }else if(!snapshot.metadata.notebooks?.some(notebook=>notebook.id===command.notebookId))throw new AppError('NOT_FOUND');
    const generation=1,key=await store.scopeKey(command.notebookId,generation,{create:true});
    try{
     const blocks=new RecordBlockStore(store,command.notebookId,generation,key),document=new RecordDocument(blocks,null,{mutable:true}),builder=new RecordContainerBuilder(blocks,'object');
     for(const [name,value] of Object.entries(command.record))if(name!=='template')await builder.add({name,value:await document.tree.retain(value)});
-    const fields=await copyRecordValue(context.reader.document,document,section.fields),template=new RecordContainerBuilder(blocks,'object');
-    for(const name of ['id','profileId','label','description'])await template.add({name,value:await document.tree.retain(section.value[name])});
-    await template.add({name:'fields',value:fields});await template.add({name:'values',value:await document.tree.retain({})});
-    await builder.add({name:'template',value:await template.finish()});document.root=await builder.finish();await blocks.flush();
+    if(configured){
+     const fields=await copyRecordValue(context.reader.document,document,section.fields),template=new RecordContainerBuilder(blocks,'object');
+     for(const name of ['id','profileId','label','description'])await template.add({name,value:await document.tree.retain(section.value[name])});
+     await template.add({name:'fields',value:fields});await template.add({name:'values',value:await document.tree.retain({})});
+     await builder.add({name:'template',value:await template.finish()});
+    }
+    document.root=await builder.finish();await blocks.flush();
     const content=await retainTransport(workspace,command.id,document),draft={formatVersion:4,id:command.id,workspaceId:command.workspaceId,updatedAt:new Date().toISOString(),count:1,titles:[command.record.title.slice(0,160)],base:{recordId:command.recordId,revision:null},content,document:{notebookId:command.notebookId,generation,root:document.root}};
     await requireDraftEdits(store.db);await drafts.index.ensureLocked(command.workspaceId);
     const raw=serialize(draft),revision=digest(raw);await workspace.writeMetadata('.observanda/drafts/'+command.id+'.json',raw);await drafts.index.putLocked({draft,revision},digest(serialize({text:raw})));
