@@ -150,7 +150,8 @@ test('the website preview is one history step and its frames and the appearance 
   // Returning to editing goes back to the editor's own step instead of adding another.
   await expect.poll(()=>page.evaluate(()=>history.state.observandaIndex)).toBe(previewIndex-1);
   await files(page).getByRole('button',{name:'Site appearance',exact:true}).click();const appearance=page.getByRole('dialog',{name:'Site appearance',exact:true});
-  await expect(appearance.locator('iframe')).toBeVisible();await expect.poll(()=>appearance.locator('iframe').evaluate(el=>el.contentWindow.location.pathname)).toContain('/api/website-files/');
+  // The appearance preview is drawn on the editor's own page, beside the tool.
+  await expect(appearance).toBeVisible();await expect(page.frameLocator('#website-files-canvas').locator('style[data-observanda-editor="appearance-preview"]')).toHaveCount(1);
   expect(await page.evaluate(()=>history.length)).toBe(historyLength+1);
   await appearance.getByRole('button',{name:'Cancel',exact:true}).click();await expect(appearance).toHaveCount(0);
   expect(await page.evaluate(()=>history.length)).toBe(historyLength+1);await expect(page).toHaveURL(editorURL);

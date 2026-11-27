@@ -81,7 +81,8 @@ test('site appearance previews and publishes shared scientific pages while raw a
    return route.fulfill({contentType:file.contentType,body:file.bytes??await contentBuffer(file.content)});
   });
   const openTool=()=>page.getByRole('button',{name:'Site appearance',exact:true}).press('Enter');await openTool();
-  const dialog=page.getByRole('dialog',{name:'Site appearance'}),preview=dialog.frameLocator('iframe'),apply=dialog.getByRole('button',{name:'Apply to website'});
+  // Site appearance opens beside the page and previews on the page itself.
+  const dialog=page.getByRole('dialog',{name:'Site appearance'}),preview=page.frameLocator('#website-files-canvas'),apply=dialog.getByRole('button',{name:'Apply to website'});
   await expect(preview.getByRole('heading',{name:'Coastal measurements'})).toBeVisible();await expect(apply).toBeDisabled();
   await dialog.getByRole('combobox',{name:'Palette',exact:true}).selectOption('night');await dialog.getByLabel('Links and accents · HEX',{exact:true}).fill('#ffb366');
   await dialog.getByRole('combobox',{name:'Body font',exact:true}).selectOption('mono');await dialog.getByRole('combobox',{name:'Heading font',exact:true}).selectOption('serif');
