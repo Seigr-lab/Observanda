@@ -18,7 +18,11 @@ export const mediaValueId=field=>typeof field==='string'&&field.startsWith('medi
 export const figureValueId=field=>typeof field==='string'&&field.startsWith('figure:')&&researchId(field.slice(7))?field.slice(7):null;
 export const recordValueCollection=field=>contributorValueId(field)?{id:contributorValueId(field),name:'contributors',kind:'contributor'}:relationValueId(field)?{id:relationValueId(field),name:'relations',kind:'relation'}:mediaValueId(field)?{id:mediaValueId(field),name:'attachments',kind:'media'}:figureValueId(field)?{id:figureValueId(field),name:'figures',kind:'figure'}:figureSharingId(field)?{id:figureSharingId(field),name:'figures',kind:'figure-sharing'}:null;
 export const validRecordValueField=field=>recordValueFields.includes(field)||!!recordValueCollection(field)||!!attemptValueField(field)||!!resultValueId(field)||typeof field==='string'&&/^template:[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(field)&&!['__proto__','constructor','prototype'].includes(field.slice(9));
-export const validRecordValueBase=value=>value&&Object.keys(value).sort().join()==='field,revision,storageRevision'&&validRecordValueField(value.field)&&revisionId(value.revision)&&revisionId(value.storageRevision);
+// A selected value is read from a saved record at one stored version, or from a new
+// record's draft at one edit (recordDraft: the review plan and its edit, null before any).
+const keyed=(value,keys)=>Object.keys(value).sort().join()===keys;
+export const validRecordDraftBase=value=>Boolean(value)&&typeof value==='object'&&keyed(value,'edit,id')&&revisionId(value.id)&&(value.edit===null||revisionId(value.edit));
+export const validRecordValueBase=value=>Boolean(value)&&typeof value==='object'&&validRecordValueField(value.field)&&revisionId(value.revision)&&(keyed(value,'field,revision,storageRevision')&&revisionId(value.storageRevision)||keyed(value,'field,recordDraft,revision')&&validRecordDraftBase(value.recordDraft));
 // Draft admission preserves incomplete values. Final saves additionally run the
 // record's domain rules, including its immutable template and completion policy.
 export function validRecordValue(value,field){

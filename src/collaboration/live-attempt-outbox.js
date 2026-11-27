@@ -4,7 +4,7 @@ import {revisionId} from '../web/revision-model.js';
 import {exact,uuid} from '../modules/validation.js';
 import {liveValid as valid} from './live-protocol.js';
 import {LiveCommandOutbox} from './live-command-outbox.js';
-const selected=c=>c&&uuid(c.workspaceId)&&validRecordValueBase(c.selection)&&attemptValueField(c.selection.field)?.kind==='preparation';
+const selected=c=>c&&uuid(c.workspaceId)&&validRecordValueBase(c.selection)&&Object.hasOwn(c.selection,'storageRevision')&&attemptValueField(c.selection.field)?.kind==='preparation';
 const checkpoint=value=>exact(value,['id','revision'])&&uuid(value.id)&&revisionId(value.revision);
 function commandValid(key,c){
  if(!c||!uuid(c.id)||c.recordId!==key.recordId)return false;

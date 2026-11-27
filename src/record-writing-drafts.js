@@ -9,7 +9,11 @@ const specification={name:'writing',version:5,validBase:validWritingBase,validVa
   if(value.body?.attrs?.semanticStyles)await requireSemanticRecordStyles(db);
  },
  async select(document,base,{row,store}){
-  const index=base.sectionId===null?null:await new RecordMemberCollections(store).position(row,'sections',base.sectionId);if(index===-1)throw new AppError('MISSING');
+  // A saved record finds the section in its member index; a draft base has no index and is searched.
+  let index=null;
+  if(base.sectionId!==null&&row)index=await new RecordMemberCollections(store).position(row,'sections',base.sectionId);
+  else if(base.sectionId!==null){index=-1;for await(const item of document.items(['sections']))if((await document.tree.selected(item.value,['id'])).value===base.sectionId){index=item.index;break;}}
+  if(index===-1)throw new AppError('MISSING');
   const path=index===null?['body']:['sections',String(index)],selected=(await document.field(path)).value;
   if(index!==null&&selected?.id!==base.sectionId)throw new AppError('CATALOGUE_DAMAGED');
   return {value:index===null?{body:selected}:writingSectionValue(selected),replace:(target,value)=>target.replace(path,index===null?value.body:{...selected,...value})};

@@ -7,6 +7,7 @@ import {ResearchDrafts} from './research-drafts.js';
 import {RecordValues} from './record-values.js';
 import {withRecordDocument,RecordDocument} from './record-document.js';
 import {withDraftDocument} from './record-draft-document.js';
+import {withSelectedValueBase} from './record-value-base.js';
 import {copyRecordValue} from './record-document-copy.js';
 import {commitRecordDocument} from './record-document-commit.js';
 import {RecordMemberCollections} from './record-member-collections.js';
@@ -30,12 +31,9 @@ export class RecordPreparationDrafts{
  constructor(workspace){this.workspace=workspace;this.drafts=new ResearchDrafts(workspace);}
  async base(store,command,consume,{mutable=false}={}){
   if(!target(command))invalid();
-  const history=store.historyIndex(command.recordId),found=await history.lookup(await history.head(),'version',command.selection.storageRevision),snapshot=await store.recordSnapshot(found.item.snapshotId,command.recordId);
-  const member=await store.member(snapshot,command.recordId);if(!member||member.revision!==found.item.revision)damaged();
-  if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  return withRecordDocument(store,command.recordId,command.selection.storageRevision,async document=>{
+  return withSelectedValueBase(store,command,async({document,baseRevision})=>{
    const id=attemptValueField(command.selection.field).id;if(await attemptFactPosition(document,'preparations',id)>=0)throw new AppError('ATTEMPT_IMMUTABLE');
-   return consume(document,(await history.display(found.item)).revision);
+   return consume(document,baseRevision);
   },{mutable});
  }
  async source(store,command,consume,{mutable=false}={}){

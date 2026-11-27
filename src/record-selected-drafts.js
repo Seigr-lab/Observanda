@@ -3,7 +3,8 @@
 import {ResearchDrafts} from './research-drafts.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
-import {withRecordDocument,RecordDocument} from './record-document.js';
+import {RecordDocument} from './record-document.js';
+import {withSelectedValueBase} from './record-value-base.js';
 import {withDraftDocument} from './record-draft-document.js';
 import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {digest,serialize} from './storage-format.js';
@@ -13,14 +14,10 @@ const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export class SelectedRecordDrafts{
  constructor(workspace,spec){this.workspace=workspace;this.spec=spec;this.drafts=new ResearchDrafts(workspace);}
  async retainedBase(store,workspaceId,recordId,selection,consume,{mutable=false}={}){
-  const history=store.historyIndex(recordId),head=await history.head(),found=await history.lookup(head,'version',selection.storageRevision);
-  const snapshot=await store.recordSnapshot(found.item.snapshotId,recordId),row=await store.member(snapshot,recordId);
-  if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(!row||row.revision!==found.item.revision)fail();
-  return withRecordDocument(store,recordId,selection.storageRevision,async document=>{
+  return withSelectedValueBase(store,{workspaceId,recordId,selection},async({document,row,baseRevision})=>{
    const selected=await this.spec.select(document,selection,{row,store});
    if(digest(serialize(selected.value))!==selection.revision)throw new AppError('RECORD_CHANGED');
-   return consume({document,selected,row,baseRevision:(await history.display(found.item)).revision});
+   return consume({document,selected,row,baseRevision});
   },{mutable});
  }
  async write(command){
