@@ -36,6 +36,16 @@ export class RecordDraftEdits{
   const node=await this.node(id.revision);if(node.requestHash!==hash(command)||hash(node.owner)!==hash(owner(plan)))throw new AppError('DRAFT_CHANGED');
   return {editRevision:id.revision,revision:hash(command.value),checkpointed:true};
  }
+ // An operation already written, found by its identity alone (a figure duplicate's stored
+ // value holds the copy the service worked out, so the request is not repeated to compare).
+ async operation(plan,command){
+  if(!researchId(command?.operationId))throw new AppError('INVALID');
+  const id=await this.store.object(operationPrefix+command.operationId);if(!id)return null;
+  const node=await this.node(id.revision);if(hash(node.owner)!==hash(owner(plan))||node.field!==command.field)throw new AppError('DRAFT_CHANGED');
+  const value=await this.document(node,document=>document.tree.read(node.value));
+  if(value.figureId!==command.value.figureId||value.copyId!==command.value.copyId)throw new AppError('DRAFT_CHANGED');
+  return {editRevision:id.revision,revision:hash(value),checkpointed:true};
+ }
  async write(plan,document,command){
   return this.mine(plan,document,async(mine,previous)=>{
    if(command.editRevision!==previous)throw new AppError('DRAFT_CHANGED');

@@ -9,9 +9,12 @@ import {researchId} from './web/research-reference.js';
 import {digest,serialize} from './storage-format.js';
 import {placedFigures} from './web/book-selectors.js';
 import {attemptValueField} from './web/record-attempt-value.js';
+import {copyFigureDocumentResults} from './record-figure-copy-values.js';
+import {validFigure} from './web/figure-model.js';
+import {validRetainedFigure} from './web/retained-figure-model.js';
 import {preparationMethodLinks} from './web/attempt-workflow.js';
 // An identity derived from the edit, so replaying an edit gives the same draft.
-const derivedId=(...parts)=>{const h=digest(serialize(parts));return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-'+'89ab'[parseInt(h[16],16)%4]+h.slice(17,20)+'-'+h.slice(20,32);};
+export const derivedId=(...parts)=>{const h=digest(serialize(parts));return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-'+'89ab'[parseInt(h[16],16)%4]+h.slice(17,20)+'-'+h.slice(20,32);};
 // A new preparation links the methods it uses, as saving one on a saved record does.
 async function linkPreparationMethods(document,field,preparation){
  const links=preparationMethodLinks([],{preparations:[preparation]},{uuid:()=>null});
@@ -45,7 +48,8 @@ export async function draftEditFields(document,group,offset,{signal}={}){
 }
 // A draft's section structure, edited by insert, move and remove like a saved record's
 // (record-section-commands.js); its revision is the order of the section identities.
-async function sectionIds(document,{signal}={}){const ids=[];for await(const item of document.items(['sections'],{signal}))ids.push((await document.tree.selected(item.value,['id'])).value);return ids;}
+// Sections, files and figures are edited by identity; each list's revision is its order of identities.
+async function collectionIds(document,name,{signal}={}){const ids=[];for await(const item of document.items([name],{signal}))ids.push((await document.tree.selected(item.value,['id'])).value);return ids;}
 const validSectionEdit=value=>{
  if(!value||typeof value!=='object'||!researchId(value.sectionId))return false;
  if(value.action==='insert')return Object.keys(value).sort().join()==='action,beforeId,sectionId,value'&&(value.beforeId===null||researchId(value.beforeId))&&validWritingValue(value.value,value.sectionId);
@@ -54,18 +58,26 @@ const validSectionEdit=value=>{
 };
 // A draft's files, attached, moved and removed as a saved record's are
 // (record-media-commands.js); its revision is the order of the attachment identities.
-async function attachmentIds(document,{signal}={}){const ids=[];for await(const item of document.items(['attachments'],{signal}))ids.push((await document.tree.selected(item.value,['id'])).value);return ids;}
 const validAttachmentEdit=value=>{
  if(!value||typeof value!=='object'||!researchId(value.mediaId))return false;
  if(value.action==='attach')return Object.keys(value).sort().join()==='action,kind,mediaId'&&['image','audio','video'].includes(value.kind);
  if(value.action==='remove')return Object.keys(value).sort().join()==='action,mediaId';
  return value.action==='move'&&Object.keys(value).sort().join()==='action,mediaId,position'&&Number.isSafeInteger(value.position)&&value.position>=0;
 };
+// A figure is removed, or duplicated with the copy the service worked out before the edit
+// (record-draft-review.js): the edit holds the copy and its figure mapping, so a replay is exact.
+const validFigureEdit=value=>{
+ if(!value||typeof value!=='object'||!researchId(value.figureId))return false;
+ if(value.action==='remove')return Object.keys(value).sort().join()==='action,figureId';
+ return value.action==='duplicate'&&Object.keys(value).sort().join()==='action,copy,copyId,figureId,targets'&&researchId(value.copyId)&&value.copy?.id===value.copyId&&(validFigure(value.copy)||validRetainedFigure(value.copy))
+  &&Array.isArray(value.targets)&&value.targets.length>0&&value.targets.every(pair=>Array.isArray(pair)&&pair.length===2&&pair.every(researchId));
+};
 export async function selectDraftEdit(document,field,{signal}={}){
  if(validRecordValueField(field))return selectedRecordValue(document,field,{signal});
  let path,definition=null,value;
- if(field==='sections'){path=['sections'];value={ids:await sectionIds(document,{signal})};}
- else if(field==='attachments'){path=['attachments'];value={ids:await attachmentIds(document,{signal})};}
+ if(field==='sections'){path=['sections'];value={ids:await collectionIds(document,'sections',{signal})};}
+ else if(field==='figures'){path=['figures'];value={ids:await collectionIds(document,'figures',{signal})};}
+ else if(field==='attachments'){path=['attachments'];value={ids:await collectionIds(document,'attachments',{signal})};}
  else if(field==='body'){path=['body'];value={body:(await document.field(path,{signal})).value};}
  else if(typeof field==='string'&&field.startsWith('section:')&&researchId(field.slice(8))){
   for await(const item of document.items(['sections'],{signal}))if((await document.tree.selected(item.value,['id'])).value===field.slice(8)){path=['sections',String(item.index)];break;}
@@ -82,6 +94,7 @@ export function validDraftEdit(field,value){
  if(validRecordValueField(field))return validRecordValue(value,field);
  if(field==='sections')return validSectionEdit(value);
  if(field==='attachments')return validAttachmentEdit(value);
+ if(field==='figures')return validFigureEdit(value);
  if(field==='body'||field?.startsWith('section:'))return validWritingValue(value,field==='body'?null:field.slice(8));
  return /^tag:(0|[1-9][0-9]*)$/.test(field)&&value&&Object.keys(value).join()==='value'&&(value.value===null||typeof value.value==='string');
 }
@@ -104,6 +117,23 @@ export async function replaceDraftEdit(document,field,value,selected){
   const before=value.position+(value.position>index?1:0);if(before===index||before===index+1)return document;
   const section=(await document.field(['sections',String(index)])).value,removed=await document.splice(['sections'],index,1,[]);
   return removed.splice(['sections'],index<before?before-1:before,0,[section]);
+ }
+ if(field==='figures'){
+  // A figure with linked results, or placed in the writing, stays, as on a saved record.
+  const index=selected.value.ids.indexOf(value.figureId);if(index<0)throw new AppError('MISSING');
+  if(value.action==='duplicate'){
+   if(selected.value.ids.includes(value.copyId))throw new AppError('INVALID');
+   // The copy goes last and takes copies of the results drawn from the original, as on a saved record.
+   const targets=new Map(value.targets);let n=0;
+   const changed=await document.splice(['figures'],selected.value.ids.length,0,[value.copy]);
+   return copyFigureDocumentResults(document,changed,[],{mapTarget:id=>targets.get(id),uuid:()=>derivedId(value.copyId,'result',n++)});
+  }
+  const figure=await selectedRecordValue(document,'figure:'+value.figureId,{position:index});
+  if(figure.definition.hasLinkedResults||figure.definition.linkedFigureIds.length)throw new AppError('FIGURE_RESULTS');
+  const inUse=body=>placedFigures({body}).has(value.figureId);
+  if(inUse((await document.field(['body'])).value))throw new AppError('FIGURE_IN_USE');
+  for await(const item of document.items(['sections']))if(inUse((await document.tree.selected(item.value,['body'])).value))throw new AppError('FIGURE_IN_USE');
+  return document.splice(['figures'],index,1,[]);
  }
  if(field==='attachments'){
   const ids=selected.value.ids,index=ids.indexOf(value.mediaId);

@@ -25,7 +25,11 @@ import {commitRecordDocument} from './record-document-commit.js';
 import {operationStage} from './operation-progress.js';
 import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {RecordDraftEdits,verifyRecordDraftEdits} from './record-draft-edits.js';
-import {draftEditFields,selectDraftEdit} from './record-draft-edit-values.js';
+import {draftEditFields,selectDraftEdit,derivedId} from './record-draft-edit-values.js';
+import {selectedRecordValue} from './record-values.js';
+import {hasRetainedFigure} from './record-retained-figures.js';
+import {RetainedFigureAuthoring} from './retained-figure-authoring.js';
+import {cloneFigure,figureTargets} from './web/figure-composition.js';
 import {resultFigureRootTarget,resultFigureTargetPage} from './record-result-values.js';
 import {sectionWindow} from './record-content.js';
 import {recordReadingHeader,validHeaderWindows} from './record-reading-header.js';
@@ -151,7 +155,30 @@ export class RecordDraftReview{
    const file=await this.media.get(command.value.mediaId,{streamed:true,includeHeader:false}).catch(error=>{if(error.code==='ENOENT')throw new AppError('MISSING');throw error;});
    if(file.kind!==command.value.kind)throw new AppError('MEDIA_INVALID');
   }
-  return this.workspace.withLock(()=>this.editWriteLocked(command));
+  return this.workspace.withLock(async()=>{
+   // A duplicate names the figure and the copy's identity; the service works out the copy
+   // under the writer lock, as a saved record's duplicate does, and the edit keeps it.
+   if(command?.field==='figures'&&command.value?.action==='duplicate'&&Object.keys(command.value).sort().join()==='action,copyId,figureId'){
+    const retry=await this.workspace.catalogue(store=>this.context(store,command,plan=>new RecordDraftEdits(store).operation(plan,command)));if(retry)return retry;
+    command={...command,value:await this.figureCopy(command)};
+   }
+   return this.editWriteLocked(command);
+  });
+ }
+ async figureCopy(command){
+  const {figureId,copyId}=command.value;if(!researchId(figureId)||!researchId(copyId))invalid();
+  const source=await this.readEdit(command,async(mine,editRevision)=>{
+   if(editRevision!==command.editRevision)throw new AppError('DRAFT_CHANGED');
+   const selected=await selectedRecordValue(mine,'figure:'+figureId,{inspectResults:false});if(!selected.value.value)throw new AppError('MISSING');
+   return selected.value.value;
+  });
+  if(hasRetainedFigure(source)){
+   const authoring=new RetainedFigureAuthoring(this.workspace),retained=source.kind==='retained'?source:await authoring.finish(await authoring.start(source)),targets=[];
+   const copy=await authoring.duplicate(retained,{id:copyId,onMapped:({sourceId,targetId})=>{targets.push([sourceId,targetId]);}});
+   return {action:'duplicate',figureId,copyId,copy,targets};
+  }
+  let n=0;const copy=cloneFigure(source,()=>n++===0?copyId:derivedId(copyId,'figure',n)),to=figureTargets([copy]);
+  return {action:'duplicate',figureId,copyId,copy,targets:figureTargets([source]).map((figure,i)=>[figure.id,to[i].id])};
  }
  async editWriteLocked(command){return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
   const edits=new RecordDraftEdits(store),retry=await edits.replay(plan,command);if(retry)return retry;

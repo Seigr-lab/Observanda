@@ -65,6 +65,12 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  await write('media:'+first.id,{value:{caption:'Bank edge',alt:'Eroded bank',transcript:'',share:false}});
  // A figure is added under a new identity.
  const figure=createFigure();figure.title='Water level';figure.kind='scatter';figure.series[0].points=[{x:1,y:2,error:null},{x:2,y:3,error:null}];await write('figure:'+figure.id,{value:figure});
+ // A figure is duplicated (a retry is the same edit) and the original removed, as on a saved record.
+ const copyId=randomUUID(),order=await review.editRead({...target(plan),field:'figures'});
+ const duplicate={...target(plan),field:'figures',value:{action:'duplicate',figureId:figure.id,copyId},valueRevision:order.revision,editRevision:order.editRevision,operationId:randomUUID()};
+ const copied=await review.editWrite(duplicate);assert.deepEqual(await review.editWrite(duplicate),copied);
+ await write('figures',{action:'remove',figureId:figure.id});
+ await assert.rejects(write('figures',{action:'remove',figureId:figure.id}),{code:'MISSING'});
  // Every recorded edit, the new kinds included, replays to the same draft.
  await f.workspace.catalogue(store=>verifyRecordDraftEdits(store));
  const draft=(await new ResearchDrafts(f.workspace).list({workspaceId:f.book.id})).drafts.find(item=>item.id===receipt.draft.id);assert.ok(draft);
@@ -78,5 +84,5 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  assert.deepEqual(entry.sections.map(section=>[section.title,proseText(section.body)]),[['Notes',''],['Observation',''],['Methods','Transect walk.']]);
  assert.deepEqual(entry.tags,['river','survey']);
  assert.deepEqual(entry.attachments.map(item=>[item.id,item.kind,item.caption]),[[second.id,'image',''],[first.id,'image','Bank edge']]);
- assert.deepEqual(entry.figures.map(item=>[item.id,item.title]),[[figure.id,'Water level']]);assert.deepEqual(entry.contributors.map(person=>[person.id,person.name,person.role]),[[contributor,'Field assistant','Observer']]);
+ assert.deepEqual(entry.figures.map(item=>[item.id,item.title]),[[copyId,'Water level']]);assert.deepEqual(entry.contributors.map(person=>[person.id,person.name,person.role]),[[contributor,'Field assistant','Observer']]);
 });
