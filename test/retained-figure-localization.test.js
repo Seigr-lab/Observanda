@@ -17,9 +17,9 @@ const revision='a'.repeat(64);
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const prepare=locale=>prepareLanguage(locale,{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});
 const baseline=[
-  "c06043387ab14168cfdacd323123abcdf2a3b62f6d2f3aacbc34dd2fb3856553",
-  "7526ed0e4b72d75b476d24c2f2dbce3e3dae4d3095ae6d3eb1ae704938560ab0",
-  "5f59d9a900db87d826dbd9b5b35dd81d475c44e2f845a44b121ee9b900f4d294"
+  "c2c4a2c3a0aae8e93fd4522ccbdd0b0004ec13525c0f720b1b7dca8576734128",
+  "8961a1344482477a1a73274e394ee8dd7f07a0af053f1bf39aa72d68cc7d66d3",
+  "0d45960544bbec7620ffaaca9242055b1832562bf0617e8a7c4a3c2087b31f8f"
 ];
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {createFigure} from '../src/web/figure-model.js';
@@ -44,7 +44,8 @@ async function collect(chunks){let text='',maximum=0;for await(const chunk of ch
 test('retained translations preserve canonical exports and complete authenticated labels in every language',async()=>{
  const figures=fixtures(),readers=await Promise.all(figures.map(open)),canonical=[];
  for(const reader of readers){const output=[];for(const render of [retainedFigureSVG,retainedFigureTable,retainedFigureCSV])output.push((await collect(render(reader))).text);output.push((await collect(reader.json())).text);canonical.push(output);}
- // Captured before this extraction, with deterministic retained point IDs.
+ // The canonical exports as drawn now (axis ticks, number notation and time stamps
+ // included), with deterministic retained point IDs. Every language must leave them unchanged.
  assert.deepEqual(canonical.map(output=>createHash('sha256').update(JSON.stringify(output)).digest('hex')),baseline);
  try{for(const locale of locales){
   await prepare(locale);activateLanguage(locale);
