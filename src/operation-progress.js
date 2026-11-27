@@ -20,9 +20,10 @@ export function withOperationProgress(onProgress,operation){
  return context.run(scope,()=>{publish(scope,true);return operation();});
 }
 export function operationStage(stage,options,operation){return diagnosticPhase(stage,()=>progressStage(stage,options,operation));}
-async function progressStage(stage,{total,unit='items',item}={},operation){
+async function progressStage(stage,{total,unit,item}={},operation){
  const parent=context.getStore();if(!parent)return operation();
- const scope={root:parent.root,parent,stage,completed:0,total,unit,item,sequences:parent.sequences,activity:empty()};
+ // A stage that counts files, pages or records is not advanced by the bytes its writes move.
+ const scope={root:parent.root,parent,stage,completed:0,total,unit:unit??'items',countsUnits:unit!==undefined&&unit!=='bytes',item,sequences:parent.sequences,activity:empty()};
  const steps=(parent.sequences??[]).flatMap(sequence=>sequence.steps).filter(step=>step.stage===stage&&step.state==='pending');
  for(const step of steps)step.state='running';
  scope.root.advancedAt=Date.now();publish(scope,true);
@@ -31,6 +32,7 @@ async function progressStage(stage,{total,unit='items',item}={},operation){
 }
 // Report a measured total once streaming work has established it.
 export function operationTotal(total){const scope=context.getStore();if(!scope)return;if(!Number.isSafeInteger(total)||total<scope.completed)throw new RangeError('Invalid measured total');scope.total=total;publish(scope,true);}
+export function operationAdvanceBytes(count){const scope=context.getStore();if(!scope||scope.countsUnits)return;scope.completed+=count;scope.root.advancedAt=Date.now();publish(scope);}
 export function operationAdvance(count=1,stage){const scope=context.getStore();if(!scope||stage&&scope.stage!==stage)return;scope.completed+=count;scope.root.advancedAt=Date.now();publish(scope);}
 export function operationItem(item){const scope=context.getStore();if(!scope)return;scope.item=item;publish(scope,true);}
 export function operationWork({objects=0,bytes=0}={}){

@@ -5,7 +5,7 @@ import {AppError} from './errors.js';
 import {temporaryStreamName} from './storage-temporary.js';
 import {createSegmentedHeader,readSegmentedHeader,sealSegment,openSegment,segmentedChunkSize,SEGMENTED_BLOCK_BYTES,SEGMENTED_HEADER_BYTES,SEGMENTED_CHUNK_OVERHEAD} from './segmented-file-format.js';
 import {readFilePart,writeFilePart} from './segmented-file-io.js';
-import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
+import {operationStage,operationAdvance,operationAdvanceBytes,operationWork} from './operation-progress.js';
 import {diskCapacity} from './disk-capacity.js';
 
 // Unknown streams use an encrypted provisional header only inside the private
@@ -22,7 +22,7 @@ async function finalizeStream(handle,header,key,aad,saved,{reservation,signal,ch
    const clear=openSegment(stored,index,staged,key,aad);
    try{
     const bytes=clear.subarray(0,segmentedChunkSize(final,index));hash.update(bytes);const sealed=sealSegment(bytes,index,final,key,aad);
-    await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position),{refresh:index===0});operationAdvance(bytes.length);operationWork({bytes:sealed.length});
+    await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position),{refresh:index===0});operationAdvanceBytes(bytes.length);operationWork({bytes:sealed.length});
    }finally{clear.fill(0);}
   }
   if(hash.digest('hex')!==saved.sha256)throw new AppError('MEDIA_INVALID');
@@ -52,7 +52,7 @@ async function writeAnchoredContent(workspace,file,source,{expected,maxBytes=0,r
     signal?.throwIfAborted();const length=Math.min(bytes.length-offset,buffer.length-buffered);size+=length;
     if(maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');if(size>header.size)throw new AppError('MEDIA_INVALID');
     const chunk=bytes.subarray(offset,offset+length);hash.update(chunk);chunk.copy(buffer,buffered);buffered+=length;offset+=length;
-    if(buffered===buffer.length)await flush();operationAdvance(length);operationWork({bytes:length});
+    if(buffered===buffer.length)await flush();operationAdvanceBytes(length);operationWork({bytes:length});
    }
   }
   const sha256=hash.digest('hex');if(expected&&(size!==header.size||sha256!==header.sha256))throw new AppError('MEDIA_INVALID');if(buffered)await flush();

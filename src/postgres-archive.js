@@ -12,7 +12,7 @@ import {refuseNewerFormat} from './stored-format.js';
 import {encrypted} from './encryption.js';
 import {cataloguePayloadRows} from './catalogue-payload-rows.js';
 import {catalogueFormat,catalogueRequiresDomains,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes,requireWebsiteDocuments,requireStagedEvidence,requireWebsiteEditor,requireWebsitePresentation} from './catalogue-format.js';
-import {operationStage,operationAdvance,operationWork,operationTotal} from './operation-progress.js';
+import {operationStage,operationAdvance,operationAdvanceBytes,operationWork,operationTotal} from './operation-progress.js';
 const CHUNK=1024*1024,MAX_LINE=32*1024*1024;
 // Includes the JSON-escaped envelope around any admitted 64 MiB module or
 // checkpoint. A corrupt declaration must not allocate an arbitrary buffer.
@@ -31,7 +31,7 @@ async function* lines(stream,{countBytes=true,checksum}={}){
    if(end<0)break;
    yield Buffer.concat(parts,length).toString('utf8');parts=[];length=0;offset=end+1;
   }
-  if(countBytes)operationAdvance(chunk.length);operationWork({bytes:chunk.length});
+  if(countBytes)operationAdvanceBytes(chunk.length);operationWork({bytes:chunk.length});
  }if(length)fail();}finally{stream.destroy();}
 }
 export async function writeCatalogueArchive(db,handle,tables,{observe=true,stage='archive',tableStage='archive-table'}={}){

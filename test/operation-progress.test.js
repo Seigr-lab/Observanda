@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {withOperationProgress,operationStage,operationAdvance,operationWork,operationTotal,operationSequence,operationTransfer} from '../src/operation-progress.js';
+import {withOperationProgress,operationStage,operationAdvance,operationAdvanceBytes,operationWork,operationTotal,operationSequence,operationTransfer} from '../src/operation-progress.js';
 import {streamOperation} from '../src/operation-stream.js';
 import {readProgressStream} from '../src/web/progress-stream.js';
 
@@ -116,4 +116,16 @@ test('streamed access errors retain the same bounded owner identity as JSON resp
  await assert.rejects(readProgressStream(response([bytes][Symbol.iterator]()),()=>{}),value=>value.projectId===error.projectId&&value.labBookId===error.labBookId&&value.labBookName===error.labBookName);
  const malformed=safeError(Object.assign(new AppError('ACCESS_LOCKED'),{projectId:'invalid',labBookId:error.labBookId,labBookName:error.labBookName}));assert.equal(malformed.projectId,undefined);assert.equal(malformed.labBookId,undefined);
  error.labBookName='Invalid/name';assert.equal(safeError(error).labBookName,undefined);
+});
+
+test('a stage that counts files is not advanced by the bytes its writes move',async()=>{
+ const seen=[];
+ await withOperationProgress(value=>seen.push(value),async()=>{
+  await operationStage('menuSave',{unit:'files'},async()=>{operationTotal(2);operationAdvanceBytes(40960);operationAdvance(1,'menuSave');operationAdvanceBytes(8192);operationAdvance(1,'menuSave');});
+  await operationStage('copy',{unit:'bytes',total:100},async()=>{operationAdvanceBytes(60);operationAdvanceBytes(40);});
+  await operationStage('unnamed',{},async()=>{operationAdvanceBytes(7);});
+ });
+ const last=stage=>seen.filter(value=>value.stage===stage).at(-1);
+ assert.equal(last('menuSave').completed,2);assert.equal(last('menuSave').total,2);
+ assert.equal(last('copy').completed,100);assert.equal(last('unnamed').completed,7);
 });

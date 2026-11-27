@@ -1,4 +1,4 @@
-import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
+import {operationStage,operationAdvance,operationAdvanceBytes,operationWork} from './operation-progress.js';
 import {withNativeContentFile} from './native-content-file.js';
 // One private encrypted partial file becomes the destination by rename. Its
 // complete authenticated chunks are the recovery record; no second body spool
@@ -40,9 +40,9 @@ async function copyAnchored(content,target,file,{decode,signal,onProgress,check=
    // Only a torn final chunk may be discarded. Complete chunks must authenticate.
    if(stored.size!==BigInt(position)){await handle.truncate(position);await handle.sync();}
    reservation??=await diskCapacity.reserve(path.dirname(file),header.storedSize-position,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES,admission});
-   const resumedBytes=accepted,retainedDigest=retainedHash.digest('hex');let prefixChecked=resumedBytes===0;operationAdvance(accepted);await onProgress?.(accepted,content.size);
+   const resumedBytes=accepted,retainedDigest=retainedHash.digest('hex');let prefixChecked=resumedBytes===0;operationAdvanceBytes(accepted);await onProgress?.(accepted,content.size);
    let read=0,pending=Buffer.alloc(0),unsynced=0;const sourceHash=createHash('sha256');
-   async function append(bytes){signal?.throwIfAborted();checkKeys();const sealed=sealSegment(bytes,index,header,key,aad);await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position));operationAdvance(bytes.length);operationWork({bytes:bytes.length});position+=sealed.length;accepted+=bytes.length;index++;unsynced+=bytes.length;if(unsynced>=8*SEGMENTED_BLOCK_BYTES){await handle.sync();unsynced=0;}await onProgress?.(accepted,content.size);}
+   async function append(bytes){signal?.throwIfAborted();checkKeys();const sealed=sealSegment(bytes,index,header,key,aad);await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position));operationAdvanceBytes(bytes.length);operationWork({bytes:bytes.length});position+=sealed.length;accepted+=bytes.length;index++;unsynced+=bytes.length;if(unsynced>=8*SEGMENTED_BLOCK_BYTES){await handle.sync();unsynced=0;}await onProgress?.(accepted,content.size);}
    for await(const bytes of decode(source,content.workspace,content.file)){
     signal?.throwIfAborted();await check();checkKeys();const start=read;read+=bytes.length;if(read>content.size)throw new AppError('MEDIA_INVALID');
     if(!prefixChecked){const count=Math.min(bytes.length,resumedBytes-start);sourceHash.update(bytes.subarray(0,count));if(start+count===resumedBytes){if(sourceHash.copy().digest('hex')!==retainedDigest)throw new AppError('MEDIA_INVALID');prefixChecked=true;}sourceHash.update(bytes.subarray(count));}else sourceHash.update(bytes);

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {withMutationFilesSession} from './mutation-files.js';
 import {nativeMemberCursor} from './native-storage-tree.js';
-import {operationStage,operationAdvance,operationWork,operationTransferred} from './operation-progress.js';
+import {operationStage,operationAdvance,operationAdvanceBytes,operationWork,operationTransferred} from './operation-progress.js';
 import {AppError} from './errors.js';
 import {nativeDestination} from './native-destination.js';
 const matches=(actual,file)=>actual?.bytes===file.bytes&&actual.sha256===file.sha256;
@@ -21,7 +21,7 @@ export async function withNativeWorkspaceCopy(sourcePath,destinationPath,operati
     }
     const target=temporary??name;let completed=0;
     await operationStage('copy-file',{total:file.bytes,unit:'bytes',item:file.path},async()=>{
-     const progress=bytes=>{const delta=bytes-completed;completed=bytes;operationTransferred({bytes:delta});operationAdvance(delta);operationWork({bytes:delta});};
+     const progress=bytes=>{const delta=bytes-completed;completed=bytes;operationTransferred({bytes:delta});operationAdvanceBytes(delta);operationWork({bytes:delta});};
      await output.copy(input,sourceName,target,{bytes:file.bytes,sha256:file.sha256,onProgress:progress});progress(file.bytes);
     });
     const verified=await operationStage('verify-file',{total:file.bytes,unit:'bytes',item:path.posix.basename(file.path)},async()=>{const value=await output.hash(target);operationAdvance(value.bytes);operationWork({bytes:value.bytes});return value;});

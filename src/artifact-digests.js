@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {operationStage,operationAdvance} from './operation-progress.js';
+import {operationStage,operationAdvance,operationAdvanceBytes} from './operation-progress.js';
 import {validMaterialReference} from './web/material-reference.js';
 import {ARTIFACT_DIGESTS,validArtifactDigestCommand,normalizedDigest} from './web/artifact-digest-model.js';
 
@@ -16,7 +16,7 @@ export async function artifactDigest(materials,command,{signal}={}){
  await operationStage('checksum-file',{total:size,unit:'bytes',item:doc.content.name},async()=>{
   try{
    for await(const chunk of content.readChunks(0,size-1,{signal})){
-    signal?.throwIfAborted();read+=chunk.length;requested.update(chunk);retained.update(chunk);operationAdvance(chunk.length);
+    signal?.throwIfAborted();read+=chunk.length;requested.update(chunk);retained.update(chunk);operationAdvanceBytes(chunk.length);
    }
   }catch(error){if(error.code==='MEDIA_INVALID')throw new AppError('MATERIAL_MISSING');throw error;}
  });
