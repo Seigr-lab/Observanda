@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,7 +36,7 @@ test('a website entry opens before owner counts finish and late counts cannot re
     default:throw Error('Unexpected route '+route);
    }
   });
-  await mountFilesEditor(page);await page.getByRole('button',{name:'Browse available content'}).click();
+  await mountFilesEditor(page);await pagePanel(page,'Lab book content');await page.getByRole('button',{name:'Browse available content'}).click();
   const d=page.getByRole('dialog');await expect.poll(()=>waiting).toBe(2);
   await d.getByRole('button',{name:'Transect observation',exact:true}).click();await expect(d.locator('.website-picker-detail')).toContainText('Sampling method');
   await expect(d.locator('[data-picker-total]')).toBeEmpty();

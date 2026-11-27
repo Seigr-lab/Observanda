@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,7 +55,7 @@ test('where used finds exact feed entries across duplicate site names, host page
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
   const picker=page.locator('dialog[data-website-picker-dialog]'),preview=page.frameLocator('#website-files-preview');
   async function sitesForSource(){
-   await page.locator('[data-website-file-site]').selectOption(desk);await page.locator('[data-action="website-files-picker-open"]').click();
+   await page.locator('[data-website-file-site]').selectOption(desk);await pagePanel(page,'Lab book content');await page.locator('[data-action="website-files-picker-open"]').click();
    await expect(picker.getByRole('button',{name:source.title,exact:true})).toHaveCount(3);
    const row=picker.locator('[data-picker-row="'+source.id+'"]');
    await expect(row.locator('.website-picker-ancestry')).toContainText(books.find(book=>book.id===source.notebookId).title);

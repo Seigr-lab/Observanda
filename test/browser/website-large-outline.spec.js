@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import os from 'node:os';
@@ -28,7 +29,7 @@ test('editing and navigating a large nested saved page keeps the outline bounded
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   const started=performance.now();await page.goto(app.origin+'/?view=website#'+app.launchToken);
-  const frame=page.frameLocator('#website-files-canvas'),body=frame.locator('body'),probe=frame.locator('#probe'),list=page.locator('[data-website-files-structure]'),rows=list.locator('li'),search=page.getByRole('searchbox',{name:'Filter page layers'});
+  await pagePanel(page,'Layers');const frame=page.frameLocator('#website-files-canvas'),body=frame.locator('body'),probe=frame.locator('#probe'),list=page.locator('[data-website-files-structure]'),rows=list.locator('li'),search=page.getByRole('searchbox',{name:'Filter page layers'});
   await expect(probe).toBeVisible();await expect(rows).toHaveCount(48);const openMs=Math.round(performance.now()-started);
   const metrics=await body.evaluate(body=>{
    const doc=body.ownerDocument,stats={walkers:0,clones:0},win=doc.defaultView;

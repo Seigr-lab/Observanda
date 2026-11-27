@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import os from 'node:os';
 import path from 'node:path';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
@@ -46,7 +47,7 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
    return {errorCode:error.code,message:error.message};
   }));
   await page.setViewportSize({width:1280,height:800});await mountFilesEditor(page);const browse=page.getByRole('button',{name:'Browse available content',exact:true}),d=page.getByRole('dialog');
-  await browse.press('Enter');await expect(d.getByText('24 records available for websites')).toBeVisible();await expect(d.getByLabel('Search records',{exact:true})).toBeFocused();await expect(d.locator('.website-picker-results li')).toHaveCount(12);
+  await pagePanel(page,'Lab book content');await browse.press('Enter');await expect(d.getByText('24 records available for websites')).toBeVisible();await expect(d.getByLabel('Search records',{exact:true})).toBeFocused();await expect(d.locator('.website-picker-results li')).toHaveCount(12);
   await d.locator('[data-picker-facet="book"] summary').click();
   const input=d.getByLabel('Find a lab book by name');await input.fill('Field observations');await input.press('Enter');
   const books=d.locator('[data-action="website-files-picker-choose-book"]');await expect(books).toHaveCount(3);await expect(books.first()).toBeVisible();

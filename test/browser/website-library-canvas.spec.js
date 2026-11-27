@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -39,7 +40,7 @@ test('dock the library and drop a permitted entry between authored sections in t
   await page.setViewportSize({width:1440,height:900});await mountFilesEditor(page);
   const canvas=page.frameLocator('#website-files-canvas'),target=canvas.getByText('Results follow');
   await expect(target).toBeVisible();
-  await page.getByRole('button',{name:'Browse available content'}).click();
+  await pagePanel(page,'Lab book content');await page.getByRole('button',{name:'Browse available content'}).click();
   const dialog=page.getByRole('dialog');
   await expect(dialog.locator('[data-picker-row]')).toHaveCount(6);
   await dialog.getByRole('button',{name:'Place on the page'}).click();

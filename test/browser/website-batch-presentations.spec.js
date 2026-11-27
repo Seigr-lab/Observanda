@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,7 +30,7 @@ test('a reviewed batch creates title cards or full entries in order in one offli
   });
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(id);
   const picker=page.locator('dialog[data-website-picker-dialog]'),canvas=page.frameLocator('#website-files-canvas');
-  const browse=async()=>{await page.locator('[data-action="website-files-picker-open"]').click();await expect(picker.locator('[data-picker-row]')).toHaveCount(12);};
+  const browse=async()=>{await pagePanel(page,'Lab book content');await page.locator('[data-action="website-files-picker-open"]').click();await expect(picker.locator('[data-picker-row]')).toHaveCount(12);};
   const idsOnPage=()=>picker.locator('[data-picker-row]').evaluateAll(nodes=>nodes.map(row=>row.dataset.pickerRow));
   const add=async count=>{
    await picker.locator('[data-action="website-files-picker-insert-group"]').click();await expect(picker.getByRole('status')).toContainText('Inserted '+count);

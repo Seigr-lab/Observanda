@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mountFilesEditor} from './mount-files-editor.js';
 
 async function editor(page){
@@ -18,7 +19,7 @@ async function editor(page){
   if(route.endsWith('/save')){html=data.html;return {site,path:data.path,html,css};}
   throw Error('Unexpected route '+route);
  });
- await mountFilesEditor(page);const canvas=page.frameLocator('#website-files-canvas'),list=page.locator('[data-website-files-structure]');
+ await mountFilesEditor(page);await pagePanel(page,'Layers');const canvas=page.frameLocator('#website-files-canvas'),list=page.locator('[data-website-files-structure]');
  await expect(canvas.locator('#station')).toBeVisible();return {canvas,list,calls,html:()=>html};
 }
 

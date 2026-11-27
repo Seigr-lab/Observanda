@@ -5,6 +5,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {workspaceReachFixture} from './workspace-reach-fixture.js';
 import {navigate,openDefaultWebsite} from './preferences-helper.js';
 import {websitePreparationFinished} from './website-preparation-helper.js';
+import {pagePanel} from './website-page-panel-helper.js';
 
 // A workspace website presents records from a project's lab book. The library
 // offers only what each lab book shares, lists a locked project as locked with
@@ -22,7 +23,7 @@ test('a workspace website using records from a project\'s lab book',async({page}
 
   const library=page.locator('dialog[data-website-picker-dialog]'),search=library.getByLabel('Search records',{exact:true}),rows=library.locator('.website-picker-results li');
   const find=async(text,count)=>expect(async()=>{await search.fill(text);await search.press('Enter');await expect(rows.filter({hasText:text})).toHaveCount(count,{timeout:2000});}).toPass({timeout:90000});
-  await page.getByRole('button',{name:'Browse available content',exact:true}).click();await expect(library).toBeVisible();
+  await pagePanel(page,'Lab book content');await page.getByRole('button',{name:'Browse available content',exact:true}).click();await expect(library).toBeVisible();
   // The open project's shared record arrives through workspace discovery.
   await find(apiary.shared.title,1);
   await find(apiary.private.title,0);await find('Other workspace project',0);await find(sealed.shared.title,0);

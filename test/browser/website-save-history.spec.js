@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {pagePanel} from './website-page-panel-helper.js';
 
 test('save, undo and redo writing, styling, order and owned media; withdraw a source before replay',async({page,browser})=>{
  test.setTimeout(120000);
@@ -36,6 +37,7 @@ test('save, undo and redo writing, styling, order and owned media; withdraw a so
   await inspector.locator('[data-visual-property="letter-spacing"]').fill('3');
   await inspector.getByRole('button',{name:'Apply styles',exact:true}).click();
   await expect(text).toHaveCSS('letter-spacing','3px');
+  await pagePanel(page,'Layers');
   await page.locator('[data-action="website-files-move-down"]:enabled').click();
   await expect(first).toHaveText('Temperature');
   await command('Image gallery').click();await page.locator('[data-gallery-files]').setInputFiles('src/preview-assets/image.png');
@@ -55,6 +57,7 @@ test('save, undo and redo writing, styling, order and owned media; withdraw a so
   await expect(text).toHaveCSS('letter-spacing','3px');await expect.poll(()=>photo.evaluate(el=>el.naturalWidth)).toBeGreaterThan(0);
   await text.click();await page.keyboard.press('End');await page.keyboard.insertText(' revised');await save();
   const library=page.locator('[data-website-components]');
+  await pagePanel(page,'Add');
   await command('Reusable library').click();await canvas.locator('#training').click({position:{x:2,y:2}});
   await library.getByLabel('Component name',{exact:true}).fill('Training notes');await library.getByRole('button',{name:'Create from selected block'}).click();
   await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();

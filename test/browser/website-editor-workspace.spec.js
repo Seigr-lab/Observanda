@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import os from 'node:os';
@@ -28,7 +29,7 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   const finder=page.getByRole('button',{name:'Find pages and tools'});await finder.click();
   const search=page.getByRole('combobox',{name:'Search by name or path'});await search.fill('Themes');await expect(page.getByRole('option',{name:'Themes',exact:true})).toBeVisible();await search.press('Escape');
   await expect(search).toHaveCount(0);await expect(finder).toBeFocused();
-  const filter=page.getByRole('searchbox',{name:'Filter page layers'});await filter.fill(label);
+  await pagePanel(page,'Layers');const filter=page.getByRole('searchbox',{name:'Filter page layers'});await filter.fill(label);
   await page.locator('[data-website-files-structure]').getByRole('button',{name:label,exact:true}).click();await filter.fill('');
   const trail=page.getByRole('navigation',{name:'Selected element path'});await expect(trail.locator('[aria-current]')).toHaveText(label);
   await trail.getByRole('button',{name:'Select parent: Calibration protocol',exact:true}).click();

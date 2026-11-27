@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,7 +49,7 @@ test('filter permitted saved entries by date, type, status and exact tags and re
    }
   });
   await page.setViewportSize({width:1280,height:800});await mountFilesEditor(page);
-  await page.getByRole('button',{name:'Browse available content'}).click();const d=page.getByRole('dialog'),rows=d.locator('[data-picker-row]');
+  await pagePanel(page,'Lab book content');await page.getByRole('button',{name:'Browse available content'}).click();const d=page.getByRole('dialog'),rows=d.locator('[data-picker-row]');
   const field=key=>d.locator('[data-picker-field="'+key+'"]'),apply=()=>d.getByRole('button',{name:'Apply filters',exact:true}).click();
   await expect(rows).toHaveCount(4);expect(tagReads).toBe(0);await rows.filter({hasText:'Ångström baseline'}).getByRole('checkbox').check();
   await field('dateFrom').fill('2026-02-01');await field('dateTo').fill('2026-02-09');await field('recordType').selectOption('analysis');await field('status').selectOption('completed');await apply();
@@ -70,7 +71,7 @@ test('filter permitted saved entries by date, type, status and exact tags and re
   await d.getByLabel('Search name',{exact:true}).fill('Gas series');await d.getByRole('button',{name:'Save current search'}).click();
   await expect(d.getByRole('button',{name:'Gas series',exact:true})).toBeVisible();
   await d.getByRole('button',{name:'Close content picker'}).click();await page.reload();
-  await page.getByRole('button',{name:'Browse available content'}).click();
+  await pagePanel(page,'Lab book content');await page.getByRole('button',{name:'Browse available content'}).click();
   await d.getByRole('button',{name:'Saved searches',exact:true}).click();await d.getByRole('button',{name:'Gas series',exact:true}).click();
   await expect(rows).toHaveCount(1);await expect(rows.first()).toContainText('Gas analysis');
   await d.getByRole('button',{name:'Saved searches',exact:true}).click();
