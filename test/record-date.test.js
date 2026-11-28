@@ -13,7 +13,8 @@ import {ResearchDrafts} from '../src/research-drafts.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {RecordHistory} from '../src/record-history.js';
 import {Workspace} from '../src/storage.js';
-import {reconcileRecords} from '../src/web/record-merge.js';
+import {mergeRecords} from './record-merge-helper.js';
+import {recordConflictLabel} from '../src/web/record-recovery-messages.js';
 import {recordRevisionComparison} from '../src/web/record-revision-view.js';
 import {escapeHTML} from '../src/publication.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
@@ -62,10 +63,11 @@ test('chronology overlaps declared spans, keeps unknown last, and never orders b
  const before=JSON.stringify(rows);queryRecords(rows,{browse:{from:'1998-12-31',to:'1998-12-31'}});assert.equal(JSON.stringify(rows),before);
  const imported=rows.map(e=>({...e,createdAt:'2099-01-01T00:00:00.000Z'}));assert.deepEqual(queryRecords(rows),queryRecords(imported).map(e=>({...e,createdAt:rows.find(r=>r.id===e.id).createdAt})));
 });
-test('date conflict decisions keep an entire declaration together and history presents it in plain language',()=>{
+test('date conflict decisions keep an entire declaration together and history presents it in plain language',async()=>{
  const base=sampleNotebook().entries[0],mine={...base,occurredOn:approx},stored={...base,occurredOn:range};
- const merge=reconcileRecords([{base,record:mine}],[stored]);assert.equal(merge.conflicts.length,1);assert.equal(merge.conflicts[0].label,'Record date');
- assert.deepEqual(merge.resolve(new Map([[merge.conflicts[0].key,merge.conflicts[0].mine]]))[0].occurredOn,approx);
+ const merge=await mergeRecords(base,mine,stored,{choose:()=>'mine'});
+ assert.deepEqual(merge.conflicts.map(item=>item.path),[['occurredOn']]);assert.equal(recordConflictLabel(merge.conflicts[0].path[0]),'Record date');
+ assert.deepEqual(merge.conflicts[0].mine,approx);assert.deepEqual(merge.record.occurredOn,approx);
  const comparison=recordRevisionComparison(mine,stored,escapeHTML);assert.match(comparison,/Estimated: February 2024/);assert.match(comparison,/2024-02-10 to 2024-03-03/);assert.ok(!comparison.includes('[object Object]'));
 });
 test('encrypted save, incomplete draft, exact pins, history and verified workspace copies retain date declarations',async()=>{

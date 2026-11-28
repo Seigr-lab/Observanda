@@ -4,7 +4,7 @@ const tr=(key,values)=>t('moduleReferenceTargets',key,values);
 
 // One bounded aggregate page. Unavailable owners remain visible as a partial
 // result without prompting for unrelated project credentials.
-export function connectedReferencePages({state,api,esc,draw,active=()=>['editor','record-reader'].includes(state.page),identity=()=>state.selected,prefix='connected',action:actionName='connected-work-page'}){
+export function connectedReferencePages({state,api,esc,draw,active=()=>state.page==='record-reader',identity=()=>state.selected,prefix='connected',action:actionName='connected-work-page'}){
  let page=null,error=null,busy=false,controller=null,attempt=null,query=null,generation=0;
  const client=moduleReferenceClient({state,api,identity,active});
  const stamp=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.projectOwner,identity()]);

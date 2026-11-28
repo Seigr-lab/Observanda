@@ -9,7 +9,6 @@ import {validAttempt,appendOnlyAttempt,mergeAttemptAdditions,currentAttemptItems
 import {attemptView} from '../src/web/attempt-view.js';
 import {attemptComparisonView} from '../src/web/attempt-comparison.js';
 import {createRun} from '../src/web/record-workflow.js';
-import {reconcileRecords} from '../src/web/record-merge.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {RecordHistory} from '../src/record-history.js';
@@ -69,10 +68,10 @@ test('record transactions preserve frozen facts, pinned methods, history restore
  await history.restore({...command,...old,expectedRevision:recordRevision(current)});
  const restored=(await f.ws.read()).book.entries.find(r=>r.id===saved.id);assert.deepEqual(restored.attempt,amended.attempt);assert.equal(restored.share,false);
  const mine=structuredClone(restored),remote=structuredClone(restored);mine.attempt.events.push(event(p,{kind:'returned'}));remote.attempt.events.push(event(p,{kind:'reviewed'}));
- const merge=reconcileRecords([{base:restored,record:mine}],[remote]);assert.equal(merge.conflicts.length,0);
- const combined=merge.resolve(new Map())[0];assert.equal(combined.attempt.events.length,4);assert.ok(appendOnlyAttempt(remote.attempt,combined.attempt));
+ // Independent additions merge without a conflict, as the record document merge does.
+ const attempt=mergeAttemptAdditions(restored.attempt,mine.attempt,remote.attempt);assert.ok(attempt);
+ const combined={...structuredClone(remote),attempt};assert.equal(combined.attempt.events.length,4);assert.ok(appendOnlyAttempt(remote.attempt,combined.attempt));
  await f.save(remote);await f.save(combined);
- assert.ok(mergeAttemptAdditions(restored.attempt,mine.attempt,remote.attempt));
  const invalid=structuredClone(combined);invalid.attempt.events.push(event(p,{references:[{...f.ref,id:randomUUID()}]}));await assert.rejects(f.save(invalid),{code:'MATERIAL_MISSING'});
 });
 test('repeats retain preparation as inherited conditions, compare one changed parameter and keep public outcomes separate',async t=>{

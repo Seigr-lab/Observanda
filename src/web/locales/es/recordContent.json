@@ -1,7 +1,4 @@
 {
-  "figuresLoading": "Abriendo el editor de figuras...",
-  "figuresLoadFailed": "No se ha podido cargar el editor de figuras. Reintenta antes de guardar este registro. Tu borrador sigue aquí.",
-  "figuresRetry": "Reintentar el editor de figuras",
   "locationTransferChoose": "Elige un cuaderno de laboratorio de un proyecto",
   "locationTransferChecking": "Comprobando si hay un traslado de registro sin terminar...",
   "locationTransferCheck": "Volver a comprobar este traslado",

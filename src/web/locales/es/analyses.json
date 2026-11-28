@@ -148,8 +148,6 @@
   "authored": "Redactado explícitamente por el autor",
   "resultSource": "Revisión del análisis de apoyo",
   "resultHelp": "Identifica explícitamente las formulaciones de autoría o fija un análisis conservado. Incluye fuentes y limitaciones. Estas formulaciones siguen la selección web del registro; los archivos privados de análisis y datos de origen no se comparten automáticamente.",
-  "resultSave": "Añadir al borrador del registro",
-  "resultSaved": "Formulación de resultados añadida al borrador. Guarda el registro para conservarla.",
   "sourcePrivate": "Análisis de apoyo conservado de forma privada; los archivos de origen no se incluyen en esta edición.",
   "reviewHelp": "Para cada resultado afectado, registra por qué el resultado conservado sigue siendo aplicable a esta edición. Para omitirlo o sustituirlo, edita el registro y prepara una edición nueva. Esta decisión queda fijada a esta edición y a las revisiones de dependencias observadas.",
   "disposition": "Decisión de aplicabilidad y limitaciones",

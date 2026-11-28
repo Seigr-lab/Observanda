@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {getHeapStatistics} from 'node:v8';
-import {researchBytes,researchRequestCapacity} from '../../src/web/research-capacity.js';
+import {researchBytes,researchCapacityIssue} from '../../src/web/research-capacity.js';
 import {validateRecordChanges,validateCatalogueMetadata} from '../../src/model.js';
 
 // Shared immutable text keeps the fixture itself small; serialized copies of
@@ -10,7 +10,7 @@ const record={id:'record',sections:Array.from({length:count},()=>section)};
 const sample={...record,sections:[section]},two={...record,sections:[section,section]};
 const bytes=value=>Buffer.byteLength(JSON.stringify(value,null,2)+'\n');
 const expected=bytes(sample)+(count-1)*(bytes(two)-bytes(sample));
-const measured=researchBytes(record),issue=researchRequestCapacity('/api/research/records/save',{changes:[{id:record.id,record}]});
+const measured=researchBytes(record),issue=researchCapacityIssue('record',measured,{recordId:record.id});
 assert.equal(measured,expected);assert.equal(issue.details[0].requestedBytes,expected);
 assert.throws(()=>validateRecordChanges({},[record],[]),error=>error.code===issue.code&&error.details[0].requestedBytes===expected);
 const metadata={formatVersion:21,entries:[],sections:record.sections},metadataBytes=researchBytes(metadata);

@@ -148,8 +148,6 @@
   "authored": "D'autoria explícita",
   "resultSource": "Revisió de l'anàlisi de suport",
   "resultHelp": "Identifica explícitament els enunciats d'autor o fixa una anàlisi conservada. Inclou-ne les fonts i limitacions. Aquests enunciats segueixen la selecció del registre per al lloc web; els fitxers d'anàlisi privats i les dades d'origen no es comparteixen automàticament.",
-  "resultSave": "Afegeix a l'esborrany del registre",
-  "resultSaved": "S'ha afegit l'enunciat del resultat a l'esborrany. Guarda el registre per conservar-lo.",
   "sourcePrivate": "Anàlisi de suport conservada de manera privada; els fitxers d'origen no s'inclouen en aquesta edició.",
   "reviewHelp": "Per a cada resultat afectat, registra per què el resultat conservat continua sent aplicable a aquesta edició. Per ometre'l o substituir-lo, edita el registre i prepara una edició nova. Aquesta decisió queda fixada a aquesta edició i a les revisions de dependència observades.",
   "disposition": "Decisió d'aplicabilitat i limitacions",

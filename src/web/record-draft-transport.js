@@ -1,3 +1,4 @@
+import {t} from './i18n/index.js';
 // A new record is a server draft until its first Save, written on the same record page as a
 // saved record. The page's editing parts send the commands they send for a saved record;
 // while the draft is open, each command for its record is turned here into the matching
@@ -6,6 +7,8 @@
 const review=operation=>'/api/research/drafts/review/'+operation;
 const changed=()=>Object.assign(Error('The record changed.'),{code:'RECORD_CHANGED'});
 const emptyBody={type:'doc',content:[{type:'paragraph',content:[]}]};
+// While the record is being saved, or its save is not yet confirmed, it is not changed.
+const saving=()=>Object.assign(Error(t('configurationEditor','recordSavingWait')),{code:'RECORD_SAVING'});
 
 export function recordDraftTransport({api,draft,written}){
  const target=current=>({id:current.id,workspaceId:current.workspaceId,expectedRevision:current.revision});
@@ -14,6 +17,7 @@ export function recordDraftTransport({api,draft,written}){
  async function read(current,field,options){return call(current,'editRead',{field},options);}
  // Read the value, check it is the one the page edited, and write the change against it.
  async function write(current,field,value,{expected,options}={}){
+  if(current.saving)throw saving();
   const selected=await read(current,field,options);
   if(expected!==undefined&&selected.revision!==expected)throw changed();
   const result=await call(current,'editWrite',{field,value,valueRevision:selected.revision,editRevision:selected.editRevision,operationId:crypto.randomUUID()},options);

@@ -10,10 +10,10 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {AppError} from '../../src/errors.js';
 import {operationStage} from '../../src/operation-progress.js';
 import {RecordValues} from '../../src/record-values.js';
-import {openRecordDetail} from './record-editing-helper.js';
+import {openRecordDetail,newRecordOpened,setNewRecordTitle} from './record-editing-helper.js';
 import {navigate} from './preferences-helper.js';
 
-test('new record save progress stays readable, preserves newer typing and closes on failure and retry',async({page})=>{
+test('new record save progress stays readable, keeps the draft on failure and closes after the retry',async({page})=>{
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-save-progress-ui-')),f=await encryptedFixture(directory,sampleNotebook()),book=(await f.workspace.read()).book;
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,headless:true,port:0});
@@ -23,35 +23,33 @@ test('new record save progress stays readable, preserves newer typing and closes
  // "Writing records and history" stage, to observe a slow save.
  ResearchCatalogue.prototype.historyIndex=function(...args){
   const index=historyIndex.apply(this,args),append=index.append.bind(index);
-  index.append=async(entry,...rest)=>{const title=entry.view?.title;if(title==='Submitted title')await gate;if(fail&&title==='Newer typing')throw new AppError('INVALID');if(title==='Newer typing')return operationStage('unrecognized-nested-stage',{},()=>append(entry,...rest));return append(entry,...rest);};
+  index.append=async(entry,...rest)=>{const title=entry.view?.title;if(title!=='Submitted title')return append(entry,...rest);if(fail)throw new AppError('INVALID');await gate;return operationStage('unrecognized-nested-stage',{},()=>append(entry,...rest));};
   return index;
  };
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  await expect(page).toHaveURL(/#\/records\/[a-f0-9-]+$/);const recordId=await page.evaluate(()=>location.hash.split('/')[2]);
-  const title=page.getByLabel('Record title',{exact:true}),save=page.getByRole('button',{name:'Save record',exact:true});
-  await expect(title).toBeVisible();await title.fill('Submitted title');await save.click();
-  const progress=page.getByRole('region',{name:'Saving records',exact:true});await expect(progress.getByRole('heading',{name:'Writing records and history'})).toBeVisible();
+  await expect(page).toHaveURL(/#\/records\/[a-f0-9-]+$/);const recordId=await newRecordOpened(page);
+  // A new record is written on the record page as a draft; its title is written into the draft at once.
+  const title=page.locator('main h1').first(),save=page.getByRole('button',{name:'Save record',exact:true}),progress=page.getByRole('region',{name:'Saving records',exact:true});
+  await setNewRecordTitle(page,'Submitted title');
+  const stored=async()=>(await f.workspace.read()).book.entries.find(record=>record.id===recordId);
+  // The unsaved new record is unsaved work: leaving asks first, and staying keeps it.
+  await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#leave-dialog')).toBeVisible();await page.locator('#leave-dialog').getByRole('button',{name:'Stay here',exact:true}).click();await expect(title).toHaveText('Submitted title');await expect(save).toBeVisible();
+  // A rejected save keeps the new record as a draft on its page and says why.
+  fail=true;await save.click();await expect(page.locator('main [role=alert]').first()).toContainText('Some fields are invalid',{timeout:15000});await expect(save).toBeEnabled();await expect(progress).toHaveCount(0);await expect(title).toHaveText('Submitted title');
+  expect(await stored()).toBeUndefined();
+  // The retry shows its progress while it is written, readable at a narrow, enlarged view.
+  fail=false;await save.click();await expect(progress.getByRole('heading',{name:'Writing records and history'})).toBeVisible({timeout:15000});
   await expect(progress.locator('[data-count]')).toHaveText('0 of 1 records completed in this stage');await expect(progress.locator('[data-hint]')).toContainText('only when the complete save succeeds');
-  // While a save is in flight the status says so; editing stays available.
-  await expect(page.locator('#save-status')).toHaveText('Saving…');await expect(title).toBeEnabled();await title.fill('Newer typing');
+  // While a save is in flight the page says so, and the record cannot be saved again or discarded.
+  await expect(page.locator('.record-toolbar [role=status]')).toHaveText('Saving the record…');await expect(save).toBeDisabled();await expect(page.getByRole('button',{name:'Discard record',exact:true})).toBeDisabled();
   await page.setViewportSize({width:760,height:1000});await page.evaluate(()=>document.documentElement.style.fontSize='24px');await progress.scrollIntoViewIfNeeded();
   expect(await progress.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await expect(progress.locator('[data-time]')).toBeVisible();await page.screenshot({path:test.info().outputPath('record-save-progress.png')});
-  release();await expect(progress).toHaveCount(0);await expect(title).toHaveValue('Newer typing');await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
-  expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Submitted title');
-  await expect(page.locator('#notice')).toContainText('Newer edits remain unsaved');await expect(page.locator('#notice')).not.toHaveClass(/error/);await page.locator('#notice').getByRole('button',{name:'Dismiss'}).click();
-  await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#leave-dialog')).toBeVisible();await page.locator('#leave-dialog').getByRole('button',{name:'Stay here',exact:true}).click();await expect(title).toHaveValue('Newer typing');
-  // A rejected save keeps the newer typing in the new-record editor and reports the fields to check.
-  const failure=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Check these fields',exact:true})});
-  fail=true;await save.click();await expect(failure).toBeVisible({timeout:15000});await expect(save).toBeEnabled();await expect(progress).toHaveCount(0);await expect(title).toHaveValue('Newer typing');await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
-  expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Submitted title');
-  await failure.getByRole('button',{name:'Back to workspace',exact:true}).click();await expect(failure).toHaveCount(0);
-  // The retry saves the newer edit. Once nothing remains unsaved, the record continues in its saved
-  // field-by-field editor, which saves each field on its own and has no record-wide save footer.
-  fail=false;await save.click();await expect(page.locator('#notice')).toContainText('Changes saved.',{timeout:15000});await expect(page.locator('.record-editing h1')).toHaveText('Newer typing');
-  await expect(page.getByRole('button',{name:'Edit record title',exact:true})).toBeVisible();await expect(title).toBeHidden();await expect(page.locator('#save-status')).toHaveCount(0);await expect(progress).toHaveCount(0);
-  expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');expect(errors).toEqual([]);
+  // Once saved, the record continues in its saved field-by-field editor, which saves each field on its own.
+  release();await expect(progress).toHaveCount(0);await expect(page.locator('.record-editing h1')).toHaveText('Submitted title',{timeout:15000});
+  await expect(page.getByRole('button',{name:'Edit record title',exact:true})).toBeVisible();await expect(save).toHaveCount(0);await expect(page.getByRole('button',{name:'Read record',exact:true})).toBeVisible();
+  expect((await stored()).title).toBe('Submitted title');expect(errors).toEqual([]);
  }finally{release();ResearchCatalogue.prototype.historyIndex=historyIndex;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 

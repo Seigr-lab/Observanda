@@ -27,7 +27,7 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,revision
  const contextFor=entry=>activityContext(state.book,entry,{selectedSection});
  let key='',result=null,error=null,loading=false,controller=null,generation=0,opened=false;
  const record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
- const active=()=>['editor','record-reader'].includes(state.page)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!!record();
+ const active=()=>state.page==='record-reader'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!!record();
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.selected,state.etag]);
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="record-activity-${action}" ${extra}>${esc(label)}</button>`;
  function stop(){targets.stop();configuration.stop();typeChoices.stop();contextGeneration++;contextLoaded=false;selectedSection=selectedPrimary=contextPending=contextError=null;controller?.abort();controller=null;generation++;key='';result=null;error=null;loading=false;opened=false;}

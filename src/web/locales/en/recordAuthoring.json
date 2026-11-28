@@ -20,7 +20,6 @@
   "removing": "Removing record",
   "removed": "Record removed. Saved revisions and evidence are retained.",
   "operationBusy": "Wait for the evidence operation to finish before removing this record.",
-  "confirmRemove": "Remove this record from its lab book? Saved revisions and evidence are retained. Unsaved changes to this record will be discarded.",
   "removeConflict": "This record changed in another window. Your record has not been removed. Reload the record and review the saved version before removing it.",
   "invalidRemoval": "The removal response was incomplete. Retry to check whether the record was removed.",
   "otherDrafts": "Save or discard changes to other records or settings before removing this record.",

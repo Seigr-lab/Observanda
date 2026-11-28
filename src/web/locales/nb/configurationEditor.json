@@ -54,8 +54,6 @@
   "foundBooks": "{shown} av {total} labbøker",
   "moreBooks": "Flere labbøker",
   "saveBeforeBook": "Lagre eller avbryt endringer før du velger en annen labbok.",
-  "newRecord": "Ny oppføring",
-  "newRecordHelp": "Rediger detaljene og feltene i oppføringen. Lagre oppføring legger den til i labboken.",
   "startingRecord": "Klargjør oppføringens felt…",
   "backToRecords": "Tilbake til oppføringer",
   "clearChoice": "Fjern valg",
@@ -84,5 +82,6 @@
  "saveRecord":"Lagre oppføringen",
  "discardRecord":"Forkast oppføringen",
  "confirmDiscardRecord":"Vil du forkaste denne nye oppføringen?",
- "savingRecord":"Lagrer oppføringen …"
+ "savingRecord":"Lagrer oppføringen …",
+ "recordSavingWait":"Oppføringen lagres. Vent til den er lagret før du endrer den."
 }

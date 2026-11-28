@@ -7,7 +7,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
 import {ResearchDraftTransfer} from '../../src/research-draft-transfer.js';
-import {writeRecordCheckpoint} from '../../src/web/record-draft-transfer.js';
+import {writeDraftTransfer} from '../record-draft-transfer-helper.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {recordRevision} from '../../src/research.js';
 import {encryptedFixture} from './encrypted-fixture.js';
@@ -215,15 +215,16 @@ test('large checkpoint review pages saved sections, retries a failed window and 
  try{
   const base=f.book.entries[0],record={...base,title:'Long field notebook draft',sections:Array.from({length:40},(_,i)=>({id:randomUUID(),title:'Saved section '+i,body:'Retained field notes. '.repeat(2700)}))};
   const command={id:randomUUID(),workspaceId:f.book.id,expectedRevision:null,changes:[{record,baseRevision:recordRevision(base),expectedRevision:recordRevision(base)}]},transfer=new ResearchDraftTransfer(f.workspace);
-  await writeRecordCheckpoint(async(route,data)=>route.includes('/transfer/')?transfer[route.split('/').at(-1)](data):f.drafts.write(data),command);
+  await writeDraftTransfer(async(route,data)=>route.includes('/transfer/')?transfer[route.split('/').at(-1)](data):f.drafts.write(data),command);
   await page.goto(f.app.url);await page.getByRole('button',{name:'Review drafts',exact:true}).click();
   await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
   const preview=page.getByRole('dialog',{name:'Long field notebook draft',exact:true});
   await expect(preview.getByRole('heading',{name:'Saved section 0',exact:true})).toBeVisible();
   await expect(preview.locator('.record-draft-preview-content>section')).toHaveCount(4);
-  await page.context().route('**/api/research/drafts/content',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic section read failure'}}));
+  // A record checkpoint's preview reads it through its review, with the edits written into it.
+  await page.context().route('**/api/research/drafts/review/content',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic section read failure'}}));
   await preview.getByRole('button',{name:'Next sections',exact:true}).click();await expect(preview.getByRole('alert')).toContainText('Synthetic section read failure');
-  await page.context().unroute('**/api/research/drafts/content');await preview.getByRole('button',{name:'Retry saved sections',exact:true}).click();
+  await page.context().unroute('**/api/research/drafts/review/content');await preview.getByRole('button',{name:'Retry saved sections',exact:true}).click();
   await expect(preview.getByRole('heading',{name:'Saved section 4',exact:true})).toBeVisible();await expect(preview).toContainText('Sections 5–8 of 40');
   await preview.getByLabel('Go to section',{exact:true}).fill('39');await preview.getByRole('button',{name:'Go',exact:true}).click();
   await expect(preview.getByRole('heading',{name:'Saved section 38',exact:true})).toBeVisible();await expect(preview.locator('.record-draft-preview-content>section')).toHaveCount(2);

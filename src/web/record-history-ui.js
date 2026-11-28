@@ -15,7 +15,7 @@ export function recordHistoryUI({state,api,esc,showDialog,notify,revisions,onRes
  const endpoint='/api/research/records/history/';
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="record-history-${action}" ${extra}>${label}</button>`;
  const command=extra=>({workspaceId,recordId:owner,...extra});
- const guard=()=>{if(context!==state.storage?.contextId||workspaceId!==state.book?.id||owner!==state.selected||!['editor','record-reader'].includes(state.page)||state.access?.locked)throw Error(message('reopen'));};
+ const guard=()=>{if(context!==state.storage?.contextId||workspaceId!==state.book?.id||owner!==state.selected||state.page!=='record-reader'||state.access?.locked)throw Error(message('reopen'));};
  const frame=(title,body,actions)=>{showDialog(`<div class="record-history"><h2 id="dialog-title" tabindex="-1">${esc(title)}</h2><div class="record-history-content" tabindex="0">${body}</div><div class="dialog-actions">${actions}</div></div>`);document.querySelector('.record-history h2')?.focus();};
  const date=v=>new Date(v).toLocaleString(appLanguage());
  async function list(cursor=pageCursor){

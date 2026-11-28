@@ -54,8 +54,6 @@
  "foundBooks":"{shown} of {total} lab books",
  "moreBooks":"More lab books",
  "saveBeforeBook":"Save or cancel changes before choosing another lab book.",
- "newRecord":"New record",
- "newRecordHelp":"Edit the record\u0027s details and fields. Save record adds it to the lab book.",
  "startingRecord":"Preparing the record\u0027s fields…",
  "backToRecords":"Back to records",
  "clearChoice":"Clear choice",
@@ -84,5 +82,6 @@
  "saveRecord":"Save record",
  "discardRecord":"Discard record",
  "confirmDiscardRecord":"Discard this new record?",
- "savingRecord":"Saving the record…"
+ "savingRecord":"Saving the record…",
+ "recordSavingWait":"The record is being saved. Wait until it is saved before changing it."
 }

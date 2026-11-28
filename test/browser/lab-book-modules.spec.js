@@ -16,6 +16,7 @@ import {LabBookStorage} from '../../src/lab-book-storage.js';
 import {readAccess,verifyAccess} from '../../src/access.js';
 import {laboratoryProfiles} from '../../src/web/laboratory/catalog.js';
 import {navigate,preferences} from './preferences-helper.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord} from './record-editing-helper.js';
 
 test('workspace projects and lab books remain usable with every optional type disabled',async({page})=>{
  test.setTimeout(600000);page.setDefaultTimeout(12000);
@@ -48,13 +49,12 @@ test('workspace projects and lab books remain usable with every optional type di
   // A lab book gets its own encrypted store, which takes longer than an ordinary save.
   await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});
  };
- // A free-form note opens the writing editor; a record of a lab-book record type is entered one value at a time.
- // Either is then saved into the lab book.
+ // A free-form note and a record of a lab-book record type both open on the record page as a draft,
+ // where the title is set; either is then saved into the lab book.
  const record=async(type,title)=>{
   await main.getByRole('button',{name:'New record',exact:true}).click();await dialog.getByRole('button',{name:type,exact:true}).click();
-  if(type==='Create free-form note')await page.getByLabel('Record title',{exact:true}).fill(title,{timeout:30000});
-  else{const initial=page.locator('[data-configuration-record-host]');await expect(initial.locator('[data-record-value]')).toBeVisible({timeout:30000});await initial.locator('[data-record-value]').fill(title);}
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText(title,{timeout:60000});
+  await newRecordOpened(page);await setNewRecordTitle(page,title);
+  await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText(title,{timeout:60000});
  };
  try{
   await page.goto(app.url);await modules();

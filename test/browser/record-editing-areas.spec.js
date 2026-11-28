@@ -10,6 +10,7 @@ import {clearVault} from '../../src/encryption.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {RecordWriting} from '../../src/record-writing.js';
 import {RecordValues} from '../../src/record-values.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord} from './record-editing-helper.js';
 
 test('saved editing opens directly, browses areas and retains late writing across reading and route changes',async({page},info)=>{
  test.setTimeout(180000);
@@ -54,7 +55,7 @@ test('new drafts keep their authoring form and saved records reopen in editing a
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  await page.getByLabel('Record title',{exact:true}).fill('A new observation');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('A new observation');
+  await newRecordOpened(page);await setNewRecordTitle(page,'A new observation');await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText('A new observation');
   const id=await page.evaluate(()=>location.hash.split('/')[2]);await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('A new observation');
   await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Writing',exact:true}).click();
   await page.getByRole('button',{name:'Add writing section',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit writing section',exact:true});

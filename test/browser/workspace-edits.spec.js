@@ -10,7 +10,7 @@ import {WorkspaceEdits} from '../../src/workspace-edits.js';
 import {workspaceSaveRequest} from '../../src/web/workspace-edits.js';
 import {recordRevisions} from '../../src/research.js';
 import {preferences} from './preferences-helper.js';
-import {openRecordActions,setRecordTitle} from './record-editing-helper.js';
+import {openRecordActions,setRecordTitle,newRecordOpened,setNewRecordTitle} from './record-editing-helper.js';
 import {readProgressStream} from '../../src/web/progress-stream.js';
 import {Workspace} from '../../src/storage.js';
 import {workspaceCreationPath} from '../../src/workspace-names.js';
@@ -112,7 +112,7 @@ test('creating and reopening a record retains a bounded selection across record-
   await page.evaluate(id=>location.hash='#/notebooks/'+id,f.book.notebooks[0].id);
   await click(page,'New record');const choices=page.locator('#dialog'),general=choices.locator('details').filter({hasText:'General record types'});
   if(!await general.evaluate(element=>element.open))await choices.getByText('General record types',{exact:true}).click();await click(choices,'Create observation');
-  await page.getByLabel('Record title',{exact:true}).fill('A first field observation');
+  await newRecordOpened(page);await setNewRecordTitle(page,'A first field observation');
   const waiting=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/apply')),applied=await acknowledgement(page,'/research/drafts/review/apply');
   await click(page,'Save record');const response=await waiting;expect(response.ok()).toBe(true);
   const data=await applied.result;expect(data.recordPatch).toBeUndefined();expect(data.book).toBeUndefined();expect(data.recordId).toBeTruthy();

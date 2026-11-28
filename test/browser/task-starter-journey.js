@@ -4,6 +4,7 @@ import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {taskStarters} from '../../src/web/task-starters.js';
 import {navigate,preferences} from './preferences-helper.js';
 import {openEvidence} from './record-editor-helper.js';
+import {newRecordOpened,openRecordWriting,saveRecordValue,saveNewRecord} from './record-editing-helper.js';
 
 export function chooseStarterAction(page){
   const dialog=page.locator('#dialog');
@@ -37,17 +38,19 @@ export async function authorStarter(page,{name,title,body,fieldVisit=false}){
   await dialog.getByLabel('Title for new records').fill(title);
   if(name==='Lesson')await dialog.getByLabel('Reflection',{exact:true}).uncheck();
   await choose('Start writing');
-  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(title);
-  await page.locator('.document-field').first().locator('[contenteditable=true]').fill(body);
+  // The started record opens on the record page as a draft; its summary, sections and visibility are written there.
+  await newRecordOpened(page);await expect(page.locator('main h1').first()).toHaveText(title);
+  const writing=await openRecordWriting(page);await writing.locator('.ProseMirror').fill(body);await saveRecordValue(writing);
   if(fieldVisit){
-    const first=page.locator('[data-writing-section]').first();
-    await first.locator('[data-writing-heading]').fill('Field conditions');await first.locator('[contenteditable=true]').fill('Rain gauge reading 12.4 mm.');
-    await first.locator('[data-writing-share-pdf]').check();
-    const visibility=page.locator('[data-record-publication]');
-    await visibility.getByRole('checkbox',{name:'Available for PDF',exact:true}).check();
-    await visibility.locator('summary').click();await visibility.getByRole('checkbox',{name:'PDF · Summary / context',exact:true}).uncheck();
+    await page.locator('main .record-sections > section').first().getByRole('button',{name:'Edit section',exact:true}).click();
+    const first=page.locator('dialog.record-writing[open]');await expect(first.locator('.ProseMirror')).toBeVisible();
+    await first.getByLabel('Section heading',{exact:true}).fill('Field conditions');await first.locator('.ProseMirror').fill('Rain gauge reading 12.4 mm.');
+    await first.locator('[data-writing-share-pdf]').check();await saveRecordValue(first);
+    const visibility=page.locator('.record-editing [data-record-publication]'),edit=async name=>{await visibility.locator('[data-value-field="'+name+'"]').click();const value=page.locator('dialog.record-writing[open]');await expect(value).toBeVisible();return value;};
+    const pdf=await edit('sharePdf');await pdf.locator('[data-record-value]').selectOption('true');await saveRecordValue(pdf);
+    const parts=await edit('publication');await parts.getByRole('checkbox',{name:'PDF · Summary / context',exact:true}).uncheck();await saveRecordValue(parts);
   }
-  await page.getByRole('button',{name:'Save record',exact:true}).click();
+  await saveNewRecord(page);
   const retained=page.getByRole('heading',{name:title,level:1,exact:true});
   await expect(retained).toBeVisible({timeout:60000});await page.reload();await expect(retained).toBeVisible({timeout:30000});
 }

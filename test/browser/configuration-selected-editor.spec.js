@@ -14,6 +14,7 @@ import {templateFrom} from '../../src/web/notebook-schema.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {revealInEditor} from './record-editor-helper.js';
+import {newRecordOpened,setNewRecordTitle,openTemplateValue,saveRecordValue,saveNewRecord} from './record-editing-helper.js';
 
 test('selected configuration pages preserve late edits and create from the saved schema with exact Save retry',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -66,18 +67,17 @@ test('selected configuration pages preserve late edits and create from the saved
   await expect(dialog).not.toBeVisible();expect(await storedChoice()).toBe('Saved late condition');
   await fixture.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),prior.id);await withRecordDocument(store,prior.id,row.revision,async document=>expect((await document.field(['template'])).value).toEqual(originalTemplate));});
   await page.evaluate(id=>location.hash='#/notebooks/'+id,notebook.id);await page.getByRole('button',{name:'New record',exact:true}).click();await dialog.getByRole('button',{name:'Next',exact:true}).click();await dialog.getByRole('button',{name:'Create observation type 24',exact:true}).click();
-  const initial=page.locator('[data-configuration-record-host]');await expect(initial.locator('[data-record-value]')).toBeVisible();await initial.locator('[data-record-value]').fill('Created from saved selected schema');
-  const created=new URL(page.url()).hash.split('/')[2];expect(created).not.toBe(prior.id);
-  await initial.getByLabel('Choose what to edit',{exact:true}).selectOption('custom');
-  for(let i=0;i<3;i++)await initial.getByRole('button',{name:'Next values',exact:true}).click();
-  await initial.getByLabel('Value',{exact:true}).selectOption('template:field_24');await expect(initial.locator('[data-custom-choice-results]')).toContainText('Condition choice 0');
+  // The new record is written on the record page from the saved schema: its title and its late choice field each in their own dialog.
+  const created=await newRecordOpened(page);expect(created).not.toBe(prior.id);await setNewRecordTitle(page,'Created from saved selected schema');
+  const initial=await openTemplateValue(page,'field_24',25);await expect(initial.locator('[data-custom-choice-results]')).toContainText('Condition choice 0');
   await initial.locator('[data-custom-choice-page=next]').click();await initial.locator('[data-custom-choice-page=next]').click();await initial.getByRole('button',{name:'Saved late condition',exact:true}).click();
-  await expect(initial.locator('[data-custom-choice-selected]')).toHaveValue('Saved late condition');
+  await expect(initial.locator('[data-custom-choice-selected]')).toHaveValue('Saved late condition');await saveRecordValue(initial);
   let lost=false;await page.context().route('**/api/research/drafts/review/apply',async route=>{applied.push(route.request().postDataJSON());if(lost)return route.continue();lost=true;await route.fetch();await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost selected creation acknowledgement'}});});
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic lost selected creation acknowledgement');
-  await expect(initial.locator('[data-writing-fields]')).toHaveJSProperty('inert',true);
+  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('main [role=alert]').first()).toContainText('Synthetic lost selected creation acknowledgement');
+  // A save whose acknowledgement was lost may already have created the record; Save record replays that same save.
+  await expect(page.getByRole('button',{name:'Save record',exact:true})).toBeEnabled();
   const count=()=>fixture.workspace.catalogue(async store=>{const snapshot=await store.snapshot();return {count:snapshot.count,row:await store.member(snapshot,created)};});
-  expect((await count()).count).toBe(2);expect((await count()).row).not.toBeNull();await page.getByRole('button',{name:'Save record',exact:true}).click();
+  expect((await count()).count).toBe(2);expect((await count()).row).not.toBeNull();await saveNewRecord(page);
   await expect(page.locator('.record-editing h1')).toHaveText('Created from saved selected schema');expect(applied).toHaveLength(2);expect(applied[1]).toEqual(applied[0]);expect((await count()).count).toBe(2);
   await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Created from saved selected schema');
   await page.getByRole('button',{name:'Record details',exact:true}).click();

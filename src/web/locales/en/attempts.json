@@ -110,7 +110,6 @@
  "invalid":"Complete the required fields and references. Use an exact hash, identify inherited conditions, and give amendments and assessments a reason.",
  "changed":"The record or workspace changed. Reopen this form from the current record.",
  "conflict":"These attempt revisions conflict. Saved facts cannot be replaced. Review both versions, keep the saved facts, then add an amendment or correction. Cancel keeps your unfinished edits.",
- "wait":"Finish selecting the reference before adding this item.",
  "privateReference":"Private or unavailable source reference",
  "retained":"Exact revision {revision}",
  "supersedes":"Corrects / supersedes {id}",

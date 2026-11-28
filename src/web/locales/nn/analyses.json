@@ -148,8 +148,6 @@
   "authored": "Uttrykkeleg forfatta",
   "resultSource": "Støttande analyserevisjon",
   "resultHelp": "Identifiser forfatta utsegner uttrykkeleg eller lås til ein bevart analyse. Ta med kjelder og avgrensingar. Desse utsegnene følgjer nettstadutvalet til oppføringa; private analysefiler og kjeldedata blir ikkje delte automatisk.",
-  "resultSave": "Legg til i oppføringsutkast",
-  "resultSaved": "Resultatutsegna er lagd til i utkastet. Lagre oppføringa for å bevare henne.",
   "sourcePrivate": "Støttande analyse er bevart privat; kjeldefiler er ikkje med i denne utgåva.",
   "reviewHelp": "Registrer for kvart påverka resultat kvifor det bevarte resultatet framleis er gyldig for denne utgåva. For å utelate eller erstatte det må du redigere oppføringa og klargjere ei ny utgåve. Denne avgjerda er låst til denne utgåva og dei observerte avhengnadsrevisjonane hennar.",
   "disposition": "Avgjerd om bruk og avgrensingar",

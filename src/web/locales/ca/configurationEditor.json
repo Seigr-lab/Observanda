@@ -54,8 +54,6 @@
   "foundBooks": "{shown} de {total} llibres de laboratori",
   "moreBooks": "Més llibres de laboratori",
   "saveBeforeBook": "Guarda o cancel·la els canvis abans de triar un altre llibre de laboratori.",
-  "newRecord": "Registre nou",
-  "newRecordHelp": "Edita els detalls i els camps del registre. El botó «Guarda el registre» l’afegeix al llibre de laboratori.",
   "startingRecord": "S'estan preparant els camps del registre…",
   "backToRecords": "Torna als registres",
   "clearChoice": "Esborra l'opció",
@@ -84,5 +82,6 @@
  "saveRecord":"Desa el registre",
  "discardRecord":"Descarta el registre",
  "confirmDiscardRecord":"Vols descartar aquest registre nou?",
- "savingRecord":"S'està desant el registre…"
+ "savingRecord":"S'està desant el registre…",
+ "recordSavingWait":"S'està desant el registre. Espera que es desi abans de canviar-lo."
 }

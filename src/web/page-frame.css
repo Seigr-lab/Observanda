@@ -10,14 +10,14 @@
 /* Stacked panels share the frame's gap; no panel sets its own width. */
 .page-frame :is(.preferences-content,.storage-grid,.settings-grid){display:flex;flex-direction:column;gap:var(--ui-stack-gap)}
 .page-frame :is(.preferences-content,.storage-grid,.settings-grid)>*{margin-block:0}
-.page-frame :is(.panel,.editor-paper){box-sizing:border-box;max-width:none;padding:var(--ui-panel-padding)}
-.page-frame :is(.preferences-content,.storage-grid,.settings-grid)>:is(.panel,.editor-paper){width:100%}
-.page-frame :is(.panel,.editor-paper)>:last-child{margin-block-end:0}
+.page-frame .panel{box-sizing:border-box;max-width:none;padding:var(--ui-panel-padding)}
+.page-frame :is(.preferences-content,.storage-grid,.settings-grid)>.panel{width:100%}
+.page-frame .panel>:last-child{margin-block-end:0}
 
 /* One heading scale. */
 .page-frame h1{font-size:var(--ui-h1);line-height:1.2;margin-block:0}
-.page-frame :is(.panel,.editor-paper)>h2:first-child{font-size:var(--ui-h2);margin-block:0 var(--ui-space-3)}
-.page-frame :is(.panel,.editor-paper) h3{font-size:var(--ui-h3)}
+.page-frame .panel>h2:first-child{font-size:var(--ui-h2);margin-block:0 var(--ui-space-3)}
+.page-frame .panel h3{font-size:var(--ui-h3)}
 
 /* Titles take focus only so screen readers announce the new page. */
 .page-frame h1[tabindex="-1"]:focus,#main:focus{outline:none}

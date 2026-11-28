@@ -54,8 +54,6 @@
   "foundBooks": "{shown} de {total} cuadernos de laboratorio",
   "moreBooks": "Más cuadernos de laboratorio",
   "saveBeforeBook": "Guarda o cancela los cambios antes de elegir otro cuaderno de laboratorio.",
-  "newRecord": "Nuevo registro",
-  "newRecordHelp": "Edita los detalles y campos del registro. Guardar registro lo añade al cuaderno de laboratorio.",
   "startingRecord": "Preparando los campos del registro…",
   "backToRecords": "Volver a los registros",
   "clearChoice": "Borrar elección",
@@ -84,5 +82,6 @@
  "saveRecord":"Guardar registro",
  "discardRecord":"Descartar registro",
  "confirmDiscardRecord":"¿Descartar este registro nuevo?",
- "savingRecord":"Guardando el registro…"
+ "savingRecord":"Guardando el registro…",
+ "recordSavingWait":"Se está guardando el registro. Espera a que se guarde antes de cambiarlo."
 }

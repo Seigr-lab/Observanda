@@ -1,5 +1,4 @@
 import {researchId} from './research-reference.js';
-import {readRecordCheckpoint} from './record-draft-transfer.js';
 import {recordDraftPreview} from './record-draft-preview.js';
 import {recordDraftRecords} from './record-draft-records.js';
 import {revisionId} from './revision-model.js';
@@ -9,7 +8,7 @@ const text=(key,args)=>t('recordDrafts',key,args);
 const validItem=item=>item&&researchId(item.id)&&revisionId(item.revision)&&typeof item.updatedAt==='string'&&Number.isFinite(Date.parse(item.updatedAt))&&Number.isSafeInteger(item.count)&&item.count>0&&Array.isArray(item.titles)&&item.titles.length===Math.min(item.count,3)&&item.titles.every(title=>typeof title==='string'&&title.length<=160);
 // Discovery owns one page. No checkpoint body is loaded until Review draft.
 // openDraft names the new record being written on the record page: it is open, not waiting for recovery.
-export function recordDraftList({api,esc,onChange,recover,recoverWriting,recoverValue,recoverDocument,checkpoint,notify,openDraft=()=>null}){
+export function recordDraftList({api,esc,onChange,recoverWriting,recoverValue,recoverDocument,notify,openDraft=()=>null}){
  const preview=recordDraftPreview({api,esc}),selectRecord=recordDraftRecords({api,esc});
  let owner=null,generation=0,controller=null,page=null,cursor=null,available=false,failed=false,busy=false,focusBefore=null;
  const dialog=document.createElement('dialog');dialog.className='record-recovery record-draft-list';dialog.setAttribute('aria-labelledby','draft-list-title');document.body.append(dialog);
@@ -18,8 +17,8 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
  function abort(){controller?.abort();controller=null;}
  function close(){const wasOpen=dialog.open;abort();dialog.close();dialog.innerHTML='';page=null;if(wasOpen)(focusBefore?.isConnected?focusBefore:document.querySelector('[data-record-drafts]'))?.focus({preventScroll:true});}
  dialog.oncancel=event=>{event.preventDefault();close();};
- function banner(issue=''){
-  return '<div id="record-draft-banner" class="record-draft-banner"'+(available||failed||issue?'':' hidden')+'><p>'+esc(issue||text(failed?'checkFailed':'available'))+'</p><button class="button" data-record-drafts>'+esc(text('reviewDrafts'))+'</button></div>';
+ function banner(){
+  return '<div id="record-draft-banner" class="record-draft-banner"'+(available||failed?'':' hidden')+'><p>'+esc(text(failed?'checkFailed':'available'))+'</p><button class="button" data-record-drafts>'+esc(text('reviewDrafts'))+'</button></div>';
  }
  function frame(body,controls=''){
   dialog.innerHTML='<h2 id="draft-list-title" tabindex="-1">'+esc(text('title'))+'</h2><p>'+esc(text('description'))+'</p><div class="record-draft-rows">'+body+'</div>'+controls+'<p data-draft-error role="alert" hidden></p><div class="dialog-actions">'+button('close','close')+'</div>';
@@ -35,11 +34,11 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
  async function load(next=null,{preview=false,focus=null}={}){
   if(!owner)return;abort();const epoch=generation,workspaceId=owner.workspaceId,request=new AbortController();controller=request;
   if(!preview){cursor=next;frame('<p role="status">'+esc(text('loading'))+'</p>');}
-  const limit=preview?1:10;
+  const limit=preview?1:10,excluded=openDraft();
   try{
-   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:openDraft()??owner.id,limit},{adopt:false,signal:request.signal});
+   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:excluded,limit},{adopt:false,signal:request.signal});
    if(request.signal.aborted||!current(epoch,workspaceId))return;
-   if(result?.workspaceId!==workspaceId||!Array.isArray(result.drafts)||result.drafts.length>limit||!result.drafts.every(validItem)||new Set(result.drafts.map(d=>d.id)).size!==result.drafts.length||result.drafts.some(d=>d.id===owner.id)||![result.previousCursor,result.nextCursor].every(v=>v===null||typeof v==='string'&&v.length>0&&v.length<=4096))throw Error(text('invalidPage'));
+   if(result?.workspaceId!==workspaceId||!Array.isArray(result.drafts)||result.drafts.length>limit||!result.drafts.every(validItem)||new Set(result.drafts.map(d=>d.id)).size!==result.drafts.length||result.drafts.some(d=>d.id===excluded)||![result.previousCursor,result.nextCursor].every(v=>v===null||typeof v==='string'&&v.length>0&&v.length<=4096))throw Error(text('invalidPage'));
    available=Boolean(result.drafts.length||result.nextCursor||result.previousCursor);failed=false;
    if(!preview){
     page=result;renderPage();
@@ -68,7 +67,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   }
  }
  dialog.addEventListener('toggle',event=>{const details=event.target;if(details.open&&details.matches?.('details[data-recovery-details]'))void loadDetails(details);},true);
- async function reset(writer){generation++;close();owner=writer?{id:writer.id,workspaceId:writer.workspaceId}:null;available=false;failed=false;busy=false;onChange();if(owner)await load(null,{preview:true});}
+ async function reset(workspaceId){generation++;close();owner=workspaceId?{workspaceId}:null;available=false;failed=false;busy=false;onChange();if(owner)await load(null,{preview:true});}
  async function refresh(){if(dialog.open)return load();return load(null,{preview:true});}
  async function show(){
   if(!owner)return;focusBefore=document.activeElement;frame('<p role="status">'+esc(text('loading'))+'</p>');
@@ -90,7 +89,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
     await api('/api/research/drafts/remove',{id:item.id,workspaceId,expectedRevision:item.revision},{adopt:false,signal:request.signal});
     if(!request.signal.aborted&&current(epoch,workspaceId)&&dialog.open)await load();return;
    }
-   const options={adopt:false,signal:request.signal};let header=await api('/api/research/drafts/read',{id:item.id,...(recoverDocument?{summary:true}:{})},options);
+   const options={adopt:false,signal:request.signal};let header=await api('/api/research/drafts/read',{id:item.id,summary:true},options);
    if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
    if(header?.revision!==item.revision||header.draft?.workspaceId!==workspaceId)throw Error(text('invalidPage'));
    if([5,6].includes(header.draft.formatVersion)){
@@ -99,7 +98,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
     if(current(epoch,workspaceId))await refresh();return;
    }
    // Every record checkpoint is reviewed through its plan, so the preview shows the edits written into it.
-   if([1,2,3,4].includes(header.draft.formatVersion)&&recoverDocument){
+   if([1,2,3,4].includes(header.draft.formatVersion)){
     const position=header.draft.count>1?await selectRecord(header,options):0;if(position===null)return;
     if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
     const reviewPlan=await api('/api/research/drafts/review/prepare',{id:item.id,workspaceId,expectedRevision:header.revision,position},options);
@@ -110,19 +109,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
     if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
     controller=null;close();await recoverDocument(header,options);if(current(epoch,workspaceId))await refresh();return;
    }
-   if(header.draft.formatVersion===4&&!await preview(header,options))return;
-   const result=await readRecordCheckpoint(api,item.id,options,header);
-   if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
-   if(result?.draft?.id!==item.id||result.draft.workspaceId!==workspaceId||!revisionId(result.revision))throw Error(text('invalidPage'));
-   controller=null;close();
-   const accepted=await recover(result.draft);if(!current(epoch,workspaceId))return;
-   if(!accepted){await show();return;}
-   if(await checkpoint()){
-    if(!current(epoch,workspaceId))return;
-    try{await api('/api/research/drafts/remove',{id:item.id,workspaceId,expectedRevision:result.revision},{adopt:false});}
-    catch{if(current(epoch,workspaceId))notify(text('recoveredCopy'),true);}
-   }
-   if(current(epoch,workspaceId))await refresh();
+   throw Error(text('readFailed'));
   }catch(error){
    if(request.signal.aborted||!current(epoch,workspaceId))return;
    if(error.code==='RECORD_SELECTION_CANCELLED'){await show();return;}

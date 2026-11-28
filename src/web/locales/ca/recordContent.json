@@ -1,7 +1,4 @@
 {
-  "figuresLoading": "S'està obrint l'editor de figures...",
-  "figuresLoadFailed": "No s'ha pogut carregar l'editor de figures. Torna-ho a provar abans de guardar aquest registre. L'esborrany continua aquí.",
-  "figuresRetry": "Torna a carregar l'editor de figures",
   "locationTransferChoose": "Tria un llibre de laboratori dins d'un projecte",
   "locationTransferChecking": "S'està comprovant si hi ha un trasllat de registre inacabat...",
   "locationTransferCheck": "Torna a comprovar aquest trasllat",

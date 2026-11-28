@@ -20,7 +20,6 @@
   "removing": "Eliminando el registro",
   "removed": "Registro eliminado. Se conservan las revisiones guardadas y las evidencias.",
   "operationBusy": "Espera a que termine la operación de evidencias antes de eliminar este registro.",
-  "confirmRemove": "¿Eliminar este registro de su cuaderno de laboratorio? Se conservan las revisiones guardadas y las evidencias. Se descartarán los cambios sin guardar de este registro.",
   "removeConflict": "Este registro ha cambiado en otra ventana. No se ha eliminado. Recarga el registro y revisa la versión guardada antes de eliminarlo.",
   "invalidRemoval": "La respuesta de eliminación estaba incompleta. Reintenta para comprobar si se ha eliminado el registro.",
   "otherDrafts": "Guarda o descarta los cambios de otros registros o de la configuración antes de eliminar este registro.",

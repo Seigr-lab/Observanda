@@ -26,7 +26,7 @@ export function analysisFormView({collection,esc,field}){
 export function analysisMethodPicker({root,state,api,call,esc,field,guard}){
  let selected=null,choosing=false,disposed=false;
  const context=state.storage?.contextId,recordId=state.selected,page=state.page,research=researchContext(state);
- const active=()=>!disposed&&root.isConnected&&['editor','record-reader'].includes(page)&&state.page===page&&researchContext(state)===research&&state.storage?.contextId===context&&state.selected===recordId;
+ const active=()=>!disposed&&root.isConnected&&page==='record-reader'&&state.page===page&&researchContext(state)===research&&state.storage?.contextId===context&&state.selected===recordId;
  const picker=researchTargetPicker({state,api,esc,field,active,excludeId:()=>null});
  const host=root.querySelector('[data-method-picker]'),choose=root.querySelector('[data-method-choose]'),remove=root.querySelector('[data-method-remove]'),draft=root.querySelector('#material-record-source');
  function collapse(){picker.stop();choosing=false;host.replaceChildren();host.hidden=true;choose.disabled=false;choose.focus();}

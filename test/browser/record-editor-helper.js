@@ -16,11 +16,8 @@ export async function revealInEditor(page,control,area){
  const button=page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:area,exact:true});
  // A record opened for reading shows Edit record instead of the editing navigation.
  const edit=page.locator('main').getByRole('button',{name:'Edit record',exact:true});
- // A record being written for the first time keeps its evidence in a collapsed group instead.
- const draft=area==='Evidence and results'?page.locator('details[data-disclosure="draft-evidence"]:not([open]) > summary'):null;
- await expect((draft?control.or(button).or(edit).or(draft):control.or(button).or(edit)).first()).toBeVisible();
+ await expect(control.or(button).or(edit).first()).toBeVisible();
  if(await control.isVisible())return control;
- if(draft&&await draft.isVisible()){await draft.click();await expect(control).toBeVisible();return control;}
  if(!await button.isVisible()){await edit.click();await expect(button).toBeVisible();}
  if(!await control.isVisible())await button.click();
  return control;

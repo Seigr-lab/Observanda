@@ -86,8 +86,6 @@
   "chartType": "Chart type",
   "transformation": "Transformation",
   "calculateRetain": "Calculate & retain figure",
-  "replaceFigureConfirm": "Replace this record figure with the retained calculation? Earlier analysis revisions remain available.",
-  "figureAdded": "Figure added to the draft. Review and save the record.",
   "pauseImport": "Pause or finish the import before leaving.",
   "saveBeforeEvidence": "Save the record before opening evidence and analysis.",
   "saveRun": "Save this run first.",

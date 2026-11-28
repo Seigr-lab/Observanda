@@ -16,7 +16,7 @@ import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
-import {writeRecordCheckpoint,readRecordCheckpoint} from '../src/web/record-draft-transfer.js';
+import {writeDraftTransfer,readDraftTransfer} from './record-draft-transfer-helper.js';
 import {RECORD_DRAFT_CHUNK_BYTES as SIZE} from '../src/web/record-draft-protocol.js';
 import {ResearchDraftContent} from '../src/research-draft-content.js';
 import {RecordValueTree} from '../src/record-value-tree.js';
@@ -40,7 +40,7 @@ async function fixture(t){
 
 test('large checkpoints use bounded authenticated requests, preserve base history and restore through both backup modes',async t=>{
  const f=await fixture(t),calls=[],api=apiFor(f.workspace,(route,data)=>calls.push({route,bytes:Buffer.byteLength(JSON.stringify(data))})),drafts=new ResearchDrafts(f.workspace);
- const start=performance.now(),saved=await writeRecordCheckpoint(api,f.command);assert.equal((await writeRecordCheckpoint(api,f.command)).revision,saved.revision);
+ const start=performance.now(),saved=await writeDraftTransfer(api,f.command);assert.equal((await writeDraftTransfer(api,f.command)).revision,saved.revision);
  const header=await drafts.read(f.command.id,{header:true});assert.equal(header.draft.formatVersion,4);assert.ok(header.draft.content.bytes>5*1024*1024);
  assert.ok(Buffer.byteLength(JSON.stringify(header))<2048);assert.ok(calls.every(c=>c.bytes<2*SIZE));
  const original=ResearchCatalogue.prototype.record,reads=[];t.mock.method(ResearchCatalogue.prototype,'record',function(...args){reads.push(args[0]);return original.apply(this,args);});
@@ -50,18 +50,18 @@ test('large checkpoints use bounded authenticated requests, preserve base histor
  const last=await content.read({id:f.command.id,workspaceId:f.book.id,expectedRevision:saved.revision,offset:40});
  assert.deepEqual(last.sections.values,f.command.changes[0].record.sections.slice(40));assert.equal(last.sections.total,42);assert.equal(last.body,null);assert.deepEqual(selected,['Observation 40','Observation 41']);assert.deepEqual(reads,[]);
  await assert.rejects(content.read({id:f.command.id,workspaceId:f.book.id,expectedRevision:'0'.repeat(64),offset:40}),{code:'DRAFT_CHANGED'});
- const recovered=await readRecordCheckpoint(api,f.command.id);assert.deepEqual(recovered.draft.changes[0].record,f.command.changes[0].record);assert.deepEqual(recovered.draft.changes[0].base,f.base);assert.deepEqual(reads,[f.base.id]);t.mock.restoreAll();
+ const recovered=await readDraftTransfer(api,f.command.id);assert.deepEqual(recovered.draft.changes[0].record,f.command.changes[0].record);assert.deepEqual(recovered.draft.changes[0].base,f.base);assert.deepEqual(reads,[f.base.id]);t.mock.restoreAll();
  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','record blocks recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const ws of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){
-  const result=await readRecordCheckpoint(apiFor(ws),f.command.id);assert.equal(result.revision,saved.revision);assert.deepEqual(result.draft.changes,recovered.draft.changes);
+  const result=await readDraftTransfer(apiFor(ws),f.command.id);assert.equal(result.revision,saved.revision);assert.deepEqual(result.draft.changes,recovered.draft.changes);
   assert.deepEqual((await new ResearchDraftContent(ws).read({id:f.command.id,workspaceId:f.book.id,expectedRevision:saved.revision,offset:40})).sections,last.sections);
  }
  t.diagnostic(JSON.stringify({draftBytes:header.draft.content.bytes,chunks:header.draft.content.root.count,maxRequestBytes:Math.max(...calls.map(c=>c.bytes)),recoveryAndBackupMs:Math.round(performance.now()-start)}));
 });
 
 test('checkpoint verification rejects a separately valid field tree that disagrees with its retained transport',async t=>{
- const f=await fixture(t);await writeRecordCheckpoint(apiFor(f.workspace),f.command);
+ const f=await fixture(t);await writeDraftTransfer(apiFor(f.workspace),f.command);
  const {draft}=await new ResearchDrafts(f.workspace).read(f.command.id,{header:true});
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   await verifyRetainedDraft(store,draft);
@@ -77,19 +77,19 @@ test('checkpoint verification rejects a separately valid field tree that disagre
 
 test('interrupted and failed replacements preserve the last checkpoint; stale, incomplete and corrupted blocks are rejected',async t=>{
  const f=await fixture(t),drafts=new ResearchDrafts(f.workspace),transfer=new ResearchDraftTransfer(f.workspace),api=apiFor(f.workspace);
- const saved=await writeRecordCheckpoint(api,f.command),next={...f.command,expectedRevision:saved.revision,changes:[{...f.command.changes[0],record:{...f.command.changes[0].record,title:'Later observations'}}]};
+ const saved=await writeDraftTransfer(api,f.command),next={...f.command,expectedRevision:saved.revision,changes:[{...f.command.changes[0],record:{...f.command.changes[0].record,title:'Later observations'}}]};
  let stopped=false;
- await assert.rejects(writeRecordCheckpoint(async(route,data)=>{const result=await api(route,data);if(route.endsWith('/part')&&data.index===2&&!stopped){stopped=true;throw Error('Lost response');}return result;},next),/Lost response/);
+ await assert.rejects(writeDraftTransfer(async(route,data)=>{const result=await api(route,data);if(route.endsWith('/part')&&data.index===2&&!stopped){stopped=true;throw Error('Lost response');}return result;},next),/Lost response/);
  assert.equal((await drafts.read(f.command.id,{header:true})).revision,saved.revision);
  const manifest=JSON.parse(await f.workspace.readMetadata('.observanda/record-draft-transfers/'+f.command.id+'.json',8192));
  assert.equal((await transfer.start({id:next.id,workspaceId:next.workspaceId,expectedRevision:next.expectedRevision,bytes:manifest.content.bytes,sha256:manifest.content.sha256})).receivedChunks,3);
  await assert.rejects(transfer.finish({id:next.id,workspaceId:next.workspaceId,transferHash:manifest.content.sha256}),{code:'INVALID'});
  const put=ResearchCatalogue.prototype.putObject;t.mock.method(ResearchCatalogue.prototype,'putObject',function(id,...args){if(id.startsWith('metadata:.observanda/draft-list/'))throw Object.assign(Error('Synthetic disk full'),{code:'ENOSPC'});return put.call(this,id,...args);});
- await assert.rejects(writeRecordCheckpoint(api,next),{code:'ENOSPC'});t.mock.restoreAll();assert.equal((await drafts.read(next.id,{header:true})).revision,saved.revision);
+ await assert.rejects(writeDraftTransfer(api,next),{code:'ENOSPC'});t.mock.restoreAll();assert.equal((await drafts.read(next.id,{header:true})).revision,saved.revision);
  const controller=new AbortController();controller.abort();await assert.rejects(transfer.finish({id:next.id,workspaceId:next.workspaceId,transferHash:manifest.content.sha256},{signal:controller.signal}),{name:'AbortError'});
- const resumed=await writeRecordCheckpoint(apiFor(new Workspace(f.workspace.root,f.vault)),next);assert.notEqual(resumed.revision,saved.revision);
+ const resumed=await writeDraftTransfer(apiFor(new Workspace(f.workspace.root,f.vault)),next);assert.notEqual(resumed.revision,saved.revision);
  await assert.rejects(transfer.readPart({id:next.id,workspaceId:next.workspaceId,expectedRevision:saved.revision,index:0}),{code:'DRAFT_CHANGED'});
- await assert.rejects(writeRecordCheckpoint(api,f.command),{code:'DRAFT_CHANGED'});
+ await assert.rejects(writeDraftTransfer(api,f.command),{code:'DRAFT_CHANGED'});
  const header=await drafts.read(next.id,{header:true}),chunks=new RecordDraftChunks(f.workspace,next.id);
  assert.equal((await f.workspace.listMetadata(chunks.prefix+'/chunks')).length,header.draft.content.root.count);
  assert.equal((await f.workspace.listMetadata(chunks.prefix+'/nodes')).length,header.draft.content.root.count);

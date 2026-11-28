@@ -4,7 +4,7 @@ import {t} from './i18n/index.js';
 const tr=key=>t('moduleConnected',key);
 export function moduleLinks({state,api,esc}){
  let pages=null,key=null;
- const active=()=>['editor','record-reader'].includes(state.page)&&!state.access?.locked&&!state.storageUnavailable;
+ const active=()=>state.page==='record-reader'&&!state.access?.locked&&!state.storageUnavailable;
  const selectedTypes=()=>[...new Set(FEATURE_MODULES.filter(m=>enabledModule(state.dashboardSettings,m.id)).flatMap(m=>m.entityTypes??[]))];
  function clear(){pages?.clear();pages=null;key=null;}
  function paint(){

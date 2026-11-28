@@ -31,36 +31,19 @@ test('built-in type presentation follows language without altering shared or cus
  }
 });
 
-test('record contributor and link controls translate while escaping authored values once',async context=>{
+// Contributors and links are edited in the record page's value dialogs; the links list is read here.
+test('record links translate while escaping authored values once',async context=>{
  context.after(()=>activateLanguage('en'));
  const authored='<img src=x onerror="fail()"> & 105₆';
- const entry={id:recordId,type:'note',contributors:[{id:otherId,name:authored,role:authored}],relations:[{id:otherId,type:authored,label:authored,target:{workspaceId:otherId,kind:'record',id:recordId,revision:'a'.repeat(64)}}]};
+ const entry={id:recordId,type:'note',contributors:[],relations:[{id:otherId,type:authored,label:authored,target:{workspaceId:otherId,kind:'record',id:recordId,revision:'a'.repeat(64)}}]};
  const before=structuredClone(entry),ui=uiFor(entry);
  for(const locale of locales){
   await load(locale);activateLanguage(locale);
-  const people=ui.contributors(entry),links=ui.relations(entry);
-  assert.ok(people.includes('aria-label="'+esc(t('recordEditors','contributors'))+'"'));
-  assert.ok(people.includes('aria-label="'+esc(t('recordEditors','contributorName',{number:1}))+'"'));
-  assert.ok(people.includes('value="'+esc(authored)+'"'));
+  const links=ui.relations(entry);
   assert.ok(links.includes(esc(t('recordLinks','revision',{revision:'a'.repeat(10)}))));
-  assert.ok(links.includes('aria-label="'+esc(t('recordEditors','removeLink',{label:authored}))+'"'));
-  assert.ok(links.includes(esc(authored)));assert.ok(!links.includes('&amp;lt;'));
-  assert.ok(!people.includes('<img'));assert.ok(!links.includes('<img'));
+  assert.ok(links.includes(esc(t('recordLinks','anotherWorkspace'))));
+  assert.ok(links.includes(esc(authored)));assert.ok(!links.includes('&amp;lt;'));assert.ok(!links.includes('<img'));
   assert.deepEqual(entry,before);
- }
-});
-
-test('record validation translates workflow and contributor errors without changing field values',async context=>{
- const previous=globalThis.document;context.after(()=>{globalThis.document=previous;activateLanguage('en');});
- const input={value:'',setCustomValidity(value){this.validationMessage=value;},reportValidity(){return !this.validationMessage;}};
- globalThis.document={querySelectorAll:selector=>selector==='[data-record-field]'?[]:[input]};
- for(const locale of locales){
-  await load(locale);activateLanguage(locale);
-  const entry={id:recordId,type:'run',contributors:[],relations:[]},ui=uiFor(entry);
-  assert.throws(()=>ui.validate(),{message:t('recordEditors','contributorNamesRequired')});
-  assert.equal(input.validationMessage,t('recordEditors','contributorNameRequired'));assert.equal(input.value,'');
-  entry.relations.push({role:'uses-method',target:{workspaceId,kind:'record',id:recordId}});
-  assert.throws(()=>ui.validate(),{message:t('recordEditors','workflowOtherRecord')});
  }
 });
 

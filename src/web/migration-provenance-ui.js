@@ -3,7 +3,7 @@ import {bookSourceMap} from './book-source-map.js';
 export function migrationProvenanceUI({state,api,esc}){
  const text=(key,values)=>esc(t('migrationImport',key,values)),dialog=document.createElement('dialog');dialog.className='provenance-dialog';dialog.setAttribute('aria-labelledby','provenance-title');document.body.append(dialog);
  let owner=null,controller=null,generation=0,page=null,trail=[],after=null,pending=null,busy=false,error='',prior=null;
- const identity=()=>['editor','record-reader'].includes(state.page)&&!state.access?.locked&&!state.storageUnavailable&&state.book&&state.selected?JSON.stringify([state.storage?.contextId,state.book.id,state.selected,state.page]):null;
+ const identity=()=>state.page==='record-reader'&&!state.access?.locked&&!state.storageUnavailable&&state.book&&state.selected?JSON.stringify([state.storage?.contextId,state.book.id,state.selected,state.page]):null;
  const current=token=>dialog.open&&owner===identity()&&generation===token;
  const button=(key,action,disabled=false)=>'<button type="button" class="button" data-provenance-action="'+action+'"'+(disabled?' disabled':'')+'>'+text(key)+'</button>';
  function stop(){controller?.abort();controller=null;generation++;owner=null;busy=false;pending=null;page=null;trail=[];after=null;error='';}

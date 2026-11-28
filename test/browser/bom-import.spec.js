@@ -33,7 +33,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
   await main.getByRole('switch',{name:'Enable Inventory',exact:true}).check();
   await page.goto(app.origin+'/#/records/'+book.entries[0].id);
-  await expect(main.locator('[data-create-type="bom"]')).toBeAttached();const evidence=main.locator('[data-disclosure="record-evidence"], [data-disclosure="draft-evidence"]');if(await evidence.count()&&await evidence.getAttribute('open')===null)await evidence.locator(':scope > summary').click();
+  await expect(main.locator('[data-create-type="bom"]')).toBeAttached();const evidence=main.locator('[data-disclosure="record-evidence"]');if(await evidence.count()&&await evidence.getAttribute('open')===null)await evidence.locator(':scope > summary').click();
   await main.getByRole('button',{name:'New bill of materials',exact:true}).click();
   await main.getByLabel('BOM title',{exact:true}).fill('Board A');
   await main.getByRole('button',{name:'Import retained BOM table',exact:true}).click();

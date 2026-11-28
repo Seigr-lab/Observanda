@@ -145,8 +145,6 @@
   "authored":"Explicitly authored",
   "resultSource":"Supporting analysis revision",
   "resultHelp":"Identify authored statements explicitly or pin a retained analysis. Include sources and limitations. These statements follow the record's website selection; private analysis files and source data are not automatically shared.",
-  "resultSave":"Add to record draft",
-  "resultSaved":"Result statement added to the draft. Save the record to retain it.",
   "sourcePrivate":"Supporting analysis retained privately; source files are not included in this edition.",
   "reviewHelp":"For each affected result, record why the retained result remains applicable to this edition. To omit or replace it, edit the record and prepare a new edition. This decision is pinned to this edition and its observed dependency revisions.",
   "disposition":"Applicability decision and limitations",

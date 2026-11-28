@@ -11,6 +11,7 @@ import {WorkspaceDatabases} from '../../src/workspace-databases.js';
 import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {clearVault} from '../../src/encryption.js';
 import {builtAssets} from './built-assets-helper.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord} from './record-editing-helper.js';
 
 test('first project opens without waiting for directory refresh and leads to a blank book and saved note',async({page})=>{
  test.setTimeout(180000);
@@ -27,6 +28,6 @@ test('first project opens without waiting for directory refresh and leads to a b
   await expect(dialog).not.toBeVisible();await expect(page.locator('main h1')).toHaveText('New observations');
   release();await expect(page.locator('#workspace-navigation')).toContainText('New observations');
   await page.locator('main [data-action=new-notebook]').click();await dialog.locator('[name=title]').fill('Field notes');await dialog.locator('[data-notebook-template]').selectOption('blank');await dialog.locator('[type=submit]').click();await expect(page.locator('main h1')).toHaveText('Field notes',{timeout:60000});
-  await page.locator('main [data-action=new-entry]').click();await dialog.locator('[data-action=configuration-type-general][data-type=note]').click();await page.getByLabel('Record title',{exact:true}).fill('First observation');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('First observation',{timeout:60000});await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('First observation',{timeout:30000});expect(errors).toEqual([]);
+  await page.locator('main [data-action=new-entry]').click();await dialog.locator('[data-action=configuration-type-general][data-type=note]').click();await newRecordOpened(page);await setNewRecordTitle(page,'First observation');await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText('First observation',{timeout:60000});await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('First observation',{timeout:30000});expect(errors).toEqual([]);
  }catch(error){await test.info().attach('creation-state',{body:JSON.stringify({error:error.message,errors,notice:await page.locator('#notice').count()?await page.locator('#notice').textContent():null,invalid:await page.locator('#dialog :invalid').evaluateAll(nodes=>nodes.map(node=>({name:node.name,message:node.validationMessage})))},null,2),contentType:'application/json'});throw error;}finally{release();await page.close();await app?.close();await runtime.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-navigation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

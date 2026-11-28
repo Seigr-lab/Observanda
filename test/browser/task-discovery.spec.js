@@ -7,6 +7,7 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {builtAssets} from './built-assets-helper.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord} from './record-editing-helper.js';
 
 async function fixture(run){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-task-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
@@ -30,10 +31,11 @@ test('contextual help keeps an unfinished record mounted and restores focus',asy
  test.setTimeout(120000);page.setDefaultTimeout(15000);
  await fixture(async(app,book)=>{
   await page.goto(app.url);await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  const title=page.getByLabel('Record title',{exact:true});await title.fill('An unfinished observation');const help=page.getByRole('button',{name:'Help with this task',exact:true});await help.click();
-  const dialog=page.getByRole('dialog',{name:'Help with this task',exact:true});await expect(dialog.locator('article')).toBeVisible();await expect(title).toHaveValue('An unfinished observation');await expect(page.locator('#leave-dialog')).not.toBeVisible();
-  await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(help).toBeFocused();await expect(title).toHaveValue('An unfinished observation');
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('An unfinished observation');
+  // The new record is written on the record page and stays a draft, open, while help is read.
+  await newRecordOpened(page);await setNewRecordTitle(page,'An unfinished observation');const title=page.locator('main h1').first(),help=page.getByRole('button',{name:'Help with this task',exact:true});await help.click();
+  const dialog=page.getByRole('dialog',{name:'Help with this task',exact:true});await expect(dialog.locator('article')).toBeVisible();await expect(title).toHaveText('An unfinished observation');await expect(page.locator('#leave-dialog')).not.toBeVisible();
+  await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(help).toBeFocused();await expect(title).toHaveText('An unfinished observation');await expect(page.getByRole('button',{name:'Save record',exact:true})).toBeVisible();
+  await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText('An unfinished observation');
   for(const width of [1440,390,320]){await page.setViewportSize({width,height:1000});await page.screenshot({path:test.info().outputPath('record-'+width+'.png'),fullPage:true});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
  });
 });

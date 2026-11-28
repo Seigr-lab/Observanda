@@ -55,19 +55,13 @@ test('navigation has one project tree; history belongs only to the open record a
   await dialog.getByRole('button',{name:'Restore this version',exact:true}).click();
   await dialog.getByRole('button',{name:'Restore record',exact:true}).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Initial listening session');
+  await expect(page.locator('.record-editing h1')).toHaveText('Initial listening session');
   const restored=(await ws.read()).book;expect(restored.entries.find(e=>e.id===other).title).toBe('Another record stays current');expect(restored.entries[0].share).toBe(false);
   await page.getByRole('button',{name:'History',exact:true}).click();
   await expect(dialog.locator('.record-history-list li')).toHaveCount(3);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
-  // Unsaved edits must never be silently discarded by opening history.
-  await page.getByLabel('Record title',{exact:true}).fill('Keep this draft');
-  await page.getByRole('button',{name:'History',exact:true}).click();
-  await expect(page.locator('#leave-dialog')).toBeVisible();
-  await page.locator('#leave-dialog').getByRole('button',{name:'Stay here',exact:true}).click();
-  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Keep this draft');
-  await page.getByRole('button',{name:'History',exact:true}).click();
-  await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();
+  // A saved record's page holds no unsaved edits (each is written from its own dialog), so History opens directly.
+  await page.getByRole('button',{name:'History',exact:true}).click();await expect(page.locator('#leave-dialog')).not.toBeVisible();
   await expect(dialog.getByRole('heading',{name:'Record history',exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Review version',exact:true}).first().click();
   // A later save of this record is rejected instead of overwritten.

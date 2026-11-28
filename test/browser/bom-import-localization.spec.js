@@ -28,7 +28,7 @@ test('BOM import localizes server and preview diagnostics while retaining source
    const messages=await catalogue(locale,'bomImport'),editors=await catalogue(locale,'moduleEditors'),parser=await catalogue(locale,'figureDiagnostics');
    await page.evaluate(()=>location.hash='#/preferences/help');await page.locator('[data-language-choice]').selectOption(locale);await expect(page.locator('.preferences-heading')).toHaveAttribute('lang',locale);
    await page.evaluate(id=>location.hash='#/records/'+id,book.entries[0].id);
-   await expect(main.locator('[data-create-type="bom"]')).toBeAttached();const evidence=main.locator('[data-disclosure="record-evidence"], [data-disclosure="draft-evidence"]');if(await evidence.count()&&await evidence.getAttribute('open')===null)await evidence.locator(':scope > summary').click();
+   await expect(main.locator('[data-create-type="bom"]')).toBeAttached();const evidence=main.locator('[data-disclosure="record-evidence"]');if(await evidence.count()&&await evidence.getAttribute('open')===null)await evidence.locator(':scope > summary').click();
    await main.locator('[data-create-type="bom"]').click();await main.locator('[data-command="bom-import"]').click();
    const source=dialog.locator('#bom-source-select');await expect(source).toBeEnabled();
    await source.selectOption(await source.locator('option').filter({hasText:'Malformed.csv'}).getAttribute('value'));

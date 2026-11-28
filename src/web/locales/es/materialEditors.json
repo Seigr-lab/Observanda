@@ -86,8 +86,6 @@
   "chartType": "Tipo de gráfico",
   "transformation": "Transformación",
   "calculateRetain": "Calcular y conservar la figura",
-  "replaceFigureConfirm": "¿Sustituir esta figura de la entrada por el cálculo conservado? Las revisiones anteriores del análisis siguen disponibles.",
-  "figureAdded": "Se ha añadido la figura al borrador. Revisa y guarda la entrada.",
   "pauseImport": "Pausa la importación o termínala antes de salir.",
   "saveBeforeEvidence": "Guarda la entrada antes de abrir las evidencias y el análisis.",
   "saveRun": "Guarda primero esta ejecución.",

@@ -16,7 +16,8 @@ import {proseReferences} from '../src/web/prose-model.js';
 import {createFigure,parseFigureCSV,figureCSV,figureIssues,xValue} from '../src/web/figure-model.js';
 import {renderFigure} from '../src/web/figure-renderer.js';
 import {validateTask} from '../src/modules/planning.js';
-import {reconcileRecords} from '../src/web/record-merge.js';
+import {mergeRecords} from './record-merge-helper.js';
+import {recordConflictLabel} from '../src/web/record-recovery-messages.js';
 const link=(text,target)=>({type:'text',text,marks:[{type:'strong'},{type:'link',attrs:{href:researchReference(target),target:'_self',title:'',nofollow:false}}]});
 test('rich research links in a website copy keep only shared labels and a record link the website resolves',async()=>{
  const book=sampleNotebook(),record=book.entries[0],shared=book.entries[1],secret=book.entries[2];shared.share=true;secret.share=false;
@@ -50,11 +51,11 @@ test('numeric spacing, gaps, uncertainty and CSV round trips use the same figure
  f.series[0].points[0].y=0;assert.ok(figureIssues(f).some(s=>s.includes('positive')));f.series[0].points[0].y=1;
  assert.throws(()=>parseFigureCSV('Time,Value\n0,not-a-number','number'));
 });
-test('rich prose shares module validation, and competing documents are explicit conflicts',()=>{
+test('rich prose shares module validation, and competing documents are explicit conflicts',async()=>{
  const book=sampleNotebook(),base=book.entries[0],mine=structuredClone(base),stored=structuredClone(base);
  mine.body=plainRichText('My formatted edit');stored.body=plainRichText('Other author');
  const task={title:'Prepare run',description:mine.body,status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]};
  validateTask(task);assert.throws(()=>validateTask({...task,description:{type:'script',text:'invalid'}}));
- const merged=reconcileRecords([{base,record:mine}],[stored,...book.entries.slice(1)]);
- assert.ok(merged.conflicts.some(c=>c.label==='Summary / context'));
+ const merged=await mergeRecords(base,mine,stored);
+ assert.ok(merged.conflicts.some(c=>recordConflictLabel(c.path[0])==='Summary / context'&&c.path.length===1));
 });

@@ -14,7 +14,6 @@ import {WorkspaceReader} from '../src/workspace-reader.js';
 import {RecordHistory} from '../src/record-history.js';
 import {recordSelectionReader,validateRecordReceipt} from '../src/web/record-selection-reader.js';
 import {validateRecordScope} from '../src/web/record-scope.js';
-import {recordCreationBase} from '../src/web/record-creation.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
 import {largeRecordBook} from './record-capacity-fixture.js';
 
@@ -125,16 +124,6 @@ test('removal checks revisions, is atomic and keeps incoming references',async t
  await f.records.remove(command);const after=(await f.workspace.read()).book;
  assert.equal(after.entries.some(r=>r.id===id),false);
  assert.deepEqual(after.entries.find(r=>r.id===other),base.book.entries[1]);
-});
-
-test('creation bases retain only an absent draft identity and no existing record bodies',()=>{
- const book=upgradeNotebook(sampleNotebook()),id=randomUUID(),etag='a'.repeat(64),recordRevisions=Object.fromEntries(book.entries.map(r=>[r.id,recordRevision(r)]));
- const full={book,etag,recordRevisions},created=recordCreationBase(full,id);
- validateRecordScope(created,{workspaceId:book.id,ids:[id]});assert.deepEqual(created.book.entries,[]);assert.deepEqual(created.recordRevisions,{});
- const outline={book:{...book,entries:[]},etag,outline:true,total:created.recordScope.total,notebookCounts:created.recordScope.notebookCounts};
- assert.deepEqual(recordCreationBase(outline,id),created);
- const selected={...full,book:{...book,entries:[book.entries[0]]},recordScope:{ids:[book.entries[0].id],missing:[],notebookCounts:created.recordScope.notebookCounts,total:book.entries.length}};
- assert.deepEqual(recordCreationBase(selected,id),created);
 });
 
 test('batched selections and save acknowledgements stay scoped across growth and concurrent changes',async t=>{

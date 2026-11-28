@@ -110,7 +110,6 @@
   "invalid": "Completa los campos y referencias obligatorios. Utiliza un hash exacto, identifica las condiciones heredadas y proporciona un motivo para las enmiendas y evaluaciones.",
   "changed": "El registro o el espacio de trabajo han cambiado. Vuelve a abrir este formulario desde el registro actual.",
   "conflict": "Estas revisiones de intentos entran en conflicto. Los hechos guardados no se pueden sustituir. Revisa ambas versiones, conserva los hechos guardados y añade después una enmienda o corrección. Cancelar conserva tus modificaciones sin terminar.",
-  "wait": "Termina de seleccionar la referencia antes de añadir este elemento.",
   "privateReference": "Referencia de origen privada o no disponible",
   "retained": "Revisión exacta {revision}",
   "supersedes": "Corrige / sustituye {id}",

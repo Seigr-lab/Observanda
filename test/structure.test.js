@@ -35,17 +35,17 @@ test('notebook moves keep content and stable links but require renewed website s
 test('navigation resolves stable project, notebook and record context and rejects missing locations',()=>{
   const b=sampleNotebook(),n=b.notebooks[0],e=b.entries[0];
   for(const hash of ['#/workspace','#/projects/'+n.projectId,'#/projects/'+n.projectId+'/records','#/notebooks/'+n.id,'#/notebooks/'+n.id+'/read','#/records/'+e.id,'#/preferences/fonts'])assert.equal(routeFor(resolveRoute(hash,b)),hash);
-  const state=resolveRoute('#/records/'+e.id,b);assert.equal(state.notebook,n.id);assert.equal(state.project,n.projectId);
+  // A record address opens its reader by identity; the reader sets the book and project from the record it reads.
+  const state=resolveRoute('#/records/'+e.id,b);assert.equal(state.page,'record-reader');assert.equal(state.selected,e.id);
   assert.equal(resolveRoute('#/notebooks/'+n.id+'/read',b).bookReading,true);
   for(const hash of ['#/notebooks/'+n.id+'/unknown','#/projects/missing','#/notebooks/missing','#/records/missing','#/unknown/%ZZ'])assert.equal(resolveRoute(hash,b).page,'workspace');
 });
 
-test('saved-record reading and editing routes resolve against metadata without complete records',()=>{
+test('saved-record reading routes resolve against metadata without complete records',()=>{
  const b=sampleNotebook(),id=b.entries[0].id,section=b.entries[0].sections[0]?.id??randomUUID();b.entries=[];
  for(const hash of ['#/records/'+id,'#/records/'+id+'/read','#/records/'+id+'/read/'+section]){
-  const state=resolveRoute(hash,b,{contentReading:true});assert.equal(state.page,'record-reader');assert.equal(state.selected,id);assert.equal(routeFor(state),hash);
+  const state=resolveRoute(hash,b);assert.equal(state.page,'record-reader');assert.equal(state.selected,id);assert.equal(routeFor(state),hash);
   assert.equal(state.recordReading,hash.includes('/read'));
  }
- for(const hash of ['#/records/missing','#/records/'+id+'/unknown','#/records/'+id+'/read/not-an-anchor'])assert.equal(resolveRoute(hash,b,{contentReading:true}).page,'workspace');
- assert.equal(resolveRoute('#/records/'+id,b).page,'workspace');
+ for(const hash of ['#/records/missing','#/records/'+id+'/unknown','#/records/'+id+'/read/not-an-anchor'])assert.equal(resolveRoute(hash,b).page,'workspace');
 });

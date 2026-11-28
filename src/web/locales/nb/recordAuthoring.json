@@ -20,7 +20,6 @@
   "removing": "Fjerner oppføring",
   "removed": "Oppføringen er fjernet. Lagrede revisjoner og dokumentasjon er beholdt.",
   "operationBusy": "Vent til dokumentasjonsoperasjonen er ferdig før du fjerner oppføringen.",
-  "confirmRemove": "Fjerne denne oppføringen fra labboken? Lagrede revisjoner og dokumentasjon beholdes. Ulagrede endringer i denne oppføringen forkastes.",
   "removeConflict": "Denne oppføringen ble endret i et annet vindu. Oppføringen er ikke fjernet. Last inn oppføringen på nytt og se gjennom den lagrede versjonen før du fjerner den.",
   "invalidRemoval": "Svaret på fjerningen var ufullstendig. Prøv igjen for å kontrollere om oppføringen ble fjernet.",
   "otherDrafts": "Lagre eller forkast endringer i andre oppføringer eller innstillinger før du fjerner denne oppføringen.",

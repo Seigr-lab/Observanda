@@ -13,6 +13,15 @@ import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
 import {proseText} from '../../src/web/prose-model.js';
 
+// Opens the only listed draft in the review that saves it: list, preview, then review.
+async function openReview(page){
+ await page.getByRole('button',{name:'Review drafts',exact:true}).click();
+ await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
+ await page.locator('.record-draft-preview [data-preview-recover]').click();
+}
+// One retained version in the review, found by its heading.
+const versionIn=(page,dialog)=>name=>dialog.locator('.record-conflict-versions>section').filter({has:page.getByRole('heading',{name,exact:true})});
+
 test('draft conflict review displays numerical figure settings and preserves the selected values',async({page})=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-conflict-values-')),book=upgradeNotebook(sampleNotebook()),figure=createFigure();
  figure.series[0].points=[{x:3,y:4,error:null}];figure.x.min=1;book.entries[0].figures=[figure];
@@ -23,19 +32,18 @@ test('draft conflict review displays numerical figure settings and preserves the
  const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  try{
-  await page.goto(app.url);await page.getByRole('button',{name:'Review drafts',exact:true}).click();
-  await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Recover record draft',exact:true}),conflict=dialog.locator('.record-conflict');
-  await expect(conflict).toHaveCount(1);
-  await expect(conflict.locator('[data-conflict-preview="mine"] pre')).toContainText('min: 0');
-  await expect(conflict.locator('[data-conflict-preview="stored"] pre')).toContainText('min: -2');
-  await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();
-  await expect(dialog.getByRole('alert')).toHaveText('Choose a version for each conflicting field.');
-  await conflict.getByText('Version you started from',{exact:true}).click();await expect(conflict.locator('details pre')).toContainText('min: 1');
-  await conflict.getByLabel('Your version',{exact:false}).check();
-  await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();
-  await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await page.goto(app.url);await openReview(page);
+  const dialog=page.locator('.record-draft-review'),version=versionIn(page,dialog);
+  await expect(dialog.locator('[role=status]').first()).toContainText('0 of 1');
+  await expect(version('Your draft').locator('pre')).toContainText('"min": 0');
+  await expect(version('Current saved version').locator('pre')).toContainText('"min": -2');
+  await expect(version('Version you started from').locator('pre')).toContainText('"min": 1');
+  // Saving waits for a version to be chosen for each overlapping change.
+  await expect(dialog.getByRole('button',{name:'Save recovered record',exact:true})).toBeDisabled();
+  await dialog.locator('[data-review=choose-mine]').click();await expect(dialog.locator('[role=status]').first()).toContainText('1 of 1');
+  await expect(dialog.locator('[data-review=choose-mine]')).toHaveText('Selected version');
+  await dialog.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(dialog).toHaveCount(0,{timeout:30000});
+  await expect(page.locator('.record-reader h1')).toHaveText(base.title);
   const saved=(await f.workspace.read()).book;expect(saved.entries[0].figures[0].x.min).toBe(0);expect(saved.entries.slice(1)).toEqual(book.entries.slice(1));expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
@@ -51,21 +59,30 @@ test('long conflict values page independently and choosing a version restores it
  await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:remote}]});
  const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
-  await page.goto(app.url);await page.getByRole('button',{name:'Review drafts',exact:true}).click();
-  const listing=page.getByRole('dialog',{name:'Recoverable record drafts',exact:true});await listing.getByRole('button',{name:'Review draft',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Recover record draft',exact:true}),local=dialog.locator('[data-conflict-preview="mine"]'),saved=dialog.locator('[data-conflict-preview="stored"]');
-  await expect(dialog.locator('[data-combined]')).toHaveCount(0);await expect(local.locator('pre')).not.toContainText('LOCAL END');
-  await local.getByRole('button',{name:'Next part',exact:true}).focus();await page.keyboard.press('Enter');await expect(local.getByRole('status')).toHaveText('Part 2');await expect(saved.getByRole('status')).toHaveText('Part 1');
-  await expect(local.getByRole('button',{name:'Next part',exact:true})).toBeFocused();await local.getByRole('button',{name:'Previous part',exact:true}).click();
-  const parts=[];for(;;){const value=await local.locator('pre').textContent();expect(value.length).toBeLessThanOrEqual(8193);parts.push(value);const next=local.getByRole('button',{name:'Next part',exact:true});if(!await next.isEnabled())break;await next.click();}
-  expect(parts.join('')).toBe(mine.body);await expect(local.locator('pre')).toContainText('LOCAL END');await expect(dialog.locator('authored')).toHaveCount(0);
-  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='150%');expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true);await local.locator('.record-value-navigation').scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('conflict-value-parts-phone.png')});
-  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect((await drafts.read(id)).draft.changes[0].record).toEqual(mine);
-  await listing.getByRole('button',{name:'Review draft',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('draft-list-large-text-phone.png')});await listing.getByRole('button',{name:'Review draft',exact:true}).click();await dialog.getByLabel('Your version',{exact:true}).check();await dialog.getByRole('button',{name:'Next field',exact:true}).click();
-  await expect(local.locator('pre')).toContainText('y: 2');await expect(saved.locator('pre')).toContainText('y: 3');
-  while(await saved.getByRole('button',{name:'Next part',exact:true}).isEnabled())await saved.getByRole('button',{name:'Next part',exact:true}).click();
-  await expect(saved.locator('pre')).toContainText('x: 799');await dialog.getByLabel('Saved version',{exact:true}).check();await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();
-  await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await page.goto(app.url);await openReview(page);
+  const dialog=page.locator('.record-draft-review'),version=versionIn(page,dialog),local=version('Your draft'),saved=version('Current saved version');
+  const idle=()=>expect(dialog.getByRole('button',{name:'Close review',exact:true})).toBeEnabled();
+  await expect(dialog.locator('[role=status]').first()).toContainText('0 of 2');
+  await expect(local.locator('pre')).toContainText('Local exact');await expect(local.locator('pre')).not.toContainText('LOCAL END');
+  // Each version pages on its own: moving through your draft leaves the saved version where it was.
+  const savedFirst=await saved.locator('pre').textContent();
+  await local.locator('[data-review=value-mine-next]').click();await idle();
+  await expect(saved.locator('pre')).toHaveText(savedFirst);await expect(saved.locator('[data-review=value-stored-previous]')).toBeDisabled();
+  await expect(local.locator('[data-review=value-mine-previous]')).toBeEnabled();await local.locator('[data-review=value-mine-previous]').click();await idle();
+  const parts=[];for(;;){const value=await local.locator('pre').textContent();expect(value.length).toBeLessThanOrEqual(4096);parts.push(value);const next=local.locator('[data-review=value-mine-next]');if(!await next.isEnabled())break;await next.click();await idle();}
+  expect(proseText(JSON.parse(parts.join('')))).toBe(mine.body);await expect(local.locator('pre')).toContainText('LOCAL END');await expect(dialog.locator('authored')).toHaveCount(0);
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='150%');expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true);await local.locator('.inline-actions').scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('conflict-value-parts-phone.png')});
+  await dialog.getByRole('button',{name:'Close review',exact:true}).click();await expect(dialog).toHaveCount(0);expect((await drafts.read(id)).draft.changes[0].record).toEqual(mine);
+  await page.getByRole('button',{name:'Review drafts',exact:true}).click();const listing=page.getByRole('dialog',{name:'Recoverable record drafts',exact:true});
+  await listing.getByRole('button',{name:'Review draft',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('draft-list-large-text-phone.png')});await listing.getByRole('button',{name:'Review draft',exact:true}).click();
+  await page.locator('.record-draft-preview [data-preview-recover]').click();
+  await expect(local.locator('pre')).toContainText('Local exact');await dialog.locator('[data-review=choose-mine]').click();await expect(dialog.locator('[role=status]').first()).toContainText('1 of 2');
+  await dialog.getByRole('button',{name:'Next change',exact:true}).click();await idle();
+  await expect(local.locator('pre')).toContainText('"y": 2');await expect(saved.locator('pre')).toContainText('"y": 3');
+  while(await saved.locator('[data-review=value-stored-next]').isEnabled()){await saved.locator('[data-review=value-stored-next]').click();await idle();}
+  await expect(saved.locator('pre')).toContainText('"x": 799');await dialog.locator('[data-review=choose-stored]').click();await expect(dialog.locator('[role=status]').first()).toContainText('2 of 2');
+  await dialog.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(dialog).toHaveCount(0,{timeout:30000});
+  await expect(page.locator('.record-reader h1')).toHaveText(base.title);expect(await drafts.read(id)).toBe(null);
   const result=(await f.workspace.read()).book.entries[0];expect(proseText(result.body)).toBe(mine.body);expect(result.figures).toEqual(remote.figures);expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {figurePoints} from './figure-authoring-controls.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,6 +9,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {openEvidence} from './record-editor-helper.js';
+import {saveRecordValue} from './record-editing-helper.js';
 const column=(name,representation)=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 
 test('native figure authoring retains the exact difference of large counters and exposes its pinned source',async({page})=>{
@@ -24,13 +26,14 @@ test('native figure authoring retains the exact difference of large counters and
   await dialog.getByLabel('Transformation').selectOption('sum');await dialog.getByLabel('Chart type').selectOption('bar');await dialog.locator('[data-material-value="1"]').check();
   await dialog.getByRole('button',{name:'Calculate & retain figure'}).click();await expect(dialog.locator('svg')).toBeVisible({timeout:30000});
   await expect(dialog).toContainText('Groups and summaries are calculated with exact rational values. Only the final coordinates are converted for plotting.');
-  const retained=(await m.heads()).find(h=>h.kind==='analysis'),doc=await m.read(retained);expect(doc.content.figure.series[0].points[0].y).toBe(1);
+  // The figure is retained as its own document; its single bar is the exact sum, 1.
+  const retained=(await m.heads()).find(h=>h.kind==='analysis'),doc=await m.read(retained),panels=await figurePoints(f.workspace,doc.content.figure);expect(panels[0][0][0].y).toBe(1);
   await dialog.getByText('Calculation coverage',{exact:true}).click();await dialog.getByRole('button',{name:'Inspect source rows & exclusions'}).click();
   await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('9007199254740993');
   await dialog.getByRole('button',{name:'Back to evidence'}).click();await dialog.locator('.material-list li').filter({hasText:'Exact total delta'}).getByRole('button',{name:'Inspect',exact:true}).click();
-  await dialog.getByRole('button',{name:'Add retained figure to record'}).click();await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await dialog.getByRole('button',{name:'Add retained figure to record'}).click();await saveRecordValue(page.locator('dialog.record-writing[open]'));
   await page.reload();await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Exact total delta'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await expect(dialog).toContainText('Groups and summaries are calculated with exact rational values.');
-  expect((await f.workspace.read()).book.entries.find(r=>r.id===recordId).figures.find(v=>v.id===doc.content.figure.id).series[0].points[0].y).toBe(1);expect(errors).toEqual([]);
+  const placed=(await f.workspace.read()).book.entries.find(r=>r.id===recordId).figures.find(v=>v.id===doc.content.figure.id);expect((await figurePoints(f.workspace,placed))[0][0][0].y).toBe(1);expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

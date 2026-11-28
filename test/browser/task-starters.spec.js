@@ -19,6 +19,7 @@ import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {chooseStarterAction,previewStarterLanguages,authorStarter,verifyFieldVisitEvidence,exportFieldVisitPdf,customizeMethodProfile} from './task-starter-journey.js';
 import {installPdfRenderer} from '../../src/pdf-render-service.js';
+import {newRecordOpened,setNewRecordTitle,openTemplateValue,saveRecordValue,saveNewRecord} from './record-editing-helper.js';
 import {measurePdfPreflight} from '../../src/pdf-preflight.js';
 
 const test=base.extend({starterFixture:async({page,browser},use)=>{
@@ -121,18 +122,12 @@ test('create, author, search, export and reopen the selected starters',async({pa
       expect(notebook.configuration.sections[1].fields.map(field=>field.label)).toEqual(['Observations','Supporting evidence','Interpretation']);
     }
     await page.getByRole('button',{name:'New record',exact:true}).click();await choose('Create method');
-    const entry=page.locator('[data-configuration-record-host]');await entry.locator('[data-record-value]').fill('Rain gauge calibration');
-    await entry.getByLabel('Choose what to edit',{exact:true}).selectOption('custom');await entry.getByLabel('Value',{exact:true}).selectOption('template:purpose');
-    await entry.getByRole('textbox',{name:'Purpose',exact:true}).fill('Calibrate the gauge before use.');
-    // Hold the next field read to make the visible transition deterministic.
-    const readField='**/research/drafts/review/editRead';let allowRead;
-    const gate=new Promise(resolve=>{allowRead=resolve;});
-    await page.context().route(readField,async route=>{if(route.request().postDataJSON()?.field==='template:materials')await gate;await route.continue();});
-    try{
-      await entry.getByLabel('Value',{exact:true}).selectOption('template:materials');
-      await expect(entry.locator('textarea[data-record-value]')).toBeDisabled();
-      await page.getByRole('button',{name:'Save record',exact:true}).click();
-    }finally{allowRead();await page.context().unroute(readField);}
+    // The method is written on the record page: its title and its Purpose field each in their own dialog, written into the draft.
+    await newRecordOpened(page);await setNewRecordTitle(page,'Rain gauge calibration');
+    const methodFields=(await methodsStorage.read()).book.notebooks[0].configuration.sections.find(section=>section.label==='Method').fields;
+    const purpose=await openTemplateValue(page,'purpose',methodFields.findIndex(field=>field.key==='purpose')+1);
+    await purpose.getByRole('textbox',{name:'Purpose',exact:true}).fill('Calibrate the gauge before use.');await saveRecordValue(purpose);
+    await saveNewRecord(page);
     await expect(page.getByRole('heading',{name:'Rain gauge calibration',level:1})).toBeVisible({timeout:60000});
     const beforeRecords=(await methodsStorage.read()).book.entries;
     expect(beforeRecords).toHaveLength(1);expect(beforeRecords[0]).toMatchObject({title:'Rain gauge calibration',template:{values:{purpose:'Calibrate the gauge before use.'}}});

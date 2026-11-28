@@ -86,8 +86,6 @@
   "chartType": "Diagramtype",
   "transformation": "Transformasjon",
   "calculateRetain": "Berekn og bevar figur",
-  "replaceFigureConfirm": "Erstatte denne oppføringsfiguren med den bevarte berekninga? Tidlegare analyserevisjonar held fram med å vere tilgjengelege.",
-  "figureAdded": "Figuren er lagd til i utkastet. Gå gjennom og lagre oppføringa.",
   "pauseImport": "Set importen på pause eller fullfør han før du går vidare.",
   "saveBeforeEvidence": "Lagre oppføringa før du opnar dokumentasjon og analyse.",
   "saveRun": "Lagre denne køyringa først.",

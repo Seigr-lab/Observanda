@@ -17,6 +17,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {navigate,preferences} from './preferences-helper.js';
 import {revealInEditor} from './record-editor-helper.js';
+import {newRecordOpened,setNewRecordTitle,openTemplateValue,saveRecordValue,saveNewRecord} from './record-editing-helper.js';
 import {researchReference} from '../../src/web/research-reference.js';
 
 test('people define their structure and every lab uses the same notebook and record tools',async({page})=>{
@@ -89,12 +90,11 @@ test('people define their structure and every lab uses the same notebook and rec
   await expect(main.getByRole('heading',{name:'Recording sessions',exact:true})).toBeVisible();
   await click(main,'New record');
   await click(dialog,'Create rehearsals & recordings');
-  // A new record is entered one value at a time and then saved into the lab book.
-  const initial=page.locator('[data-configuration-record-host]');await expect(initial.locator('[data-record-value]')).toBeVisible({timeout:30000});await initial.locator('[data-record-value]').fill('First session');
-  await initial.getByLabel('Choose what to edit',{exact:true}).selectOption('custom');// The record's fields open on their first field, the session date, with its own date input.
-  await expect(initial.getByLabel('Value',{exact:true})).toHaveValue('template:sessionDate');
-  await initial.locator('input[type="date"][data-record-value]').fill('2026-09-28');
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('First session',{timeout:60000});
+  // A new record is written on the record page, each value in its own dialog, and then saved into the lab book.
+  await newRecordOpened(page);await setNewRecordTitle(page,'First session');
+  // The record's first field is the session date, with its own date input.
+  const sessionDate=await openTemplateValue(page,'sessionDate',1);await sessionDate.locator('input[type="date"][data-record-value]').fill('2026-09-28');await saveRecordValue(sessionDate);
+  await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText('First session',{timeout:60000});
   // The saved record offers figures, contributors and research links in its editing areas.
   await expect(await revealInEditor(page,page.getByRole('button',{name:'Add figure',exact:true}),'Evidence and results')).toBeVisible();
   await expect(await revealInEditor(page,page.getByRole('button',{name:'Add contributor',exact:true}),'Record details')).toBeVisible();

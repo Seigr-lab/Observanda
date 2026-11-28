@@ -121,11 +121,11 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
    try{await refresh();}catch(e){if(e.name==='AbortError')return true;listError=message(e);notify(listError,true);}
    if(operationRoute!==location.hash)return true;
    busy=false;close();
-   if(state.page==='module')render();else if(['editor','record-reader'].includes(state.page)){owner=state.selected;witnessFrame();}
+   if(state.page==='module')render();else if(state.page==='record-reader'){owner=state.selected;witnessFrame();}
    if(!listError)notify(tr('saved'));
   }catch(e){error(e);}finally{upload=null;busy=false;delete form.dataset.busy;}return true;
  }
  async function activate(){owner=null;packet=null;plan=null;context=researchContext(state);try{await refresh();}catch(e){if(e.name!=='AbortError'){list=empty();listError=message(e);}}}
- function release(){if(state.access?.locked||context!==researchContext(state)||!['editor','record-reader'].includes(state.page)&&!(state.page==='module'&&state.moduleId==='collaboration')){abortUpload();disposeFigures();reading++;list=empty();owner=null;packet=null;plan=null;contact=null;}}
+ function release(){if(state.access?.locked||context!==researchContext(state)||state.page!=='record-reader'&&!(state.page==='module'&&state.moduleId==='collaboration')){abortUpload();disposeFigures();reading++;list=empty();owner=null;packet=null;plan=null;contact=null;}}
  return {action,input,submit,release,isBusy:()=>busy,button:()=>button('witnesses','witnesses'),async moduleUI(){await activate();return {view,activate};}};
 }

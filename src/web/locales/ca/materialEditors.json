@@ -86,8 +86,6 @@
   "chartType": "Tipus de gràfic",
   "transformation": "Transformació",
   "calculateRetain": "Calcula i conserva la figura",
-  "replaceFigureConfirm": "Vols substituir aquesta figura de l’entrada pel càlcul conservat? Les revisions anteriors de l’anàlisi continuen disponibles.",
-  "figureAdded": "S’ha afegit la figura a l’esborrany. Revisa i guarda l’entrada.",
   "pauseImport": "Posa la importació en pausa o acaba-la abans de sortir.",
   "saveBeforeEvidence": "Guarda l’entrada abans d’obrir les evidències i l’anàlisi.",
   "saveRun": "Guarda primer aquesta execució.",

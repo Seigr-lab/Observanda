@@ -2,7 +2,6 @@
 .project-overview:hover,.project-overview[aria-current=page] { color:var(--ui-accent); text-decoration:underline; text-underline-offset:.2rem; }
 .project-overview:focus-visible { outline:2px solid var(--ui-accent); outline-offset:4px; border-radius:3px; }
 .record-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; }
-.record-toolbar .back-button { margin:0; }
 dialog:has(.record-history) { width:min(960px,calc(100% - 2rem)); max-height:90dvh; padding:0; overflow:hidden; }
 .record-history { display:flex; flex-direction:column; box-sizing:border-box; max-height:calc(90dvh - 2px); min-width:0; padding:1.25rem; }
 .record-history-content { overflow:auto; min-height:0; padding-inline-end:.5rem; scrollbar-gutter:stable; overflow-wrap:anywhere; }

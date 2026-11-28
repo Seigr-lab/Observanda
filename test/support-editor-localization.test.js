@@ -8,7 +8,7 @@ import {organizationsUI} from '../src/web/organizations-ui.js';
 const locales=['en','ca','es','nb','nn'];
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const load=locale=>prepareLanguage(locale,{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});
-const state=()=>({storage:{contextId:'context',encrypted:true},book:{id:'workspace',entries:[],notebooks:[]},selected:'record',page:'editor',dashboardSettings:{enabledModules:[]}});
+const state=()=>({storage:{contextId:'context',encrypted:true},book:{id:'workspace',entries:[],notebooks:[]},selected:'record',page:'record-reader',dashboardSettings:{enabledModules:[]}});
 function globals(context,values){
  const previous=Object.fromEntries(Object.keys(values).map(key=>[key,globalThis[key]]));Object.assign(globalThis,values);
  context.after(()=>{Object.assign(globalThis,previous);activateLanguage('en');});

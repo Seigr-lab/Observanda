@@ -13,7 +13,8 @@ import {clearVault} from '../src/encryption.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {RecordHistory} from '../src/record-history.js';
-import {reconcileRecords} from '../src/web/record-merge.js';
+import {mergeRecords} from './record-merge-helper.js';
+import {recordConflictLabel} from '../src/web/record-recovery-messages.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
@@ -73,7 +74,7 @@ test('saved workflow survives drafts, conflicts, exact method edits and record h
  assert.equal((await materials.read(pinned)).body,method.body);
  const savedNext=(await ws.read()).book.entries.find(e=>e.id===run.id);assert.equal(savedNext.outcome,next.outcome);assert.deepEqual(savedNext.relations,next.relations);
  const local=structuredClone(next);local.outcome='Inconclusive';const remote=structuredClone(next);remote.outcome='Mixed results';
- const merge=reconcileRecords([{base:next,record:local}],[remote]);assert.equal(merge.conflicts[0].label,'Outcome');
+ const merge=await mergeRecords(next,local,remote);assert.deepEqual(merge.conflicts.map(item=>item.path),[['outcome']]);assert.equal(recordConflictLabel(merge.conflicts[0].path[0]),'Outcome');
  const history=new RecordHistory(ws,{get:()=>{throw Error('No media');}}),versions=await history.list({workspaceId:book.id,recordId:run.id});
  const old=versions.versions.find(v=>v.revision===originalRevision);
  assert.deepEqual((await history.read({workspaceId:book.id,recordId:run.id,...old})).record,savedRun);

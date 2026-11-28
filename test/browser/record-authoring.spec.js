@@ -12,6 +12,7 @@ import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {answerConfirmation} from './confirm-helper.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord,discardNewRecord} from './record-editing-helper.js';
 
 async function fixture(page,count=42){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-authoring-ui-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[2];
@@ -29,11 +30,8 @@ async function fixture(page,count=42){
 async function create(page,f){
  await page.goto(f.app.url);await page.evaluate(id=>location.hash='#/notebooks/'+id,f.book.notebooks[0].id);
  await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
- await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Untitled free-form note');
- return page.evaluate(()=>location.hash.split('/')[2]);
+ const id=await newRecordOpened(page);await expect(page.locator('main h1').first()).toHaveText('Untitled free-form note');return id;
 }
-// A saved new record opens in the field-by-field editing view.
-async function save(page){await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toBeVisible({timeout:30000});}
 // Record removal lives in the collapsed "Record actions" group of the reader and of a draft.
 async function openRecordActions(page){const actions=page.locator('details.record-actions').first();await expect(actions).toBeVisible();if(!await actions.evaluate(node=>node.open))await actions.locator('summary').click();}
 async function remove(page,accept=true){
@@ -47,7 +45,7 @@ for(const count of [42,420])test('new records and removal stay scoped with '+cou
  test.setTimeout(120000);const f=await fixture(page,count);
  try{
   const id=await create(page,f);expect(f.loaded).toEqual([]);
-  await page.getByLabel('Record title',{exact:true}).fill('New apiary field notes');await save(page);
+  await setNewRecordTitle(page,'New apiary field notes');await saveNewRecord(page);
   // A new record commits through its reviewed draft, never through a workspace-wide save.
   expect(f.writes[0]).toMatchObject({url:'/api/research/drafts/review/apply',workspaceId:f.book.id});expect(f.writes.some(write=>write.url==='/api/research/records/save')).toBe(false);
   expect(f.loaded.every(value=>value===id)).toBe(true);
@@ -59,21 +57,20 @@ for(const count of [42,420])test('new records and removal stay scoped with '+cou
  }finally{await f.close();}
 });
 
-test('failed creation retains the draft, reload recovers it and unsaved removal never creates a record',async({page})=>{
+test('failed creation retains the draft, reload recovers it and a discarded new record never exists',async({page})=>{
  test.setTimeout(90000);const f=await fixture(page);
  try{
-  const id=await create(page,f);await page.getByLabel('Record title',{exact:true}).fill('Recover my new observation');
-  await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');
+  const id=await create(page,f);await setNewRecordTitle(page,'Recover my new observation');
   await page.context().route('**/api/research/drafts/review/apply',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Synthetic save interruption'})}));
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic save interruption');
-  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Recover my new observation');
+  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('main [role=alert]').first()).toContainText('Synthetic save interruption');
+  await expect(page.locator('main h1').first()).toHaveText('Recover my new observation');
   await page.context().unroute('**/api/research/drafts/review/apply');await page.reload();
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('button',{name:'Review draft',exact:true}).click();
   await page.getByRole('button',{name:'Recover this draft',exact:true}).click();await page.getByRole('button',{name:'Save recovered record',exact:true}).click();
   await expect(page.locator('.record-reader h1')).toHaveText('Recover my new observation');expect((await f.workspace.read()).book.entries.find(record=>record.id===id).title).toBe('Recover my new observation');
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  await page.getByLabel('Record title',{exact:true}).fill('Discard this unsaved draft');await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');
-  const writes=f.writes.length;await remove(page);await expect(page.locator('#entry-results')).toBeVisible();expect(f.writes).toHaveLength(writes);
+  await newRecordOpened(page);await setNewRecordTitle(page,'Discard this unsaved draft');
+  const writes=f.writes.length;await discardNewRecord(page);await expect(page.locator('#entry-results')).toBeVisible();expect(f.writes).toHaveLength(writes);
   expect((await new ResearchDrafts(f.workspace).list()).drafts).toEqual([]);expect(f.fullReads).toEqual([]);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });

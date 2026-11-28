@@ -1,7 +1,4 @@
 {
-  "figuresLoading": "Opnar figurredigering...",
-  "figuresLoadFailed": "Figurredigeringa kunne ikkje lastast inn. Prøv på nytt før du lagrar denne oppføringa. Utkastet ditt er framleis her.",
-  "figuresRetry": "Prøv figurredigering på nytt",
   "locationTransferChoose": "Vel ei labbok i eit prosjekt",
   "locationTransferChecking": "Ser etter ei uferdig oppføringsflytting…",
   "locationTransferCheck": "Kontroller denne flyttinga igjen",

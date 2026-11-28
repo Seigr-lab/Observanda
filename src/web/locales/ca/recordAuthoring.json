@@ -20,7 +20,6 @@
   "removing": "S'està eliminant el registre",
   "removed": "S'ha eliminat el registre. Es conserven les revisions guardades i les evidències.",
   "operationBusy": "Espera que s'acabi l'operació d'evidències abans d'eliminar aquest registre.",
-  "confirmRemove": "Vols eliminar aquest registre del seu llibre de laboratori? Es conserven les revisions guardades i les evidències. Es descartaran els canvis sense guardar d'aquest registre.",
   "removeConflict": "Aquest registre ha canviat en una altra finestra. No s'ha eliminat el registre. Torna a carregar-lo i revisa la versió guardada abans d'eliminar-lo.",
   "invalidRemoval": "La resposta de l'eliminació era incompleta. Torna-ho a provar per comprovar si s'ha eliminat el registre.",
   "otherDrafts": "Guarda o descarta els canvis d'altres registres o configuracions abans d'eliminar aquest registre.",

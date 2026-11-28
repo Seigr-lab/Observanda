@@ -1,9 +1,5 @@
-import {lengthCount} from './length-count.js';
 import {noticeLayout} from './notice-layout.js';
-import {recordCaptionTracks} from './record-media-captions.js';
 import {sessionHeaders} from './session-store.js';
-import {confirmAction} from './confirm-action.js';
-import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
 import {recordDraftTransport} from './record-draft-transport.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
@@ -22,7 +18,7 @@ import {retainedFigureReadingSlots} from './retained-figure-reader.js';
 import {publicationErrorView} from './publication-error-view.js';
 import {startApplication} from './application-startup.js';
 import {activityUI} from './activity-ui.js';
-import {snapshotWorkspace,draftWorkspace,editableRecord,sameValue} from './workspace-snapshot.js';
+import {snapshotWorkspace,draftWorkspace,editableRecord} from './workspace-snapshot.js';
 
 
 import {workspaceReader,validateWorkspaceOutline} from './workspace-reader.js';
@@ -57,7 +53,6 @@ import {bookReferenceUI} from './book-reference-ui.js';
 import {selectorAnchor,selectorExists} from './book-selectors.js';
 import {validViewFilter} from './record-view-model.js';
 import {recordDateLabel} from './record-date.js';
-import {recordDateFields,updateRecordDate} from './record-date-ui.js';
 import {recordBrowse,browseActive} from './record-query.js';
 import {recordBrowseFields} from './record-query-ui.js';
 import {researchMaterialsUI} from './research-materials-loader.js';
@@ -66,12 +61,8 @@ import {templateFrom} from './notebook-schema.js';
 import {prepareProfileText} from './laboratory/profile-text.js';
 import {templateText} from './custom-field-presentation.js';
 import {locationName} from './workspace-structure.js';
-import {recordFields,updateRecordField} from './record-fields-ui.js';
 import {wireCustomFieldClipboard} from './custom-field-clipboard-ui.js';
 import {documentEditors} from './document-editor.js';
-import {recordSectionsUI} from './record-sections-ui.js';
-import {publicationAvailability,updatePublicationPart} from './record-publication-controls.js';
-import {figureEditor} from './figure-editor-loader.js';
 import {researchReference,parseResearchReference} from './record-model.js';
 import {researchTargets} from './research-target-presentation.js';
 import {applicationShell} from './application-shell.js';
@@ -89,18 +80,13 @@ import {replaceRestoredModuleRoute} from './module-route-normalization.js';
 import {recordActivityUI} from './record-activity-ui.js';
 import {documentRecord} from './record-activity.js';
 import {recordWorkflowUI} from './record-workflow-ui.js';
-import {recordRevisionView} from './record-revision-view.js';
-import {LIFECYCLE_STATUSES,OUTCOME_SUGGESTIONS} from './record-workflow.js';
 import {recordDetailsUI} from './record-details-ui.js';
 import {targetRoute} from './record-model.js';
 import {expandingText} from './expanding-text.js';
-import {recordRecoveryUI} from './record-recovery-ui.js';
 import {recordDraftsUI} from './record-drafts-ui.js';
 import {recordDraftReviewUI} from './record-draft-review-ui.js';
-import {researchRequestCapacity} from './research-capacity.js';
 import {researchCapacityMessage} from './research-capacity-message.js';
 import {recordDraftTracker,retainPendingEdits} from './research-client.js';
-import {recordCreationBase} from './record-creation.js';
 import {recordStartersUI} from './record-starters-ui.js';
 import {recordCreationUI} from './record-creation-ui.js';
 import {recordDestinationUI} from './record-destination-ui.js';
@@ -129,7 +115,7 @@ import {storageUI} from './storage-ui.js';
 import {workspaceUI} from './workspace-ui.js';
 import {routeFor as localRouteFor,resolveRoute as resolveNavigationRoute} from './navigation.js';
 const routeFor=state=>ownedRoute(localRouteFor(state),state.projectOwner);
-const resolveRoute=(hash,book)=>resolveNavigationRoute(projectRoute(hash).hash,book,{contentReading:true});
+const resolveRoute=(hash,book)=>resolveNavigationRoute(projectRoute(hash).hash,book);
 
 import {validWebsitePin} from './website-pin.js';
 import {applicationMark} from './app-brand.js';
@@ -142,7 +128,6 @@ const recordStatus=status=>STATUSES.includes(status)?t('recordValues','status_'+
 const $ = selector => document.querySelector(selector);
 const notices=noticeLayout($('#notice'));
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 const fileEditorHash=hash=>/^#\/(?:website|websites|publishing)$/.test(hash)||/^#\/websites\/(?:default|[a-f0-9-]{36})\/(?:editor|website|publishing)$/.test(projectRoute(hash).hash);
@@ -177,19 +162,18 @@ function sourceVisibilityWrite(route,data){
  if(!data)return false;
  if(/\/research\/records\/values\/save$/.test(route))return ['share','sharePdf','publication'].includes(data.field)||data.field?.startsWith('media:');
  if(/\/research\/records\/writing\/save$/.test(route))return data.value&&('share' in data.value||'sharePdf' in data.value);
- return /\/(?:research\/records\/(?:save|history\/restore|sections|media|location)|workspace\/(?:save|structure|notebook)|notebook\/save|lab-books\/edit)$/.test(route);
+ return /\/(?:research\/records\/(?:history\/restore|sections|media|location)|workspace\/(?:save|structure|notebook)|notebook\/save|lab-books\/edit)$/.test(route);
 }
 
 wireCustomFieldClipboard(document.body,{available:()=>!state.access?.locked&&!state.storageUnavailable});
 let previewSurfaces=[],dialogSurface=null;
-let noticeTimer, noticeToken = 0, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null,draftTransport=null;
+let noticeTimer, noticeToken = 0, savePromise, savedBook=null,savedRecordRevisions={},configurationRecord=null,draftTransport=null;
 const drafts=formDrafts(),recordChanges=recordDraftTracker();
 expandingText();
 let uploading = false, fieldSequence = 0;
 let changeVersion = 0;
 let restoringRoute = false, workspaceOpening=false,routeRestoreVersion=0,ownerBeforeRestore=null;
 let completingWorkspace=null;
-let removingRecord=false;
 let routeIndex=Number.isInteger(history.state?.observandaIndex)?history.state.observandaIndex:0;
 let travel=null,historyBusy=false;
 
@@ -224,7 +208,6 @@ function adoptSnapshot(result){
   savedBook=snapshotWorkspace(result.book);
   result.book=draftWorkspace(savedBook);
   savedRecordRevisions={...result.recordRevisions};
-  savedRecordBases=Object.fromEntries(savedBook.entries.map(record=>[record.id,record]));
   recordChanges.reset(savedBook,savedRecordRevisions);
 }
 async function api(route, data, options={}) {
@@ -258,9 +241,9 @@ async function workspaceApi(route, data, {adopt=true,signal,onProgress,metadataO
   if(outlineWrite)data={...data,response:'outline'};
   const structureStream=outlineWrite&&route!=='/api/workspace/save';
   if(structureStream)data={...data,commandId:await structureRequestId(route,data)};
-  const scopedWrite=state.recordScope&&['/api/research/records/save','/api/research/records/history/restore'].includes(route);
+  const scopedWrite=state.recordScope&&route==='/api/research/records/history/restore';
   // History restore is allowed only with a clean editor; retain just its subject.
-  const selectionIds=scopedWrite?(route.endsWith('/history/restore')?[data.recordId]:[...new Set([...state.book.entries.map(e=>e.id),...(data.changes??[]).map(c=>c.id)])]):null;
+  const selectionIds=scopedWrite?[data.recordId]:null;
   const receiptWrite=scopedWrite&&!validRecordSelection(selectionIds);
   if(scopedWrite)data={...data,...(receiptWrite?{receipt:true}:{recordIds:selectionIds})};
   const expectedSelection=route==='/api/workspace/read/selection'?data.ids:route==='/api/research/records/remove'?[data.recordId]:scopedWrite?selectionIds:null;
@@ -270,13 +253,11 @@ async function workspaceApi(route, data, {adopt=true,signal,onProgress,metadataO
   const stop=structureStream?new AbortController():null;
   if(stop)signal=signal?AbortSignal.any([signal,stop.signal]):stop.signal;
   const storageOperation=/^\/api\/projects\/[a-f0-9-]{36}\/(?:settings\/save|directory\/reparent)$/.test(route)||['/api/storage/rename','/api/storage/rename/resume','/api/storage/delete','/api/storage/delete/finish','/api/storage/open','/api/storage/copy/preview','/api/storage/copy','/api/storage/move','/api/storage/move/finish','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable'].includes(route);
-  const recordOperation=['/api/research/records/remove','/api/research/records/location','/api/research/records/runs/create','/api/research/records/save','/api/research/records/writing/save','/api/research/records/values/save','/api/research/records/sections','/api/research/records/media','/api/research/records/figures','/api/research/records/tags','/api/research/records/history/restore','/api/research/drafts/review/prepare','/api/research/drafts/review/apply'].includes(route);
+  const recordOperation=['/api/research/records/remove','/api/research/records/location','/api/research/records/runs/create','/api/research/records/writing/save','/api/research/records/values/save','/api/research/records/sections','/api/research/records/media','/api/research/records/figures','/api/research/records/tags','/api/research/records/history/restore','/api/research/drafts/review/prepare','/api/research/drafts/review/apply'].includes(route);
   let result;const progress=onProgress?null:structureStream?structureProgress({cancel:()=>stop.abort()}):storageOperation?storageProgress():recordOperation?recordSaveProgress():null;
   if(progress?.element)progress.element.dataset.operationKind=route;
   const operationStream=route.startsWith('/api/sharing/')||route.startsWith('/api/workspaces/delete/')||storageOperation||recordOperation;
   try{
-   const capacity=researchRequestCapacity(route,data);
-   if(capacity)throw {...capacity,message:researchCapacityMessage(capacity)};
    const pictures=['/api/website-files/save-pictures','/api/website-files/components/update-pictures','/api/website-files/recovery/save-pictures','/api/website-files/recovery/save-inputs','/api/website-files/media/save','/api/website-files/designs/import/review','/api/website-files/designs/import/apply','/api/website-files/import/zip','/api/website-files/downloads/save'].includes(route)&&data instanceof Blob;
    const body=pictures?data:data===undefined?undefined:JSON.stringify(data);
    const response=await fetch(projectApiRoute(route,owner),data===undefined?{headers,signal}:{signal,method:'POST',headers:{...headers,...(onProgress||structureStream||operationStream?{Accept:'application/x-ndjson'}:{}),'Content-Type':pictures?'application/octet-stream':'application/json'},body});
@@ -394,121 +375,36 @@ function updateSaveStatus(){
   const changed=state.dirty||['interface','appearance'].includes(state.page)&&textControls.isDirty();
   const label=$('#save-status');if(label)label.textContent=savePromise?t('pendingSettings','saving'):changed?appText('unsaved'):appText('saved');
   recordDrafts.update();
-  for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||figures.isBusy()||recordDrafts.isRecovering();
+  for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||recordDrafts.isRecovering();
 }
 function sectionActions(){
-  if(state.page==='editor'&&state.recordReading)return '';
-  const label={editor:appText('saveRecord'),website:appText('saveWebsite'),appearance:t('appearance','saveAppearance')}[state.page];
+  const label={website:appText('saveWebsite'),appearance:t('appearance','saveAppearance')}[state.page];
   if(!label)return '';
-  return `<footer class="section-save" aria-label="${esc(label)}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">${esc(appText('discardChanges'))}</button><button class="button primary" data-action="save">${esc(label)}</button></div></footer>`;
+  return `<footer class="section-save" aria-label="${esc(label)}"><div><span id="save-status" role="status"></span></div><div class="inline-actions"><button class="button" data-action="discard-section">${esc(appText('discardChanges'))}</button><button class="button primary" data-action="save">${esc(label)}</button></div></footer>`;
 }
-function changed(dirtyState){
-  changeVersion++;state.dirty=dirtyState;state.preview=null;updateSaveStatus();
-  if(recordChanges.command())recordDrafts.schedule();else if(!state.dirty)void recordDrafts.clear();else recordDrafts.pause();
-}
+function changed(dirtyState){changeVersion++;state.dirty=dirtyState;state.preview=null;updateSaveStatus();}
 function dirty(){if(configurationRecord?.active()){state.dirty=true;changeVersion++;updateSaveStatus();return;}changed(recordChanges.inspect(state.book));}
-function dirtyRecord(id=state.selected){changed(recordChanges.updateRecord(state.book,id));}
 async function save() {
   checkFontInputs();
   if(savePromise){await savePromise;return save();}
   if(!state.dirty)return;
-  // Wait for a checkpoint already in flight before acquiring the workspace
-  // write lock. Draft writes and record commits use the same durable adapter.
   savePromise=Promise.resolve().then(saveRecords);
   updateSaveStatus();
   try{return await savePromise;}finally{savePromise=null;updateSaveStatus();}
 }
+// A new record saves from its draft; everything else here is workspace settings.
 async function saveRecords(){
   if(configurationRecord?.active())return configurationRecord.save();
-  figures.validate();
-  const creation=recordChanges.command();
-  if(creation?.changes.length===1&&(creation.changes[0].expectedRevision===null||initialRecordSave?.workspaceId===state.book.id&&initialRecordSave.recordId===creation.changes[0].id))return saveInitialRecord();
-  await recordDrafts.flush();
-  const version=changeVersion,{book:submitted,command:recordCommand}=recordChanges.submission(state.book),previousRevisions={...savedRecordRevisions},previousBases={...savedRecordBases};
-  const command=recordCommand;
-  const workspaceCommand=command?null:workspaceSaveRequest(savedBook,submitted,previousRevisions);
-  try {
-    if(!command&&!workspaceCommand)throw {code:'INVALID',message:appText('dedicatedSettings')};
-    const result=command?await api('/api/research/records/save',{...command,baseEtag:state.etag}):await api('/api/workspace/save',{...workspaceCommand,baseEtag:state.etag});
-    if(changeVersion===version){state.book=result.book;state.dirty=false;}
-    else{
-      const pending=state.book;
-      state.book=retainPendingEdits(submitted,pending,result.book);
-      for(const record of pending.entries){
-        const sent=submitted.entries.find(item=>item.id===record.id);
-        if(!sameValue(sent,record)&&!(command??workspaceCommand)?.changes.some(change=>change.id===record.id)&&previousRevisions[record.id]){
-          savedRecordRevisions[record.id]=previousRevisions[record.id];
-          savedRecordBases[record.id]=previousBases[record.id];
-        }
-      }
-      state.dirty=recordChanges.inspect(state.book);
-    }
-    state.etag=result.etag;
-    if(state.dirty)recordDrafts.schedule();else await recordDrafts.clear();
-  }catch(error){
-    if(!command||error.code!=='RECORD_CHANGED')throw error;
-    const changes=recordCheckpoint();
-    if(!changes)throw error;
-    const latest=await api('/api/notebook',undefined,{adopt:false});
-    if(latest.book?.id!==state.book.id)throw {code:'WORKSPACE_CHANGED',message:appText('workspaceChanged')};
-    const entries=await recordRecovery.review({changes,book:latest.book});
-    if(!entries)throw {code:'RECORD_REVIEW_CANCELLED',message:appText('recordRetained')};
-    adoptSnapshot(latest);state.book={...latest.book,entries};state.etag=latest.etag;
-    dirty();render();await recordDrafts.flush();
-    throw {code:'RECORD_REVIEW',message:state.dirty?appText('combinedChanges'):appText('alreadySaved')};
-  }
+  const version=changeVersion,submitted=draftWorkspace(state.book);
+  const command=workspaceSaveRequest(savedBook,submitted,{...savedRecordRevisions});
+  if(!command)throw {code:'INVALID',message:appText('dedicatedSettings')};
+  const result=await api('/api/workspace/save',{...command,baseEtag:state.etag});
+  if(changeVersion===version){state.book=result.book;state.dirty=false;}
+  else{state.book=retainPendingEdits(submitted,state.book,result.book);state.dirty=recordChanges.inspect(state.book);}
+  state.etag=result.etag;
 }
-// Initial authoring commits its streamed checkpoint through the same selected
-// document transaction used by recovery. The client retains only its own exact
-// submitted value; acknowledgement reads never reconstruct the saved record.
-async function saveInitialRecord(){
-  const current=recordChanges.command(),id=current?.changes[0]?.id;
-  if(!current||current.changes.length!==1)throw Error(t('recordDrafts','saveChanged'));
-  if(!initialRecordSave||initialRecordSave.workspaceId!==state.book.id||initialRecordSave.recordId!==id)initialRecordSave={workspaceId:state.book.id,recordId:id,baseRevision:null,pending:null};
-  const session=initialRecordSave;
-  session.pending??={...recordChanges.submission(state.book),baseRevision:session.baseRevision};
-  const submitted=session.pending,changes=submitted.command.changes.map(change=>({record:change.record,base:savedRecordBases[change.id]??null,expectedRevision:change.expectedRevision}));
-  let committed;
-  try{committed=await recordDrafts.commit(changes,{baseRevision:submitted.baseRevision});}
-  catch(error){if(error.checkpointRejected)session.pending=null;throw error;}
-  const saved=committed.saved,workspaceId=session.workspaceId;
-  const [outline,content]=await Promise.all([
-    newWorkspaceReader({snapshotId:saved.etag}).read({requireOutline:true}),
-    api('/api/workspace/read/record-content',{workspaceId,recordId:id,snapshotId:saved.etag,offset:0,pagedHeader:true},{adopt:false})
-  ]);
-  if(initialRecordSave!==session||state.book.id!==workspaceId||content.workspaceId!==workspaceId||content.recordId!==id||content.etag!==saved.etag||outline.etag!==saved.etag||content.header?.id!==id||!revisionId(content.storageRevision)||!revisionId(content.revision))throw Error(t('recordDrafts','invalidPage'));
-  const sent=submitted.command.changes[0].record;
-  if(content.header.createdAt!==sent.createdAt||typeof content.header.updatedAt!=='string'||!Number.isFinite(Date.parse(content.header.updatedAt)))throw Error(t('recordDrafts','invalidPage'));
-  const acknowledged={...sent,createdAt:content.header.createdAt,updatedAt:content.header.updatedAt},pending=state.book;
-  const result={book:{...outline.book,entries:[acknowledged]},etag:saved.etag,recordRevisions:{[id]:content.revision},recordScope:{ids:[id],missing:[],notebookCounts:outline.notebookCounts,total:outline.total}};
-  adoptSnapshot(result);state.book=retainPendingEdits(submitted.book,pending,result.book);state.etag=saved.etag;state.dirty=recordChanges.inspect(state.book);
-  session.baseRevision=content.storageRevision;session.pending=null;recordDrafts.acknowledge();
-  if(state.dirty){recordDrafts.schedule();return;}
-  await recordDrafts.clear();initialRecordSave=null;
-  // Continue in the already qualified selected editor after the first commit.
-  adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=id;state.page='record-reader';state.recordReading=false;state.recordSection=null;recordContent.clear();render();
-}
-function recordCheckpoint(){
-  if(configurationRecord?.active()||!state.book||!state.dirty||state.access?.locked)return null;
-  return recordChanges.checkpoint(savedRecordBases);
-}
-const recordRecovery=recordRecoveryUI({esc});
 const recordDraftReview=recordDraftReviewUI({state,api,esc,field,notify,destinations:recordLinkDestinations,figures:()=>[],onSaved:async result=>{await workspaceLive.check();if(result.absent){state.page='entries';state.selected=null;render();}else await openRecordReading(result.recordId);}});
-const recordDrafts=recordDraftsUI({api,esc,snapshot:recordCheckpoint,openDraft:()=>configurationRecord?.draftId()??null,compact:()=>true,onReset:()=>recordDraftReview.close(),onChange:()=>{recordDrafts.update();updateSaveStatus();},notify,recoverWriting:header=>recordWriting.recover(header),recoverValue:header=>recordValues.recover(header),recoverDocument:async(header,options)=>{let accepted=false;await leave.run(async()=>{accepted=await recordDraftReview(header,options);});return accepted;},recover:async draft=>{
-  let applied=false;
-  await leave.run(async()=>{
-    const ids=draft.changes.map(change=>change.record.id);
-    const latest=await api('/api/workspace/read/selection',{workspaceId:draft.workspaceId,ids},{adopt:false});
-    if(latest.book?.id!==draft.workspaceId)throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};
-    const entries=await recordRecovery.review({changes:draft.changes,book:latest.book,recovering:true});
-    if(!entries)return;
-    adoptSnapshot(latest);state.book={...latest.book,entries};state.etag=latest.etag;
-    const selected=entries.find(record=>draft.changes.some(change=>change.record.id===record.id));
-    if(selected){state.selected=selected.id;state.page='editor';state.notebook=selected.notebookId;state.project=state.book.notebooks.find(n=>n.id===selected.notebookId)?.projectId??null;}
-    dirty();render();applied=true;notify(t('recordDrafts','recovered'));
-  });
-  return applied;
-}});
+const recordDrafts=recordDraftsUI({api,esc,openDraft:()=>configurationRecord?.draftId()??null,onReset:()=>recordDraftReview.close(),onChange:()=>{recordDrafts.update();updateSaveStatus();},notify,recoverWriting:header=>recordWriting.recover(header),recoverValue:header=>recordValues.recover(header),recoverDocument:async(header,options)=>{let accepted=false;await leave.run(async()=>{accepted=await recordDraftReview(header,options);});return accepted;}});
 
 function showDialog(html) { dialogSurface?.destroy(); const dialog = $('#dialog'); dialog.innerHTML = html; if (!dialog.open) dialog.showModal(); const frame=dialog.querySelector(".expanded-preview iframe");dialogSurface=frame?previewSurface(frame):null;dialog.addEventListener("close",()=>{dialogSurface?.destroy();dialogSurface=null;},{once:true}); drafts.track(); }
 function field(label, content) {
@@ -525,7 +421,7 @@ function field(label, content) {
 }
 const entry = () => editableRecord(state.book,state.selected);
 async function navigateResearch(target,{origin:providedOrigin}={}){
-  const sourceReturn=providedOrigin??(['editor','record-reader'].includes(state.page)?state.recordReturn:await captureResearchReturn());
+  const sourceReturn=providedOrigin??(state.page==='record-reader'?state.recordReturn:await captureResearchReturn());
   if(target.workspaceId!==state.book.id){
     if(target.workspaceId===projectOwners.root()?.id)await projectOwners.enter(null);
     else{
@@ -546,13 +442,13 @@ async function navigateResearch(target,{origin:providedOrigin}={}){
   else if(!target.selector)window.scrollTo(0,0);
 }
 const displayedRecord=()=>state.page==='record-reader'?recordContent.current():entry();
-const recordActivity=recordActivityUI({getRecord:displayedRecord,state,api,esc,field,showDialog,notify,render,dirty:()=>dirtyRecord(),revisions:()=>state.page==='record-reader'?{[state.selected]:recordContent.savedRevision()}:savedRecordRevisions,create:addEntry,relationSaved:async()=>{await workspaceLive.check();render();}});
+const recordActivity=recordActivityUI({getRecord:displayedRecord,state,api,esc,field,showDialog,notify,render,revisions:()=>state.page==='record-reader'?{[state.selected]:recordContent.savedRevision()}:savedRecordRevisions,create:addEntry,relationSaved:async()=>{await workspaceLive.check();render();}});
 const recordStarters=recordStartersUI({state,api,esc,showDialog,notify,sourceRecord:()=>state.page==='record-reader'?recordContent.captureTarget():null,openRecord:async id=>{if(!await selectRecord(id))return;await rawAction({dataset:{action:'edit-entry',id}});},
   openRecordDraft:record=>openCreatedRecord(record),openBook:(projectId,setup)=>structureUI.notebooks.openTaskBook(projectId,setup),
   chooseDestination:(book,start)=>recordDestination.open({projectOnly:book,heading:t('recordStarters',book?'taskBrowseProjects':'taskBrowseBooks'),
     selected:async(projectId,bookId,legacy)=>{await projectOwners.enter(legacy?null:projectId,legacy?null:bookId);await start(book?projectId:bookId);}})});
 const workflow=recordWorkflowUI({getRecord:displayedRecord,state,api,esc,notify,revisions:()=>savedRecordRevisions,create:openCreatedRecord});
-const recordDetails=recordDetailsUI({state,esc,field,dirty:()=>dirtyRecord(),render,showDialog,notify,navigate:navigateResearch,api});
+const recordDetails=recordDetailsUI({state,esc,showDialog,notify,navigate:navigateResearch});
 const bookReferences=bookReferenceUI({state,api,esc,showDialog,notify,revisions:()=>savedRecordRevisions});
 async function recordLinkDestinations({query='',cursor=null,signal}={}){
  const book=state.book,context=state.storage?.contextId;
@@ -573,26 +469,24 @@ const recordValues=recordValuesUI({state,api,esc,field,notify,access:operation=>
 const runCreation=recordRunCreationUI({state,api,esc,notify,onCreated:async result=>{await workspaceLive.check();await openRecordReading(result.recordId);}});
 const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordContent.locationTarget(),refresh:()=>workspaceLive.check(),choose:options=>recordDestination.open(options),access:operation=>withProjectAccess(operation),moved:result=>{location.hash=ownedRoute('#/records/'+result.recordId+'/read',{projectId:result.projectId,labBookId:result.labBookId});}});
 const recordRemoval=recordRemovalUI({state,api,esc,notify,target:()=>recordContent.removalTarget(),refresh:()=>workspaceLive.check(),onRemoved:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.selected=null;state.page='entries';state.preview=null;render();}});
-const recordSections=recordSectionsUI({state,documents,esc,field,icon,dirty:dirtyRecord,render});
-const materials=researchMaterialsUI({currentRecordRevision:()=>recordContent.savedRevision(),showFigureResults:figureId=>recordContent.action({dataset:{action:'content-results-figure',resultFigure:figureId}}),access:operation=>withProjectAccess(operation),refreshReader:()=>workspaceLive.check(),getRecord:displayedRecord,state,api,esc,field,showDialog,notify,dirty,render,revisions:()=>savedRecordRevisions,create:openCreatedRecord,editRetainedFigure:({recordId,figure})=>recordValues.open({recordId,field:'figure:'+figure.id,retainedFigure:figure})});
+const materials=researchMaterialsUI({currentRecordRevision:()=>recordContent.savedRevision(),showFigureResults:figureId=>recordContent.action({dataset:{action:'content-results-figure',resultFigure:figureId}}),access:operation=>withProjectAccess(operation),refreshReader:()=>workspaceLive.check(),getRecord:displayedRecord,state,api,esc,field,showDialog,notify,render,revisions:()=>savedRecordRevisions,create:openCreatedRecord,editRetainedFigure:({recordId,figure})=>recordValues.open({recordId,field:'figure:'+figure.id,retainedFigure:figure})});
 // Retained figures in record readers are drawn inline and list their calculation sources.
 retainedFigureReadingSlots({root:document.body,current:()=>JSON.stringify([state.storage?.contextId,state.book?.id]),
  selection:node=>{const figureId=node.dataset.figureId;if(!state.book||state.access?.locked)return null;if(!node.dataset.figureRef)return {workspaceId:state.book.id,recordId:node.dataset.recordId,figureId};const ref=JSON.parse(node.dataset.figureRef);return ref.workspaceId&&ref.workspaceId!==state.book.id?null:{ref:{kind:ref.kind,id:ref.id,revision:ref.revision},figureId};},
  imageURL:selected=>ownedAssetURL(state,'/api/research/materials/retained-figure-export')+'?context='+encodeURIComponent(state.storage?.contextId??'')+'&selection='+encodeURIComponent(JSON.stringify({...selected,format:'svg'})),
  read:body=>api('/api/research/materials/retained-figure',body,{adopt:false})});
-const attempts=attemptUI({editPreparation:recordId=>recordValues.open({recordId,field:'attempt:preparation:'+crypto.randomUUID()}),getRecord:displayedRecord,state,api,esc,field,showDialog,notify,dirty:()=>dirtyRecord(),render,revisions:()=>savedRecordRevisions,openReference:ref=>materials.openReference(ref),requestClose:()=>action({dataset:{action:'close-dialog'}})});
-const results=resultStatementsUI({state,api,esc,field,showDialog,notify,dirty:()=>dirtyRecord(),render,openReference:ref=>materials.openReference(ref)});
+const attempts=attemptUI({getRecord:displayedRecord,esc,openReference:ref=>materials.openReference(ref)});
+const results=resultStatementsUI({api,esc,openReference:ref=>materials.openReference(ref)});
 const mediaImports=mediaImportsUI({state,api,esc,showDialog,notify,apply:applyMedia,busy:value=>{uploading=value;updateSaveStatus();}});
 const recordHistory=recordHistoryUI({state,api,esc,showDialog,notify,revisions:()=>savedRecordRevisions,onRestore:async result=>{
   if(result.historyReceipt){$('#dialog').close();await workspaceLive.check();return;}
   state.book=result.book;state.etag=result.etag;state.dirty=false;state.preview=null;changeVersion++;
-  await recordDrafts.clear();$('#dialog').close();render();
+  $('#dialog').close();render();
 }});
 const recordViews=recordViewsUI({state,api,esc,field,showDialog,notify,snapshot:()=>recordList.snapshot(),apply:q=>{
   Object.assign(state,{page:'entries',selected:null,project:q.notebookId?state.book.notebooks.find(n=>n.id===q.notebookId).projectId:q.projectId,notebook:q.notebookId??'all',filter:q.filter,search:q.search,recordBrowse:q.browse});
   render();rememberFilters();$('#search')?.focus();
 }});
-const figures=figureEditor({getFigures:()=>entry()?.figures??[],getResults:()=>entry()?.results,setResults:value=>{entry().results=value;results.refresh();},prepareCopies:items=>materials.pinFigureSources(items),busyChanged:updateSaveStatus,changed:()=>dirtyRecord(),notify,context:()=>state.book?.id??null},{context:()=>JSON.stringify([researchContext(state),state.storage?.contextId,state.book?.id,state.selected,state.page,state.access?.locked])});
 
 const option = (value, label, selected) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`;
 const labUI=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'laboratory'),handles:name=>name==='laboratory-samples'||name.startsWith('lab-'),load:()=>import('./laboratory-ui.js').then(m=>m.laboratoryUI({state,api,esc,field,option,showDialog,render,notify}))});
@@ -610,8 +504,10 @@ const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,rend
 let recordOpenRequest=0;
 // The selected record page reads again: from its draft for a new record, else from the workspace.
 const refreshRecord=options=>{if(configurationRecord?.active()){configurationRecord.written();render();return;}return workspaceLive.check(options);};
-const recordContent=recordContentUI({state,api,esc,field,render,report,returnLabel:fallback=>recordReturnLabel(fallback),refresh:()=>refreshRecord(),draft:()=>configurationRecord?.draft(),draftControls:()=>configurationRecord?.controls()??'',editWriting:target=>recordWriting.open(target),tools:({readonly})=>recordHistory.button({saved:true})+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary><div class="record-action-menu">'+bookReferences.button()+reviews.button()+migrationProvenance.button()+recordLocation.button()+(readonly?'':recordStarters.button()+recordRemoval.view())+'</div></details>',before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
+const recordContent=recordContentUI({state,api,esc,field,render,report,returnLabel:fallback=>recordReturnLabel(fallback),refresh:()=>refreshRecord(),draft:()=>configurationRecord?.draft(),draftControls:()=>configurationRecord?.controls()??'',editWriting:target=>recordWriting.open(target),tools:({readonly})=>recordHistory.button({saved:true})+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary><div class="record-action-menu">'+bookReferences.button()+reviews.button()+migrationProvenance.button()+recordLocation.button()+(readonly?'':recordStarters.button()+recordRemoval.view())+'</div></details>',before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
 configurationRecord=configurationRecordCreation({state,api,esc,render,onOpened:showCreatedRecord,onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},onSaved:async(result,original)=>{
+ // The record exists once its save is confirmed: nothing is unsaved while its page loads.
+ state.dirty=false;changeVersion++;updateSaveStatus();
  const [outline,content]=await Promise.all([newWorkspaceReader({snapshotId:result.etag}).read({requireOutline:true}),api('/api/workspace/read/record-content',{workspaceId:state.book.id,recordId:result.recordId,snapshotId:result.etag,offset:0,pagedHeader:true},{adopt:false})]);
  if(outline.etag!==result.etag||content.etag!==result.etag||content.recordId!==original.id||content.header?.createdAt!==original.createdAt||!revisionId(content.storageRevision))throw Error(t('recordDrafts','invalidPage'));
  adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=result.recordId;state.page='record-reader';state.recordReading=false;state.recordSection=null;state.dirty=false;recordContent.clear();render();await recordDrafts.refresh();
@@ -634,7 +530,7 @@ const userProfile=userProfileUI({state,api,esc,field,render,notify});
 const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify});
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:()=>{applyAppTheme(textControls);updateSaveStatus();}});
 const shellMenu=shellNavigation();
-const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,canGoBack:()=>routeIndex>0,pageKey:()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.page,...(['editor','record-reader'].includes(state.page)?[state.selected,state.recordReading]:state.page==='module'?[state.moduleId,state.modulePath]:state.page==='help'?[state.helpTopic,state.helpSection]:[state.project,state.notebook,state.websiteId])])});
+const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,canGoBack:()=>routeIndex>0,pageKey:()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.page,...(state.page==='record-reader'?[state.selected,state.recordReading]:state.page==='module'?[state.moduleId,state.modulePath]:state.page==='help'?[state.helpTopic,state.helpSection]:[state.project,state.notebook,state.websiteId])])});
 const connectedWork=moduleLinks({state,api,esc});
 const bookStorage=labBookStorageUI({state,api,esc,field,showDialog,access:operation=>withProjectAccess(operation),moved:async(result,view,entry)=>{await labBookDirectoryUI.refresh(entry.projectId);await labBookDirectoryUI.refresh(result.projectId);if(location.hash===view)location.hash=ownedRoute('#/notebooks/'+result.book.labBookId,{projectId:result.projectId,labBookId:result.book.labBookId});}});
 const bookAccessSettings=labBookAccessSettingsUI({state,api,esc,field,enterProject:id=>projectOwners.enter(id),render});
@@ -659,7 +555,7 @@ async function captureResearchReturn(){
  if(state.page==='module')origin.moduleReturn=await modules.captureReturn();
  return origin;
 }
-const openModuleReference=moduleReferenceNavigation({state,api,access:operation=>withProjectAccess(operation),captureReturn:()=>['editor','record-reader'].includes(state.page)?state.recordReturn:captureResearchReturn(),openResearch:(target,origin)=>navigateResearch(target,{origin}),openModule:destination=>rawAction({dataset:{action:'module-open-owned',...destination}})});
+const openModuleReference=moduleReferenceNavigation({state,api,access:operation=>withProjectAccess(operation),captureReturn:()=>state.page==='record-reader'?state.recordReturn:captureResearchReturn(),openResearch:(target,origin)=>navigateResearch(target,{origin}),openModule:destination=>rawAction({dataset:{action:'module-open-owned',...destination}})});
 
 const returnNavigation=researchReturnNavigation({state,enterOwner:(projectId,labBookId)=>projectOwners.enter(projectId,labBookId),readyModule:id=>modules.ready(id),restoreModule:(token,options)=>modules.restoreReturn(token,options),render});
 
@@ -676,19 +572,17 @@ function pendingChanges(scope='all'){
   if(scientificForm&&!forms.includes(scientificForm))forms.push(scientificForm);
   const labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':appText('workspaceDetails'),'storage-access-form':appText('localAccess'),'create-form':appText('workspaceSetup'),'publish-token-form':appText('unsubmittedConnection')}[form.id]??appText('unsubmittedForm')));
   if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?appText('labBookTemplate'):appText('projectBookSettings'));
-  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(configurationRecord?.active()?appText('recordEdits',{title:recordContent.title()??configurationRecord.title()??appText('newRecord')}):state.page==='editor'?appText('recordEdits',{title:entry()?.title??appText('newRecord')}):appText('namedEdits',{name:document.querySelector('main h1')?.textContent??appText('workspace')}));
+  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(configurationRecord?.active()?appText('recordEdits',{title:recordContent.title()??configurationRecord.title()??appText('newRecord')}):appText('namedEdits',{name:document.querySelector('main h1')?.textContent??appText('workspace')}));
   if(scope==='all'&&state.publishing?.dirty)labels.push(appText('publishingDestination'));
   if(scope==='all'&&modules.needsNavigationGuard())labels.push(appText('moduleEdits'));
   if(scope==='all'&&(navigation?dashboard.needsNavigationGuard():dashboard.isDirty()))labels.push(appText('moduleSettings'));
   if(scope==='all'&&userProfile.isDirty())labels.push(t('userProfile','title'));
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))labels.push(appText('appSettings'));
-  if(attempts.isDirty())labels.push(t('attempts','title'));
-  return {forms,labels:[...new Set(labels)],canKeep:labels.length===1&&forms.length===1&&materials.canKeepRecovery(forms[0]),canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
+  return {forms,labels:[...new Set(labels)],canKeep:labels.length===1&&forms.length===1&&materials.canKeepRecovery(forms[0]),canSave:forms.every(form=>saveableForms.has(form.id))};
 }
 async function savePending(scope='all',forms=drafts.changed(scope),{requireClean=true}={}){
  if(state.filesMode){await websiteFiles?.save();return !websiteFiles?.isDirty();}
  const guardScope=scope;if(scope==='navigation')scope='all';
- if(figures.isBusy())throw Error(t('figureProvenance','checking'));
   if(forms.some(form=>!saveableForms.has(form.id)))throw new Error(appText('completeAction'));
   for(const form of forms)if(!form.checkValidity())throw new Error(appText('requiredFields'));
   for(const form of forms){
@@ -701,7 +595,6 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
   if(scope==='all'&&modules.isDirty())await modules.save();
   if(scope==='all'&&dashboard.isDirty())await (guardScope==='navigation'?dashboard.saveNavigation():dashboard.save());
   if(scope==='all'&&userProfile.isDirty())await userProfile.save();
-  if(scope==='all'&&state.page==='editor')recordDetails.validate();
   if(scope==='all'||forms.length)await save();
   const complete=pendingChanges(guardScope).labels.length===0;
   if(!complete&&requireClean)throw new Error(appText('newerChanges'));
@@ -711,15 +604,13 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
   if(state.filesMode){await websiteFiles?.discard();return;}
   const navigation=scope==='navigation';if(navigation)scope='all';
   if(savePromise)await savePromise;
-  if(initialRecordSave?.pending&&recordDrafts.saveUncertain())await saveInitialRecord();
   if(configurationRecord?.active())await configurationRecord.discard();
   const scientificDialog=navigation?forms.find(form=>materials.canKeepRecovery(form))?.closest('dialog'):null;
   for(const form of forms)await materials.discardRecovery(form);
   drafts.reset(forms);
-  attempts.stop();
   await structureUI.notebooks.discard();
   if(scope==='all'){
-    if(state.dirty&&savedBook){const latest=await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});state.book=latest.book;state.etag=latest.etag;state.dirty=false;changeVersion++;state.preview=null;await recordDrafts.clear();initialRecordSave=null;}
+    if(state.dirty&&savedBook){const latest=await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});state.book=latest.book;state.etag=latest.etag;state.dirty=false;changeVersion++;state.preview=null;}
     if(forms.some(form=>form.id==='server-login-form'))publishUI.discardServerLogin();
     if(modules.isDirty())await modules.discard();
     if(dashboard.isDirty())await (navigation?dashboard.discardNavigation():dashboard.discard());
@@ -730,16 +621,16 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
   updateSaveStatus();
   if(scope==='all'){const previous=restoringRoute;restoringRoute=true;try{render();}finally{restoringRoute=previous;}}
 }
-const leave=unsavedChanges({esc,defaultScope:'navigation',flush:async scope=>{await textControls.settle();if(scope!=='dialog')await modules.flushAutosave();},prepare:scope=>scope==='navigation'&&state.page==='module'?modules.captureReturn():undefined,changes:pendingChanges,save:savePending,discard:discardPending,keep:()=>materials.keepRecovery(),busy:()=>removingRecord||uploading||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
+const leave=unsavedChanges({esc,defaultScope:'navigation',flush:async scope=>{await textControls.settle();if(scope!=='dialog')await modules.flushAutosave();},prepare:scope=>scope==='navigation'&&state.page==='module'?modules.captureReturn():undefined,changes:pendingChanges,save:savePending,discard:discardPending,keep:()=>materials.keepRecovery(),busy:()=>uploading||fontLibrary.busy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
 const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
- blocked:({completedDialog=null,manual=false}={})=>Boolean(!manual&&recordList.hasPinnedPage()||workspaceOpening||completingWorkspace||savePromise||restoringRoute||uploading||removingRecord||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||pendingChanges().labels.length||[...document.querySelectorAll('dialog[open],form[data-busy]')].some(element=>element!==completedDialog&&!completedDialog?.contains(element))||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')&&!completedDialog?.contains(document.activeElement)),
+ blocked:({completedDialog=null,manual=false}={})=>Boolean(!manual&&recordList.hasPinnedPage()||workspaceOpening||completingWorkspace||savePromise||restoringRoute||uploading||fontLibrary.busy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||pendingChanges().labels.length||[...document.querySelectorAll('dialog[open],form[data-busy]')].some(element=>element!==completedDialog&&!completedDialog?.contains(element))||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')&&!completedDialog?.contains(document.activeElement)),
  version:({workspaceId,signal})=>api('/api/workspace/read/version',{workspaceId},{adopt:false,signal}),
  read:({signal,version})=>state.recordScope?api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope.ids},{adopt:false,signal}):newWorkspaceReader().read({requireOutline:Boolean(state.workspaceOutline),signal}),
  apply:result=>{
   const scroll={x:window.scrollX,y:window.scrollY},sidebar=document.querySelector('#main-navigation'),sideScroll=sidebar?.scrollTop;
   adoptSnapshot(result);state.book=result.book;state.etag=result.etag;
   
-  if(state.project&&!state.book.projects.some(p=>p.id===state.project)||state.notebook!=='all'&&!state.book.notebooks.some(n=>n.id===state.notebook)||state.page==='editor'&&!state.book.entries.some(r=>r.id===state.selected))Object.assign(state,resolveRoute(location.hash,state.book));
+  if(state.project&&!state.book.projects.some(p=>p.id===state.project)||state.notebook!=='all'&&!state.book.notebooks.some(n=>n.id===state.notebook))Object.assign(state,resolveRoute(location.hash,state.book));
   recordList.stop({clear:true});dashboard.refreshData();render();
   window.scrollTo(scroll.x,scroll.y);if(sidebar)sidebar.scrollTop=sideScroll;
  }
@@ -762,7 +653,6 @@ async function leaveEditorFor(button){
 // Find anything runs the same action as the control an entry names.
 const finder=findAnything({state,api,esc,run:async control=>{if(control.dataset.toolQuery!==undefined)state.toolQuery=control.dataset.toolQuery;if(state.filesMode&&!editorPlace(control.dataset.action)&&!control.dataset.action?.startsWith('website-files-'))return leaveEditorFor(control);return action(control);}});
 async function action(button){
-  if(removingRecord)return;
   const fileAction=button.dataset.action;
   if(fileAction==='shell-back'){if(routeIndex>0)history.back();return;}
   // In the website editor, Find searches the editor: its tools, elements, pages and layers.
@@ -790,10 +680,10 @@ async function action(button){
   if(name?.startsWith('starter-')&&!['starter-add','starter-remove','starter-up','starter-down'].includes(name))return leave.run(()=>rawAction(button));
   if(['material-home','material-close','material-draft-back'].includes(name))return leave.run(()=>rawAction(button),{scope:'dialog'});
   if(name==='close-dialog')return leave.run(async()=>($('#dialog[open] .folder-browser')?storageControls.action({dataset:{action:'storage-browse-cancel'}}):rawAction(button)),{scope:'dialog'});
-  if((['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner)||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){
+  if(['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner){
     // Choosing the page already shown still supersedes a slower navigation in progress.
     if(navigationActions.has(name))navigationChoice={action:name};
-    if(name==='open-issue')$('#dialog').close();return;}
+    return;}
   if(navigationActions.has(name)){if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{/* Automatic settings remain available for retry in their section. */}const scope=['storage-new','storage-open-dialog','storage-open-recent','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-lock','storage-reset-dialog'].includes(name)?'all':'navigation';return leave.run(()=>rawAction(button),{scope});}
   return rawAction(button);
 }
@@ -802,9 +692,9 @@ $('#dialog').addEventListener('cancel',event=>{event.preventDefault();action({da
 function renderAccess(content){help.stop();appShell.showStandalone(content);accessHelp.fromRoute();}
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
-const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','interface','tools','dashboard-settings','templates','workspaces','appearance','laboratory','website','publishing','integrations','agents','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
+const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>['record-reader','user-profile','websites','help','entries','projects','project','preferences','interface','tools','dashboard-settings','templates','workspaces','appearance','laboratory','website','publishing','integrations','agents','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true,origin=null){
- const returnOrigin=origin??(!['editor','record-reader'].includes(state.page)?await captureResearchReturn():null);
+ const returnOrigin=origin??(state.page!=='record-reader'?await captureResearchReturn():null);
  const sameRecord=state.page==='record-reader'&&state.selected===id;
  if(!sameRecord&&!await selectRecord(id,{metadataOnly:true}))return false;
  if(returnOrigin)state.recordReturn=returnOrigin;
@@ -847,19 +737,18 @@ function render() {
   if(state.access?.locked){userProfile.release();activity.hide();}
   workspaceLive.bind();
   if(state.page!=='workspaces')storageControls.workspaces.bind();
-  releaseCompleteWorkspace();structureUI.bind();recordDetails.sync();if(!['editor','record-reader'].includes(state.page)||state.access?.locked||state.storageUnavailable||state.newWorkspace){recordActivity.stop();workflow.stop();}
-  if((state.workspaceOutline||state.recordScope&&state.page!=='editor')&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!outlineViewSupported()){
+  releaseCompleteWorkspace();structureUI.bind();if(state.page!=='record-reader'||state.access?.locked||state.storageUnavailable||state.newWorkspace){recordActivity.stop();workflow.stop();}
+  if((state.workspaceOutline||state.recordScope)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!outlineViewSupported()){
     void ensureCompleteWorkspace().then(render).catch(report);return;
   }
-  migration.bind();attempts.bind();reviews.release();migrationProvenance.release();
+  migration.bind();reviews.release();migrationProvenance.release();
   if(state.page!=='entries'||state.access?.locked||state.newWorkspace)recordList.stop();
-  figures.release();
   documents.release();
   previewSurfaces.forEach(surface=>surface.destroy());previewSurfaces=[];
   document.documentElement.dataset.appMode=state.access?.locked||state.storageUnavailable&&!state.newWorkspace?'access':!state.book||state.newWorkspace?'setup':'workspace';
   applyAppTheme(textControls);
   if(document.documentElement.dataset.appMode!=='workspace')shellMenu.apply(null);
-  if(state.access?.locked){recordWriting.locked();recordValues.locked();dashboard.releaseData();recordList.stop({clear:true});fontLibrary.clear();recordSelectionLoading.close();recordUpdatesLoading.close();recordRecovery.close();recordDrafts.close();$('#dialog').close();notices.hide();renderAccess(storageControls.lockView());return;}
+  if(state.access?.locked){recordWriting.locked();recordValues.locked();dashboard.releaseData();recordList.stop({clear:true});fontLibrary.clear();recordSelectionLoading.close();recordUpdatesLoading.close();recordDrafts.close();$('#dialog').close();notices.hide();renderAccess(storageControls.lockView());return;}
   if(state.page==='workspaces'&&!state.newWorkspace&&(state.storageUnavailable||!state.book)){renderAccess(storageControls.workspaces.view({standalone:true}));storageControls.workspaces.bind();syncRoute();return;}
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
@@ -867,9 +756,9 @@ function render() {
   if(state.page==='publishing'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/publishing':'#/publishing',replace:true}).catch(report);return;}
   accessHelp.close();clearOwnerSwitch();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
-  fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();
+  fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();modules.bind();connectedWork.bind();documents.bind();mediaImports.bind();
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe.preview-frame')].map(frame=>previewSurface(frame));
-  syncRoute();storageControls.workspaces.bind();storageControls.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
+  syncRoute();storageControls.workspaces.bind();storageControls.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
   userProfile.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
 }
 
@@ -901,19 +790,18 @@ function renderPage(){
  case 'laboratory':content=labUI.view();break;
  case 'projects':content=structureUI.overview();break;
  case 'record-reader':content=recordContent.view();break;
- case 'editor':content=renderEditor();break;
  default:content=renderEntries();
  }
- if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext(state.page==='record-reader'?recordContent.title()??entry()?.title??'':state.page==='editor'?entry()?.title||appText('newRecord'):null)+content;
+ if(['entries','record-reader'].includes(state.page))content=structureUI.recordContext(state.page==='record-reader'?recordContent.title()??entry()?.title??'':null)+content;
  if(state.page==='project'||state.page==='entries'&&state.notebook!=='all')content+='<button class="button" data-action="research-copy-context">'+esc(appText(state.page==='project'?'copyProject':'copyBook'))+'</button>';
- if(['workspace','entries','editor','record-reader'].includes(state.page))content=recordDrafts.banner()+content;
- const helpTopic=({workspace:'getting-started',tools:'getting-started',entries:'records',editor:'records','record-reader':'records',website:'publishing',websites:'publishing',appearance:'publishing',publishing:'publishing',review:'publishing',storage:'storage',project:'getting-started',projects:'getting-started',module:({inventory:'inventory',timeline:'timeline',collaboration:'reviews',organizations:'reviews','pdf-editor':'publishing'})[state.moduleId]??'evidence'})[state.page];
- if(helpTopic)content='<div class="task-guidance"><button class="button subtle" data-action="context-help" data-topic="'+helpTopic+'">'+esc(ux('contextHelp'))+'</button>'+(['editor','record-reader','project','entries'].includes(state.page)?'<button class="button subtle" data-action="tools">'+esc(ux('tools'))+'</button>':'')+'</div>'+content;
+ if(['workspace','entries','record-reader'].includes(state.page))content=recordDrafts.banner()+content;
+ const helpTopic=({workspace:'getting-started',tools:'getting-started',entries:'records','record-reader':'records',website:'publishing',websites:'publishing',appearance:'publishing',publishing:'publishing',review:'publishing',storage:'storage',project:'getting-started',projects:'getting-started',module:({inventory:'inventory',timeline:'timeline',collaboration:'reviews',organizations:'reviews','pdf-editor':'publishing'})[state.moduleId]??'evidence'})[state.page];
+ if(helpTopic)content='<div class="task-guidance"><button class="button subtle" data-action="context-help" data-topic="'+helpTopic+'">'+esc(ux('contextHelp'))+'</button>'+(['record-reader','project','entries'].includes(state.page)?'<button class="button subtle" data-action="tools">'+esc(ux('tools'))+'</button>':'')+'</div>'+content;
  if(['tools','module'].includes(state.page)&&toolOrigin?.context===state.storage?.contextId)content='<button class="button task-return" data-action="tool-return">'+esc(ux('returnTask',{name:toolOrigin.title}))+'</button>'+content;
  content=content+sectionActions();content=preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
  // One page frame for every page: work pages use the full width, reading and
  // settings pages one column (docs/ui-overhaul/2026-11-25-consistency-design.md).
- const width=['workspace','entries','editor','module','laboratory','migration'].includes(state.page)?'wide':'column';
+ const width=['workspace','entries','module','laboratory','migration'].includes(state.page)?'wide':'column';
  return '<div class="page-frame" data-page-width="'+width+'">'+content+'</div>';
 }
 
@@ -938,36 +826,6 @@ function recordReturnLabel(fallback){
   const origin=state.recordReturn,module=origin?.page==='module'?FEATURE_MODULES.find(item=>item.id===origin.moduleId):null;
   return module?ux('returnTask',{name:moduleLabel(module)}):fallback;
 }
-function renderEditor() {
-  const e=entry();
-  if(!e){state.page='entries';return renderEntries();}
-  if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">${esc(recordReturnLabel(appText('backRecords')))}</button><button class="button" data-action="record-edit">${esc(appText('editRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
-   <article class="record-reader">${recordRevisionView(e,esc,{title:e.title,headExtra:publicationAvailability(e,state.book.notebooks.find(n=>n.id===e.notebookId),esc,{compact:true})+recordActivity.view({readonly:true})+workflow.view({readonly:true}),assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),relations:false,anchors:true,sectionsHtml:figure=>recordSections.view(e,{readonly:true,figure}),attemptReference:attempts.reference,resultReference:results.reference})}${materials.view(e,{readonly:true})}${recordDetails.relations(e,{readonly:true})}</article>`;
-  const notebook=state.book.notebooks.find(n=>n.id===e.notebookId);
-  const notebookOptions=state.book.projects.map(project=>`<optgroup label="${esc(appText('projectLabel',{project:project.title}))}">${state.book.notebooks.filter(n=>n.projectId===project.id).map(n=>option(n.id,n.title,e.notebookId)).join('')}</optgroup>`).join('');
-  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(recordReturnLabel(appText('backRecords')))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}<details class="record-actions" data-disclosure="draft-actions"><summary>${esc(ux('actions'))}</summary><button class="button danger" data-action="delete-entry">${esc(t('recordAuthoring','remove'))}</button></details></div>
-    <article class="record-draft-editor"><h1>${esc(ux('writeRecord'))}</h1><section class="editor-paper" aria-label="${esc(appText('entryEditor'))}">
-      ${field(esc(appText('recordTitle')),`<textarea rows="1" class="title-input" data-entry="title" maxlength="180" placeholder="${esc(appText('recordName'))}">${esc(e.title)}</textarea>`)}
-      ${documents.field({key:e.id+':body',label:appText('summaryContext'),value:e.body,set:value=>{editableRecord(state.book,e.id).body=value;dirtyRecord(e.id);}})}
-      ${renderSections(e)}
-      ${publicationAvailability(e,notebook,esc,{draft:true})}
-    </section><details class="record-edit-group" data-disclosure="draft-evidence"><summary>${esc(ux('evidence'))}</summary>${renderMedia(e)}${figures.view()}${materials.view()}${attempts.view()}<div data-result-statements>${results.view()}</div>${recordDetails.relations(e)}${connectedWork.view()}</details>
-    <details class="record-edit-group" data-disclosure="draft-details"><summary>${esc(ux('details'))}</summary><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
-      ${e.template?'<p class="scope-kicker">'+esc(templateText(e.template.label))+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
-      ${field(esc(appText('progress')),`<select data-entry="status">${[...LIFECYCLE_STATUSES,...(LIFECYCLE_STATUSES.includes(e.status)?[]:[e.status])].map(status=>option(status,LIFECYCLE_STATUSES.includes(status)?recordStatus(status):appText('legacyStatus',{status:recordStatus(status)}),e.status)).join('')}</select>`)}
-      ${field(esc(appText('outcome'))+' <small>'+esc(appText('optional'))+'</small>',`<input data-entry="outcome" data-length-limit="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="${esc(appText('outcomePlaceholder'))}"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>${lengthCount(e.outcome,500,esc)}`)}
-      <p class="muted">${esc(appText('progressHelp'))}</p>
-      ${recordDateFields(e.occurredOn,{field,option,esc})}
-      ${field(esc(appText('labBook')),`<select data-entry="notebookId">${notebook?'':option(e.notebookId,appText('chooseBook'),e.notebookId)}${notebookOptions}</select>`)}
-      <p class="muted">${esc(appText('locationLabel',{location:locationName(projectDirectoryUI.navigation(state.book),notebook?.projectId)}))}</p>
-      ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<textarea data-entry="tags" rows="1" placeholder="${esc(appText('tagExample'))}">${esc(formatRecordTagList(e.tags))}</textarea>`)}${recordFields(e,{field,option,esc})}${recordDetails.contributors(e)}
-    </section></details>
-    <details class="record-edit-group" data-disclosure="draft-activity"><summary>${esc(ux('activity'))}</summary>${recordActivity.view()}${workflow.view()}</details></article>`;
-}
-
-
-
-
 async function addEntry(type, notebookId,section=null,subject=null) {
   const local = new Date(), now = local.toISOString();
   const occurredOn = [local.getFullYear(), String(local.getMonth() + 1).padStart(2, '0'), String(local.getDate()).padStart(2, '0')].join('-');
@@ -991,7 +849,7 @@ function showCreatedRecord(e){
 
 const structureActions=new Set(['book-convert-open','book-convert-resume','book-convert-return','configuration-profile-retry','configuration-edit','new-project','edit-project','edit-project-template','project-template-command','new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook','lab-book-delete','lab-book-delete-cancel','workspace-reorganize','location-counts-retry']);
 const recordCreationActions=new Set(['new-entry','choose-notebook','configuration-record-retry']);
-const scopedRecordAction=name=>name?.startsWith('starter-')||name?.startsWith('record-content-')||name?.startsWith('result-')||name?.startsWith('attempt-')||name?.startsWith('workflow-')||name?.startsWith('material-')||name?.startsWith('media-import-')||recordCreationActions.has(name)||name==='delete-entry'||name==='save'||name==='discard-section'||name==='back-to-records'||name==='record-read'||name==='record-edit'||name==='record-section-jump'||name==='record-copy-reference'||name==='record-workflow-link'||name?.startsWith('record-link-')||name?.startsWith('research-target-')||name==='record-backlink-open'||name?.startsWith('record-history-')||name?.startsWith('record-activity-')||name?.startsWith('record-contributor-')||name?.startsWith('section-')||name?.startsWith('figure-')||name==='remove-media';
+const scopedRecordAction=name=>name?.startsWith('starter-')||name?.startsWith('record-content-')||name?.startsWith('result-')||name?.startsWith('attempt-')||name?.startsWith('workflow-')||name?.startsWith('material-')||name?.startsWith('media-import-')||recordCreationActions.has(name)||name==='save'||name==='discard-section'||name==='back-to-records'||name==='record-read'||name==='record-edit'||name==='record-section-jump'||name==='record-copy-reference'||name==='record-workflow-link'||name?.startsWith('record-link-')||name?.startsWith('research-target-')||name==='record-backlink-open'||name?.startsWith('record-history-')||name?.startsWith('record-activity-')||name?.startsWith('section-')||name?.startsWith('figure-');
 // The latest page the author chose. Opening a website for an earlier choice
 // can finish after it and must not replace the newer page.
 let navigationChoice={action:null};
@@ -1074,7 +932,7 @@ async function rawAction(button) {
   if(state.page==='record-reader'){
    if(name==='record-location-open'){recordLocation.open();return;}
    if(name?.startsWith('workflow-')){await workflow.action(button);return;}
-   if(name==='record-removal-open'){if(uploading||figures.isBusy()||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);recordRemoval.open();return;}
+   if(name==='record-removal-open'){if(uploading||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);recordRemoval.open();return;}
    // The linked-record type chooser opened from this record reports its choice through the same owner.
    // A subject is linked through the record's own values, without loading the workspace;
    // its paged subject picker answers its own controls first, so paging never loads the whole workspace either.
@@ -1093,14 +951,16 @@ async function rawAction(button) {
   }
   if(state.page==='record-reader'&&name==='record-link-open'){const link=recordContent.current()?.relations.find(link=>link.id===button.dataset.id);if(link)await navigateResearch(link.target);return;}
   if(['browse-record','record-read-linked','record-read','record-edit','edit-entry','open-issue'].includes(name)){
-   const id=button.dataset.id??state.selected,unsaved=state.page==='editor'&&state.book.entries.some(record=>record.id===id)&&!savedRecordRevisions[id];
-   if(!unsaved){$('#dialog').close();return openRecordReading(id,null,['browse-record','record-read-linked','record-read'].includes(name)||name==='edit-entry'&&button.dataset.reading==='true');}
+   // A run's series link opens its experiment with the run series shown.
+   state.runSeries=name==='record-read-linked'&&button.dataset.runSeries==='true'?button.dataset.id:null;
+   $('#dialog').close();return openRecordReading(button.dataset.id??state.selected,null,['browse-record','record-read-linked','record-read'].includes(name)||name==='edit-entry'&&button.dataset.reading==='true');
   }
   if(name==='user-profile'||name?.startsWith('user-profile-')){
     if(await userProfile.action(button))return;
   }
   if(name==='workspace-refresh'){await workspaceLive.check({manual:true});return;}
-  const readingAction=state.page==='record-reader'&&name==='back-to-records';
+  // A new record's Save and Discard act on its draft only, never on the whole workspace.
+  const readingAction=state.page==='record-reader'&&(name==='back-to-records'||configurationRecord?.active()&&['save','configuration-record-discard'].includes(name));
   const appearanceAction=name==='appearance'||name?.startsWith('interface-')||state.page==='appearance'&&(['save','discard-section'].includes(name)||name?.startsWith('theme-'));
   const outlineModuleAction=name==='laboratory-samples'||state.page==='laboratory'&&name?.startsWith('lab-')||name?.startsWith('review-')||name==='module-open'&&modules.supportsOutline(button.dataset.moduleId)||state.page==='module'&&modules.supportsOutline(state.moduleId)&&(name==='module-command'||['module-reference-','module-choice-','research-target-'].some(prefix=>name?.startsWith(prefix)));
   // Account controls operate on credentials and destination state, never on
@@ -1118,11 +978,14 @@ async function rawAction(button) {
   if(await structureUI.notebooks.action(button)){returnToProjectAfterBookSettings(name);return;}
   if(name==='module-open'&&moduleDestination(button.dataset.moduleId)){state.page=moduleDestination(button.dataset.moduleId);state.project=null;state.notebook='all';render();return;}
   if(name==='module-open')document.querySelector('#dialog').close();
-  if(await recordStarters.action(button)||await bookReferences.action(button)||await results.action(button)||await attempts.action(button)||await migrationProvenance.action(button)||await migration.action(button)||await reviews.action(button)||await mediaImports.action(button)||await recordList.action(button)||await recordViews.action(button)||await recordActivity.action(button)||await workflow.action(button)||await recordHistory.action(button)||await materials.action(button)||await figures.action(button)||await modules.action(button)||await recordDetails.action(button)||await dashboard.action(button))return;
+  if(await recordStarters.action(button)||await bookReferences.action(button)||await results.action(button)||await attempts.action(button)||await migrationProvenance.action(button)||await migration.action(button)||await reviews.action(button)||await mediaImports.action(button)||await recordList.action(button)||await recordViews.action(button)||await recordActivity.action(button)||await workflow.action(button)||await recordHistory.action(button)||await materials.action(button)||await modules.action(button)||await recordDetails.action(button)||await dashboard.action(button))return;
   if (await setupControls.action(button) || await textControls.action(button) || await storageControls.action(button) || await structureUI.action(button) || await labUI.action(button) || await publishUI.action(button) || await extendedAction(button)) return;
   if (name === 'close-dialog') { recordDestination.reset();await structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
   if (name === 'discard-section') { await discardPending(); return; }
-  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); notify(complete?appText('changesSaved'):t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
+  if (name === 'save') { button.disabled = true; try { await savePending('all'); notify(appText('changesSaved')); }
+    // A new record that could not be saved stays open with the reason beside its Save record button.
+    catch(error){if(!configurationRecord?.active())throw error;}
+    finally { updateSaveStatus(); } return; }
   if(name==='clear-record-filters'){state.search='';state.filter='all';state.recordBrowse=null;rememberFilters();render();$('#search')?.focus();return;}
   if (name === 'entries') { state.search='';state.filter='all';state.recordBrowse=null;state.page = 'entries'; state.project = null; state.notebook = 'all'; render(); }
   if (name === 'projects' || name === 'website') { $('#dialog').close(); state.page = name; state.project = null; state.notebook = 'all'; render(); }
@@ -1131,22 +994,8 @@ async function rawAction(button) {
     state.bookReading=false;state.notebook = button.dataset.id; state.project = state.book.notebooks.find(n => n.id === state.notebook)?.projectId; state.search = ''; state.filter = 'all';state.recordBrowse=null; state.page = 'entries'; render(); }
   if (name === 'new-entry') { chooseEntry(button.dataset.notebook); }
   if(name==='choose-notebook'){$('#dialog').close();chooseEntry(button.dataset.id);return;}
-  if(name==='record-read'||name==='record-edit'){state.recordReading=name==='record-read';state.recordSection=null;render();return;}
   if(name==='record-section-jump'){state.recordSection=button.dataset.id;render();return;}
-  if(name==='record-read-linked'){if(!await selectRecord(button.dataset.id))return;const target=state.book.entries.find(e=>e.id===button.dataset.id);if(target){state.selected=target.id;state.runSeries=button.dataset.runSeries==='true'?target.id:null;const n=state.book.notebooks.find(n=>n.id===target.notebookId);state.notebook=n.id;state.project=n.projectId;state.recordReading=true;state.recordSection=null;render();window.scrollTo(0,0);}return;}
-  if(name==='browse-record'){
-    button.disabled=true;try{if(!await selectRecord(button.dataset.id))return;}finally{button.disabled=false;}
-    return rawAction({dataset:{action:'edit-entry',id:button.dataset.id,reading:'true'}});
-  }
-  if (name === 'edit-entry' || name === 'open-issue') { if((!state.recordScope||!state.book.entries.some(e=>e.id===button.dataset.id))&&!await selectRecord(button.dataset.id))return;$('#dialog').close(); if (state.book.entries.some(e => e.id === button.dataset.id)) { state.recordReturn = {bookReading:!!state.bookReading,page:state.page,project:state.project,notebook:state.notebook,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id}; state.selected = button.dataset.id; state.recordReading=button.dataset.reading==='true';state.recordSection=null; const n=state.book.notebooks.find(n=>n.id===entry().notebookId); state.project=n.projectId; state.notebook=n.id; state.page = 'editor'; render(); } else { state.page = 'website'; render(); } }
   if (name === 'back-to-records') return returnNavigation.back();
-
-  if (name === 'delete-entry') {
-    if(uploading||figures.isBusy()||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);
-    if (!await confirmAction(t('recordAuthoring','confirmRemove'),{action:'remove'})) return;
-    return removeSelectedRecord();
-  }
-
 }
 
 document.addEventListener('click', event => {
@@ -1175,9 +1024,7 @@ document.addEventListener('input', event => {
   if(event.target.id==='preferences-section'){const next=event.target.value;event.target.value=state.page;action({dataset:{action:next,preferences:'true'}}).catch(report);return;}
   if(structureUI.projectStorage.input(event.target))return;
   if(structureUI.notebooks.input(event.target))return;
-  if(updateRecordDate(event.target,entry(),{field,option,esc})){dirtyRecord();return;}
-  if(updateRecordField(event.target,entry())){dirtyRecord();return;}
-  if(migration.input(event.target)||reviews.input(event.target)||figures.input(event.target)||modules.input(event.target)||recordDetails.input(event.target)||recordActivity.input(event.target)||dashboard.input(event.target))return;
+  if(migration.input(event.target)||reviews.input(event.target)||modules.input(event.target)||recordActivity.input(event.target)||dashboard.input(event.target))return;
   if(storageControls.input(event.target))return;
   if(userProfile.input(event.target))return;
   const el = event.target;
@@ -1192,17 +1039,6 @@ document.addEventListener('input', event => {
   if(labUI.input(el))return;
   if(el.dataset.recordBrowse){state.recordBrowse={...recordBrowse(state.recordBrowse),[el.dataset.recordBrowse]:el.value};refreshRecordResults();return;}
   if (el.id === 'search') { state.search = el.value;refreshRecordResults();return; }
-  if(el.matches('[data-publication-part],[data-publication-figure]')&&el.closest('.record-draft-editor')){const record=entry();record.publication=updatePublicationPart(record.publication,el);dirtyRecord();return;}
-  if (el.dataset.entry) {
-    const record=entry(),previousNotebook=record.notebookId;
-    record[el.dataset.entry] = el.type === 'checkbox' ? el.checked : el.dataset.entry === 'tags' ? parseRecordTagList(el.value) : el.value;
-    if(el.dataset.entry==='notebookId'&&previousNotebook!==record.notebookId){
-      record.share=false;if(record.sharePdf)record.sharePdf=false;state.notebook=record.notebookId;
-      state.project=state.book.notebooks.find(n=>n.id===record.notebookId)?.projectId??null;
-      dirtyRecord();render();$('[data-entry="notebookId"]')?.focus({preventScroll:true});
-    }else dirtyRecord();
-  }
-  if (el.dataset.book) { state.book[el.dataset.book] = el.value; dirty(); }
 
 });
 document.addEventListener('change', event => { if (event.target.id === 'type-filter') { state.filter = event.target.value;refreshRecordResults(); } });
@@ -1211,7 +1047,6 @@ async function submitForm(form){
   if(form.id==='lab-book-access-form')return bookAccessSettings.submit(form);
   if(form.id==='user-profile-form'){await userProfile.save();return;}
   if(await recordStarters.submit(form))return;
-  if(await attempts.submit(form))return;
   if(form.id==='inventory-form'||form.id.startsWith('migration-import-'))return migration.submit(form);
   if(form.id.startsWith('review-'))return reviews.submit(form);
   if(form.dataset.busy)return;
@@ -1243,7 +1078,7 @@ async function submitForm(form){
   }catch(error){if(beforeBook&&state.etag===beforeEtag){state.book=beforeBook;Object.assign(state,locationBefore);dirty();}throw error;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(form.id==='create-form')setupControls.busy(false);}
 }
 document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;if(state.filesMode&&form.matches('[data-website-files-form]')){websiteFiles?.submit(form).catch(report);return;}submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??appText('workspaceCreateFailed'));else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??appText('formSaveFailed'),true);else report(error);});});
-window.addEventListener('beforeunload', event => { if (pendingChanges().labels.length || uploading || figures.isBusy() || materials.isBusy()) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (pendingChanges().labels.length || uploading || materials.isBusy()) { event.preventDefault(); event.returnValue = ''; } });
 // Ctrl+K (Command+K) opens Find anything from anywhere in the workspace. Where Ctrl+K
 // already means something (adding a link in text, the website editor's own finder),
 // that place handles the key first and this does nothing.
@@ -1260,58 +1095,17 @@ const recordCreation=recordCreationUI({state,api,create:addEntry,notebooks:struc
 const recordDestination=recordDestinationUI({state,api,esc,field,showDialog,access:operation=>withProjectAccess(operation),rootBook:()=>projectOwners.root(),selected:async(projectId,bookId,legacy)=>{await projectOwners.enter(legacy?null:projectId,legacy?null:bookId);state.project=projectId;state.notebook=bookId;state.page='entries';state.search='';state.filter='all';state.recordBrowse=null;render();recordCreation.choose(bookId);}});
 const chooseEntry=preferredNotebook=>{const id=preferredNotebook??(state.notebook!=='all'?state.notebook:null);if(id&&state.book.notebooks.some(book=>book.id===id))return recordCreation.choose(id);recordDestination.open();};
 
-async function removeSelectedRecord(){
- if(savePromise)await savePromise;
- const id=state.selected,changes=recordCheckpoint();
- if(state.dirty&&(!changes||changes.some(change=>change.record.id!==id)))throw Error(t('recordAuthoring','otherDrafts'));
- const main=$('#main');removingRecord=true;if(main)main.inert=true;
- try{
-  await recordDrafts.flush();
-  const expectedRevision=savedRecordRevisions[id];
-  const result=expectedRevision?await api('/api/research/records/remove',{workspaceId:state.book.id,recordId:id,expectedRevision},{adopt:false}):
-   {book:savedBook,etag:state.etag,recordRevisions:savedRecordRevisions,recordScope:state.recordScope};
-  if(expectedRevision&&(!result.recordScope.missing.includes(id)||result.book.entries.length))throw Error(t('recordAuthoring','invalidRemoval'));
-  adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.dirty=false;changeVersion++;state.preview=null;
-  await recordDrafts.clear();state.selected=null;state.page='entries';render();
- }catch(error){
-  if(error.code==='RECORD_CHANGED')throw {...error,message:t('recordAuthoring','removeConflict')};
-  throw error;
- }finally{removingRecord=false;if(main)main.inert=false;}
-}
-
-function renderSections(e) { return recordSections.view(e); }
-function mediaPlayer(a,recordId) {
-  return a.kind === 'image' ? `<img src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" alt="${esc(a.alt || a.caption)}">` : `<${a.kind} src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" controls preload="metadata" aria-label="${esc(a.caption || t('websiteMedia',a.kind))}">${recordCaptionTracks(a,{recordId,assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),esc})}</${a.kind}>`;
-}
-function uploadField(label, purpose, projectId = '') {
-  const accept = purpose === 'attachment' ? 'image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff,audio/*,video/*,image/gif' : 'image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff';
-  return field(label, `<input type="file" data-upload="${purpose}" data-project-id="${projectId}" accept="${accept}" ${uploading ? 'disabled' : ''}>`);
-}
-function renderMedia(e) {
-  return `<section class="media-editor"><h3>${esc(appText('media'))}</h3><p class="muted">${esc(appText('originalsRetained'))}</p>${uploadField(appText('addMedia'), 'attachment')}<p id="media-progress" class="muted" role="status">${esc(uploading ? appText('preparingMedia') : '')}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a,e.id)}${field(esc(appText('caption')), `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(esc(a.kind === 'image' ? appText('alternativeText') : appText('accessibleDescription')), `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field(esc(appText('transcript')), `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>${esc(appText('includeMedia'))}<small>${esc(appText('checkMedia'))}</small></span></label><label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="sharePdf" ${a.sharePdf?'checked':''}>${esc(t('recordValues','sharePdf'))}</label><button class="button subtle" data-action="remove-media" data-index="${index}">${esc(appText('removeFromEntry'))}</button></div>`).join('')}</section>`;
-}
 async function uploadMedia(input) { await mediaImports.upload(input); }
 async function applyMedia(intent,asset) {
-  const {purpose,recordId,projectId}=intent;
-  if(purpose==='record-attachment'){await recordContent.attachMedia(intent,asset);notify(t('recordContent','mediaAttached'));return;}
-  if (purpose === 'attachment') {
-    const current=editableRecord(state.book,recordId);if(!current)throw Error(appText('reopenRecord'));
-    if(!current.attachments.some(a=>a.id===asset.id))current.attachments.push({...asset,caption:'',alt:'',transcript:'',share:false});
-  } else {const project=state.book.projects.find(p=>p.id===projectId);if(!project)throw Error(appText('reopenProject'));project.logoId=asset.id;}
-  dirty();notify(appText('mediaAdded'));render();
+  if(intent.purpose!=='record-attachment')throw Error(appText('reopenRecord'));
+  await recordContent.attachMedia(intent,asset);notify(t('recordContent','mediaAttached'));
 }
 function extendedInput(el) {
   if(recordContent.input(el))return true;
-  if(recordSections.input(el))return true;
-  if (el.dataset.attachment !== undefined) { entry().attachments[Number(el.dataset.attachment)][el.dataset.column] = el.type === 'checkbox' ? el.checked : el.value; dirtyRecord(); return true; }
   return false;
 }
 async function extendedAction(button) {
-  const name = button.dataset.action, id = button.dataset.id, index = Number(button.dataset.index);
-  if(name==='workspace-discard'){drafts.reset([document.querySelector('main #workspace-name-form')]);render();return true;}
-  if(recordSections.action(button))return true;
-  if (name === 'remove-media') { if (await confirmAction(appText('removeMedia'),{action:'remove'})) { entry().attachments.splice(index,1); dirtyRecord(); render(); } return true; }
-  if (name === 'remove-project-logo') { state.book.projects.find(p => p.id === id).logoId = null; dirty(); $('#dialog').close(); render(); return true; }
+  if(button.dataset.action==='workspace-discard'){drafts.reset([document.querySelector('main #workspace-name-form')]);render();return true;}
   return false;
 }
 document.addEventListener('change', event => {
@@ -1376,7 +1170,7 @@ async function enterWebsiteFiles({hash='#/website',replace=false}={}){
   if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex,websiteScreen:null},'',hash);}
   else history.replaceState({...history.state,websiteScreen:null},'',hash);
   const id=/^#\/websites\/([a-f0-9-]{36})\//.exec(projectRoute(hash).hash)?.[1]??null;
-  document.querySelector('#dialog')?.close();workspaceLive.bind();recordList.stop();recordDrafts.pause();recordActivity.stop();workflow.stop();dashboard.bind();operationsLive.bind();
+  document.querySelector('#dialog')?.close();workspaceLive.bind();recordList.stop();recordActivity.stop();workflow.stop();dashboard.bind();operationsLive.bind();
   if(!websiteFiles){const {websiteFilesUI}=await import('./website-files-ui.js');if(epoch!==fileEditorEpoch)return;websiteFiles=websiteFilesUI({api,esc,state,field,address:hash=>{websiteAddress=hash;},access:operation=>withProjectAccess(operation),render:()=>{if(state.filesMode)renderWebsiteFiles();},notify,onSession:session=>{if(!state.filesMode)return;if(!session.contextId)throw Error(t('websiteFiles','failed'));state.storage={...state.storage,contextId:session.contextId};},onDirty:value=>{if(state.filesMode)state.dirty=value;}});}
   websiteFiles.clear();renderWebsiteFiles();
   try{await websiteFiles.load({id,publishing:hash.endsWith('/publishing')});if(epoch!==fileEditorEpoch)return;const session=websiteFiles.session();if(!state.storage&&session?.contextId)state.storage={contextId:session.contextId};}

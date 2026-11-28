@@ -40,7 +40,7 @@ export function configurationRecordCreation({state,api,esc,render,onDirty,onSave
  }
  function stop(){session=null;}
  // The draft the record page reads and writes, while it is the selected record.
- function draft(){return active()?{id:session.plan.id,workspaceId:session.plan.workspaceId,revision:session.plan.revision,recordId:session.command.recordId,version:session.version}:null;}
+ function draft(){return active()?{id:session.plan.id,workspaceId:session.plan.workspaceId,revision:session.plan.revision,recordId:session.command.recordId,version:session.version,saving:session.busy||session.applyAttempted}:null;}
  // An edit was written into the draft: the page reads it again.
  function written(){if(session)session.version++;}
  function controls(){

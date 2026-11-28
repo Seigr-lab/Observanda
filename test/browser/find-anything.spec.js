@@ -6,6 +6,7 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
+import {newRecordOpened,openRecordWriting} from './record-editing-helper.js';
 
 test('Find anything reaches settings, records and tools by name from the keyboard or the title bar',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);await page.setViewportSize({width:1440,height:900});
@@ -38,7 +39,8 @@ test('Find anything reaches settings, records and tools by name from the keyboar
   // In text being written, Ctrl+K keeps its meaning of adding a link; the search does not open.
   await page.locator('#main-navigation .notebook-link').first().click();await page.locator('main').getByRole('button',{name:'New record',exact:true}).click();
   await page.locator('dialog[open] button').filter({hasText:/^Observation/}).click();
-  const text=page.locator('main .ProseMirror').first();await text.click();
+  // The new record opens on the record page; its text is written in the writing dialog.
+  await newRecordOpened(page);const text=(await openRecordWriting(page)).locator('.ProseMirror');await text.click();
   await page.keyboard.press('Control+k');await expect(page.locator('dialog.rich-link-panel[open]')).toBeVisible();await expect(dialog).toBeHidden();
     expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});}

@@ -110,7 +110,6 @@
   "invalid": "Fyll ut de påkrevde feltene og referansene. Bruk en eksakt kontrollsum, identifiser arvede vilkår, og begrunn endringer og vurderinger.",
   "changed": "Oppføringen eller arbeidsområdet har endra seg. Åpne dette skjemaet på nytt fra den gjeldende oppføringen.",
   "conflict": "Disse forsøksrevisjonene er i konflikt. Lagrede fakta kan ikke erstattes. Se gjennom begge versjonene, bevar de lagrede faktaene, og legg deretter til en endring eller rettelse. Avbryt bevarer de uferdige endringene dine.",
-  "wait": "Fullfør valget av referanse før du legger til dette elementet.",
   "privateReference": "Privat eller utilgjengelig kildereferanse",
   "retained": "Eksakt revisjon {revision}",
   "supersedes": "Retter / erstatter {id}",

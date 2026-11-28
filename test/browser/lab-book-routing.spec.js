@@ -18,6 +18,7 @@ import {LabBookDeletions} from '../../src/lab-book-deletion.js';
 import {LabBookRegistry} from '../../src/lab-book-registry.js';
 import {readAccess,verifyAccess} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
+import {newRecordOpened,setNewRecordTitle,openRecordWriting,saveRecordValue} from './record-editing-helper.js';
 
 for(const deviceAvailable of [true,false])test('nested lab books retain independent authoring through navigation and reload '+(deviceAvailable?'with device protection':'with passwords and no device protection'),async({page})=>{
  test.setTimeout(240000);page.setDefaultTimeout(15000);
@@ -43,8 +44,10 @@ for(const deviceAvailable of [true,false])test('nested lab books retain independ
   const second=await createBook('Field Book 2'),firstKey=await verifyAccess(await readAccess(first.root),'',password,{deviceStore:f.deviceStore});vaults.push(firstKey);const sibling=new LabBookStorage(first.root,first.labBookId,firstKey);
   let entered;const ready=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve);busy=project.withLock(()=>sibling.withLock(async()=>{entered();await held;}));await ready;
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create observation',exact:true}).click();
-  await page.getByLabel('Record title').fill('Recorded observation');await page.getByRole('textbox',{name:'Summary / context',exact:true}).fill('An independently saved observation.');
-  const save=page.locator('.section-save [data-action=save]'),applied=page.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/research/drafts/review/apply'));await save.click();const response=await applied;expect(response.ok()).toBe(true);await expect(page.getByRole('heading',{name:'Recorded observation',exact:true})).toBeVisible();
+  await newRecordOpened(page);await setNewRecordTitle(page,'Recorded observation');const summary=await openRecordWriting(page);await summary.locator('.ProseMirror').fill('An independently saved observation.');await saveRecordValue(summary);
+  const save=page.getByRole('button',{name:'Save record',exact:true}),applied=page.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/research/drafts/review/apply'));await save.click();const response=await applied;expect(response.ok()).toBe(true);
+  // The save has finished once the saved record's page replaces the new record's.
+  await expect(save).toHaveCount(0,{timeout:30000});await expect(page.getByRole('heading',{name:'Recorded observation',exact:true})).toBeVisible();
   release();await busy;busy=null;release=null;
   const secondKey=await verifyAccess(await readAccess(second.root),'',password,{deviceStore:f.deviceStore});vaults.push(secondKey);const selected=new LabBookStorage(second.root,second.labBookId,secondKey);
   const saved=(await selected.read()).book;expect(saved.entries).toHaveLength(1);expect(saved.entries[0].title).toBe('Recorded observation');expect((await sibling.read()).book.entries).toHaveLength(0);expect((await project.read()).book.entries).toHaveLength(0);expect((await f.workspace.read()).book.entries).toHaveLength(0);if(password){expect(JSON.stringify(saved)).not.toContain(password);expect(JSON.stringify((await project.read()).book)).not.toContain(password);}
@@ -65,7 +68,8 @@ for(const deviceAvailable of [true,false])test('nested lab books retain independ
   expect((await books.list()).items.map(book=>book.labBookId)).toEqual([second.labBookId]);expect((await selected.read()).book.entries[0].title).toBe('Recorded observation');
   await page.locator('#workspace-navigation [data-action=filter-notebook][data-id="'+second.labBookId+'"]').click();await expect(page.locator('main h1')).toHaveText('Field Book 2',{timeout:15000});
   const accessPanel=page.locator('[data-lab-book-access]');await accessPanel.locator('summary').click();await expect(accessPanel.getByLabel('New lab book password',{exact:true})).toBeVisible();
-  await accessPanel.getByLabel('Username',{exact:true}).fill('Researcher');await accessPanel.getByLabel('New lab book password',{exact:true}).fill('Disposable passphrase 739!');await accessPanel.getByLabel('Confirm password',{exact:true}).fill('Disposable passphrase 739!');await accessPanel.getByRole('button',{name:'Save lab book password',exact:true}).click();await expect(accessPanel).toContainText('Lab book password saved.');
+  // Changing a protected lab book's password asks for its current password first.
+  await accessPanel.getByLabel('Username',{exact:true}).fill('Researcher');const current=accessPanel.getByLabel('Current password',{exact:true});if(await current.count())await current.fill(password);await accessPanel.getByLabel('New lab book password',{exact:true}).fill('Disposable passphrase 739!');await accessPanel.getByLabel('Confirm password',{exact:true}).fill('Disposable passphrase 739!');await accessPanel.getByRole('button',{name:'Save lab book password',exact:true}).click();await expect(accessPanel).toContainText('Lab book password saved.');
   await accessPanel.getByRole('button',{name:'Lock lab book',exact:true}).click();await expect(page.locator('main h1')).toHaveText('Field Project 1',{timeout:15000});
   await page.locator('#workspace-navigation [data-action=filter-notebook][data-id="'+second.labBookId+'"]').click();await expect(dialog.getByRole('heading',{name:'Unlock lab book',exact:true})).toBeVisible();
   await dialog.getByLabel('Username',{exact:true}).fill('Researcher');await dialog.getByLabel('Lab book password',{exact:true}).fill('Disposable passphrase 739!');await dialog.getByRole('button',{name:'Unlock',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.locator('main h1')).toHaveText('Field Book 2',{timeout:15000});await expect(page.locator('main')).toContainText('Recorded observation');

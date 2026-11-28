@@ -39,7 +39,7 @@ export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,ope
  }
  async function launch(control){
   tasks.reset();
-  sourceCapture.stop();pages.stop();context=state.storage?.contextId;workspaceId=state.book.id;notebookId=control.dataset.notebook??(state.notebook==='all'?null:state.notebook);source=sourceRecord()??(state.page==='editor'?{id:state.selected,snapshotId:state.etag}:null);generation++;
+  sourceCapture.stop();pages.stop();context=state.storage?.contextId;workspaceId=state.book.id;notebookId=control.dataset.notebook??(state.notebook==='all'?null:state.notebook);source=sourceRecord();generation++;
   await list();
  }
  async function releasedView(id,revision){const view=await request('view',{id,release:revision,offset:0}),body=await request('field',{id,release:revision,field:'body',position:0});return {...view,...view.release,body:body.value};}

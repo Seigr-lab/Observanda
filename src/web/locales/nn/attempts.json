@@ -110,7 +110,6 @@
   "invalid": "Fyll ut dei påkravde felta og referansane. Bruk ein nøyaktig hash, identifiser arva vilkår, og grunngi endringar og vurderingar.",
   "changed": "Oppføringa eller arbeidsområdet har endra seg. Opne dette skjemaet på nytt frå den gjeldande oppføringa.",
   "conflict": "Desse forsøksrevisjonane er i konflikt. Lagra fakta kan ikkje erstattast. Sjå gjennom begge versjonane, bevar dei lagra fakta, og legg deretter til ei endring eller retting. Avbryt bevarer dei uferdige endringane dine.",
-  "wait": "Fullfør valet av referanse før du legg til dette elementet.",
   "privateReference": "Privat eller utilgjengeleg kjeldereferanse",
   "retained": "Nøyaktig revisjon {revision}",
   "supersedes": "Rettar / erstattar {id}",

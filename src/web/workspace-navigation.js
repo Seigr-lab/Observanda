@@ -143,7 +143,7 @@ export function workspaceNavigation({state,icon,pinnedTools=()=>[]}) {
         wantedNotebooks.add(notebook.id);let node=notebooks.get(notebook.id);
         if(!node){node=button('filter-notebook',notebook.title,'book');node.classList.add('notebook-link');node.dataset.id=notebook.id;node.append(element('span','count'));notebooks.set(notebook.id,node);}
         text(node.querySelector('.tree-title'),notebook.title);text(node.querySelector('.count'),notebook.count??'');
-        active(node,(state.page==='entries'?state.notebook:['editor','record-reader'].includes(state.page)&&(state.projectOwner?.labBookId??state.notebook))===notebook.id);ordered.push(node);
+        active(node,(state.page==='entries'?state.notebook:state.page==='record-reader'&&(state.projectOwner?.labBookId??state.notebook))===notebook.id);ordered.push(node);
       }
       orderNavigationNodes(item.node,ordered);
     }

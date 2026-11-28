@@ -17,48 +17,13 @@ export function recordSaveRequest(before,after,revisions){
   return {workspaceId:after.id,changes};
 }
 
-// The caller owns an immutable saved snapshot. Record editors explicitly mark
-// their changed identity; metadata/structural editors use inspect(). This keeps
-// keystrokes and recovery checkpoints from traversing unrelated record bodies.
+// The caller owns an immutable saved snapshot; inspect() reports whether the
+// live workspace differs from it.
 export function recordDraftTracker(){
-  let before=null,revisions={},previous=new Map(),changes=new Map(),recordOnly=true,changed=false;
-  function reset(book,heads={}){
-    before=book;revisions=heads;previous=new Map(book?.entries.map(record=>[record.id,record])??[]);
-    changes.clear();recordOnly=true;changed=false;
-  }
-  function inspect(book){
-    const request=recordSaveRequest(before,book,revisions);
-    changes=new Map(request?.changes.map(change=>[change.id,change.record])??[]);
-    changed=Boolean(request)||!sameWorkspace(before,book);recordOnly=Boolean(request)||!changed;
-    return changed;
-  }
-  function updateRecord(book,id){
-    if(!before||book.id!==before.id||!recordOnly)return inspect(book);
-    const record=book.entries.find(item=>item.id===id);
-    if(!record||!previous.has(id)&&!changes.has(id))return inspect(book);
-    if(equal(record,previous.get(id)))changes.delete(id);else changes.set(id,record);
-    changed=changes.size>0;return changed;
-  }
-  function command(){
-    if(!before||!recordOnly||!changes.size)return null;
-    const edits=[...changes].map(([id,record])=>({id,expectedRevision:revisions[id]??(previous.has(id)?undefined:null),record}));
-    if(edits.some(edit=>edit.expectedRevision===undefined))return null;
-    return {workspaceId:before.id,changes:edits};
-  }
-  function checkpoint(bases){
-    const request=command();
-    return request?.changes.map(change=>({base:bases[change.id]??null,record:structuredClone(change.record),expectedRevision:change.expectedRevision}))??null;
-  }
-  function submission(book){
-    const request=command();
-    if(!request)return {book:draftWorkspace(book),command:null};
-    const detached=structuredClone(request),sent=new Map(detached.changes.map(change=>[change.id,change.record]));
-    const {entries,...metadata}=book;
-    // Unchanged bodies belong to the saved snapshot, never the live editor.
-    // A later edit while saving must not mutate this submitted comparison base.
-    return {command:detached,book:{...structuredClone(metadata),entries:entries.map(record=>sent.get(record.id)??previous.get(record.id))}};
-  }
-  return {reset,inspect,updateRecord,command,checkpoint,submission};
+  let before=null,revisions={};
+  function reset(book,heads={}){before=book;revisions=heads;}
+  function inspect(book){return Boolean(recordSaveRequest(before,book,revisions))||!sameWorkspace(before,book);}
+  return {reset,inspect};
 }
 
 // Rebase only edits made while the request was running. Adopt other records and

@@ -12,34 +12,36 @@ import {Workspace} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
 import {validateCatalogueMetadata} from '../src/model.js';
 import {startServer} from '../src/server.js';
-import {researchBytes,researchCapacityIssue,researchRequestCapacity,MAX_RECORD_BYTES,MAX_RECORD_COMMAND_BYTES} from '../src/web/research-capacity.js';
+import {researchBytes,researchCapacityIssue,MAX_RECORD_BYTES,MAX_RECORD_COMMAND_BYTES} from '../src/web/research-capacity.js';
 import {researchCapacityMessage} from '../src/web/research-capacity-message.js';
 
-test('capacity preflight uses UTF-8 storage bytes and separates record, checkpoint and request owners',()=>{
+test('capacity policy uses UTF-8 storage bytes and separates record, checkpoint and request owners',()=>{
  assert.equal(researchBytes('界'),Buffer.byteLength(JSON.stringify('界',null,2)+'\n'));
  assert.equal(researchCapacityIssue('record',MAX_RECORD_BYTES),null);
  const issue=researchCapacityIssue('record',MAX_RECORD_BYTES+1,{recordId:randomUUID()});
  assert.equal(issue.details[0].requestedBytes,MAX_RECORD_BYTES+1);assert.equal(issue.details[0].limitBytes,MAX_RECORD_BYTES);
  assert.match(researchCapacityMessage(issue),/Record content needs 2097153 bytes/);assert.doesNotMatch(researchCapacityMessage(issue),/divide|split/i);
  assert.equal(researchCapacityMessage({details:{}}),null);assert.equal(researchCapacityMessage({details:[{kind:'research-capacity',owner:'unknown'}]}),null);
- const record={body:'界'.repeat(Math.ceil(MAX_RECORD_BYTES/3))},change={id:randomUUID(),record};
- assert.equal(researchRequestCapacity('/api/research/records/save',{changes:[change]}).code,'RECORD_SIZE_LIMIT');
- assert.equal(researchRequestCapacity('/api/research/records/save',{changes:[]},'x'.repeat(MAX_RECORD_COMMAND_BYTES+1)).code,'RECORD_COMMAND_LIMIT');
- assert.equal(researchRequestCapacity('/unrelated',{changes:[change]}),null);
+ const record={body:'界'.repeat(Math.ceil(MAX_RECORD_BYTES/3))};
+ assert.equal(researchCapacityIssue('record',researchBytes(record)).code,'RECORD_SIZE_LIMIT');
+ assert.equal(researchCapacityIssue('recordCommand',MAX_RECORD_COMMAND_BYTES),null);
+ assert.equal(researchCapacityIssue('recordCommand',MAX_RECORD_COMMAND_BYTES+1).code,'RECORD_COMMAND_LIMIT');
+ assert.equal(researchCapacityIssue('checkpointRequest',MAX_RECORD_COMMAND_BYTES+1).code,'DRAFT_SIZE_LIMIT');
 });
 
 test('an oversized research save preserves its durable draft; a larger rejected checkpoint preserves the prior revision',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-capacity-')),book=largeRecordBook(),f=await encryptedFixture(directory,book),base=book.entries[0],drafts=new ResearchDrafts(f.workspace),source=await f.workspace.outline();
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const draftRecord={...base,body:'界'.repeat(50000)},change={record:draftRecord,expectedRevision:recordRevision(base),baseRevision:recordRevision(base)},command={id:randomUUID(),workspaceId:book.id,expectedRevision:null,changes:[change]};
- assert.ok(researchBytes(draftRecord)>MAX_RECORD_BYTES);assert.equal(researchRequestCapacity('/api/research/drafts/write',command),null);
+ assert.ok(researchBytes(draftRecord)>MAX_RECORD_BYTES);
  const saved=await drafts.write(command);
  await assert.rejects(new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:draftRecord}]},{receipt:true}),error=>{
   assert.equal(error.code,'RECORD_SIZE_LIMIT');assert.deepEqual(error.details,researchCapacityIssue('record',researchBytes(draftRecord),{recordId:base.id}).details);return true;
  });
  assert.equal((await f.workspace.outline()).etag,source.etag);
  const excessive={...command,expectedRevision:saved.revision,changes:[{...change,record:{...draftRecord,sections:Array.from({length:20},()=>({id:randomUUID(),title:'Original observations',body:'界'.repeat(60000)}))}}]};
- const issue=researchRequestCapacity('/api/research/drafts/write',excessive);assert.equal(issue.code,'DRAFT_SIZE_LIMIT');assert.equal(issue.details[0].owner,'recordCheckpoint');
+ // The refusal reports the exact size of the draft as it would be stored.
+ const issue=researchCapacityIssue('recordCheckpoint',researchBytes({formatVersion:2,id:excessive.id,workspaceId:excessive.workspaceId,updatedAt:'2000-01-01T00:00:00.000Z',changes:excessive.changes}));assert.equal(issue.code,'DRAFT_SIZE_LIMIT');assert.equal(issue.details[0].owner,'recordCheckpoint');
  await assert.rejects(drafts.write(excessive),error=>{assert.equal(error.code,issue.code);assert.deepEqual(error.details,issue.details);return true;});
  const reopened=await new ResearchDrafts(new Workspace(f.workspace.root,f.vault)).read(command.id);
  assert.equal(reopened.revision,saved.revision);assert.deepEqual(reopened.draft.changes[0].record,draftRecord);assert.deepEqual(reopened.draft.changes[0].base,base);

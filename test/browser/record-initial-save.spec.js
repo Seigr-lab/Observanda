@@ -70,6 +70,8 @@ test('a new record is written on the record page as a draft, saved once with a r
    expect(written).toEqual(sections);
   }));
   expect((await drafts.list({workspaceId:book.id})).drafts).toEqual([]);
+  // A saved record leaves nothing unsaved behind.
+  await page.locator('#main-navigation').getByRole('button',{name:'Preferences',exact:true}).click();await expect(page.locator('#leave-dialog')).not.toBeVisible();await page.goBack();
 
   // A draft left by a reload is kept and saved from Review drafts.
   await page.getByRole('button',{name:'Back to records',exact:true}).click();const recovered=await create(page,book.notebooks[0].id);await setTitle(page,'Reloadable new record');

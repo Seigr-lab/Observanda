@@ -35,7 +35,6 @@ test('ordinary next run connects preparation, native evidence, measurements, res
  ]),refs=new Map();
  const reference=r=>r.kind+':'+r.id+':'+r.revision;
  const openRecord=async(id,title)=>{await page.evaluate(id=>location.hash='#/records/'+id,id);await expect(page.getByRole('heading',{level:1,name:title,exact:true})).toBeVisible();};
- const save=async()=>{await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
  // Record values (attempt facts, figures) are edited in a dialog that saves them to the record.
  const saveChanges=async()=>{const values=page.locator('dialog[open]').filter({has:page.getByRole('button',{name:'Save changes',exact:true})});await values.getByRole('button',{name:'Save changes',exact:true}).click();await expect(values).toHaveCount(0);};
  const addFact=saveChanges;

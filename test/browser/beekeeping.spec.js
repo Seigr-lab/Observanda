@@ -10,6 +10,7 @@ import {navigate,preferences} from './preferences-helper.js';
 import {documentRecord} from '../../src/web/record-activity.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {revealInEditor} from './record-editor-helper.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord,discardNewRecord,openRecordDetail,openTemplateValue,saveRecordValue} from './record-editing-helper.js';
 
 test('inspection subject search pages only saved hives and colonies without loading their bodies',async({page})=>{
  const {book,inspection,record}=beekeepingFixture();
@@ -37,45 +38,38 @@ test('inspection subject search pages only saved hives and colonies without load
 
 test('enable beekeeping, record distinct inspections, reopen hive history and retain a failed save',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(10000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bee-ui-')),{book,hive,other,colony,inspection}=beekeepingFixture();
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bee-ui-')),{book,notebook,hive,other,colony,inspection}=beekeepingFixture();
  const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  const main=page.locator('main'),dialog=page.locator('#dialog'),history=()=>page.getByRole('region',{name:'Hive history',exact:true});
  const open=async id=>{await page.goto(app.origin+'/#/records/'+id+'/read');await expect(page.locator('.record-reader')).toBeVisible();};
- const save=async()=>{await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
- // Values of a lab-book record type are chosen one at a time: a group, then a value from its pages.
- const host=page.locator('[data-configuration-record-host]');
- const value=async(group,name)=>{
-  // Each choice loads before the next one: the value list is disabled while a group or page loads.
-  const select=host.getByLabel('Value',{exact:true});
-  if(await host.getByLabel('Choose what to edit',{exact:true}).inputValue()!==group){await host.getByLabel('Choose what to edit',{exact:true}).selectOption(group);await expect(select).toBeEnabled({timeout:30000});}
-  for(let i=0;i<10&&!await select.locator('option[value="'+name+'"]').count();i++){await host.getByRole('button',{name:'Next values',exact:true}).click();await expect(select).toBeEnabled({timeout:30000});}
-  await select.selectOption(name);await expect(select).toHaveValue(name);await expect(select).toBeEnabled({timeout:30000});
+ // A new record of a lab-book record type is written on the record page: each of its fields is edited in
+ // its own dialog from Record details, where the fields are paged a few at a time.
+ const value=(kind,key)=>openTemplateValue(page,key,notebook.configuration.sections.find(s=>s.key===kind).fields.findIndex(f=>f.key===key)+1);
+ const choose=async(key,choice,{empty=false}={})=>{
+  const edit=await value('inspection',key),selected=edit.locator('[data-custom-choice-selected]');if(empty)await expect(selected).toHaveValue('');
+  await edit.locator('[data-custom-choice-results]').getByRole('button',{name:choice,exact:true}).click();await expect(selected).toHaveValue(choice);await saveRecordValue(edit);
  };
  try{
   await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Templates');
   await expect(main.getByRole('switch',{name:'Enable Beekeeping',exact:true})).not.toBeChecked();
   const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;
   await open(hive.id);await expect(history().getByRole('link',{name:inspection.title,exact:true})).toBeVisible();
-  // A new inspection of a lab-book record type is entered value by value in the record host; the hive it was
+  // A new inspection of a lab-book record type opens on the record page as a draft; the hive it was
   // started from is linked when the record is seeded.
   await (await revealInEditor(page,history().getByRole('button',{name:'New inspection',exact:true}),'Activity and history')).focus();await page.keyboard.press('Enter');
-  await expect(host.locator('[data-record-value]')).toHaveValue(/Hive inspection.*Hive 01/,{timeout:30000});
-  await host.locator('[data-record-value]').fill('First October inspection');
-  await value('custom','template:queen');await expect(host.locator('[data-custom-choice-selected]')).toHaveValue('');
-  await host.locator('[data-custom-choice-results]').getByRole('button',{name:'Not seen',exact:true}).click();await expect(host.locator('[data-custom-choice-selected]')).toHaveValue('Not seen');
-  await value('custom','template:eggs');await expect(host.locator('[data-custom-choice-selected]')).toHaveValue('');
-  await host.locator('[data-custom-choice-results]').getByRole('button',{name:'Observed',exact:true}).click();await expect(host.locator('[data-custom-choice-selected]')).toHaveValue('Observed');
-  await value('custom','template:extent');await host.locator('[data-custom-choice-results]').getByRole('button',{name:'Partial internal',exact:true}).click();
-  await value('custom','template:health');await host.locator('[data-record-value]').fill('Stopped before examining the lower box.');
-  await value('details','status');await host.locator('[data-record-value]').selectOption('incomplete');
+  await newRecordOpened(page);await expect(page.locator('main h1').first()).toHaveText(/Hive inspection.*Hive 01/,{timeout:30000});
+  await setNewRecordTitle(page,'First October inspection');
+  await choose('queen','Not seen',{empty:true});await choose('eggs','Observed',{empty:true});await choose('extent','Partial internal');
+  const health=await value('inspection','health');await health.locator('[data-record-value]').fill('Stopped before examining the lower box.');await saveRecordValue(health);
+  const status=await openRecordDetail(page,'status');await status.locator('[data-record-value]').selectOption('incomplete');await saveRecordValue(status);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.setProperty('--app-font-size','24px'));
-  await host.locator('[data-record-value]').scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  await page.locator('main h1').first().scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:test.info().outputPath('inspection-narrow.png')});
   let lost=false;await page.context().route('**/api/research/drafts/review/apply',async route=>{if(lost)return route.continue();lost=true;await route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted save'}});});
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic interrupted save');
+  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('main [role=alert]').first()).toContainText('Synthetic interrupted save');
   expect((await f.workspace.read()).book.entries.find(e=>e.title==='First October inspection')).toBeUndefined();
-  await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();await page.getByRole('button',{name:'Save record',exact:true}).click();
+  await saveNewRecord(page);
   await expect(page.locator('.record-editing h1')).toHaveText('First October inspection',{timeout:60000});
   // The colony is linked from the saved record's activity and history area.
   await (await revealInEditor(page,page.getByRole('button',{name:'Choose hive / colony',exact:true}),'Activity and history')).click();await dialog.getByRole('button',{name:new RegExp(colony.title)}).click();await expect(dialog).not.toBeVisible({timeout:30000});
@@ -91,19 +85,19 @@ test('enable beekeeping, record distinct inspections, reopen hive history and re
   await expect(history().getByRole('link',{name:created.title,exact:true})).toBeVisible();await page.evaluate(()=>document.documentElement.style.setProperty('--app-font-size','24px'));
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await history().scrollIntoViewIfNeeded();await page.screenshot({path:test.info().outputPath('hive-history-narrow.png')});
   // Another new inspection starts with empty values.
-  await (await revealInEditor(page,history().getByRole('button',{name:'New inspection',exact:true}),'Activity and history')).click();await expect(host.locator('[data-record-value]')).toBeVisible({timeout:30000});
-  await value('custom','template:queen');await expect(host.locator('[data-custom-choice-selected]')).toHaveValue('');
-  await value('custom','template:health');await expect(host.locator('[data-record-value]')).toHaveValue('');
-  await page.getByRole('button',{name:'Discard changes',exact:true}).click();
+  await (await revealInEditor(page,history().getByRole('button',{name:'New inspection',exact:true}),'Activity and history')).click();await newRecordOpened(page);
+  const queen=await value('inspection','queen');await expect(queen.locator('[data-custom-choice-selected]')).toHaveValue('');await queen.getByRole('button',{name:'Close',exact:true}).click();await expect(queen).not.toBeVisible();
+  const emptyHealth=await value('inspection','health');await expect(emptyHealth.locator('[data-record-value]')).toHaveValue('');await emptyHealth.getByRole('button',{name:'Close',exact:true}).click();await expect(emptyHealth).not.toBeVisible();
+  await discardNewRecord(page);
   // Wait for the discard to finish before opening the next record.
   await expect(main.getByRole('heading',{name:'Apiary',exact:true})).toBeVisible();
   await page.setViewportSize({width:1440,height:1000});await open(hive.id);
   // Other record types are created from the linked-record chooser and entered value by value too.
   await (await revealInEditor(page,history().getByRole('button',{name:'Add linked record',exact:true}),'Activity and history')).click();
   await dialog.getByRole('button',{name:/^Create hive & equipment movement$/i}).click();
-  await expect(host.locator('[data-record-value]')).toHaveValue(/Hive & equipment movement/,{timeout:30000});
-  await value('custom','template:to');await host.locator('[data-record-value]').fill('Synthetic upper apiary');
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText(/Hive & equipment movement/,{timeout:60000});
+  await newRecordOpened(page);await expect(page.locator('main h1').first()).toHaveText(/Hive & equipment movement/,{timeout:30000});
+  const to=await value('movement','to');await to.locator('[data-record-value]').fill('Synthetic upper apiary');await saveRecordValue(to);
+  await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText(/Hive & equipment movement/,{timeout:60000});
   await navigate(page,'Preferences');await preferences(page,'Templates');const disabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).uncheck();await disabled;
   await open(hive.id);await expect(history().getByRole('button',{name:'New inspection',exact:true})).toHaveCount(0);await expect(history().getByRole('link',{name:created.title,exact:true})).toBeVisible();
   expect(errors).toEqual([]);
@@ -138,7 +132,7 @@ test('ordinary records use the same linked history and dedicated creation workfl
   await expect(history.getByRole('link',{name:inspection.title,exact:true})).toBeVisible();
   // Linked records are added from the record editor's activity and history area; a free-form note opens the writing editor.
   await (await revealInEditor(page,history.getByRole('button',{name:'Add linked record',exact:true}),'Activity and history')).click();await dialog.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  await page.getByLabel('Record title',{exact:true}).fill('Interpretation after a second visit',{timeout:30000});await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('Interpretation after a second visit',{timeout:30000});
+  await newRecordOpened(page);await setNewRecordTitle(page,'Interpretation after a second visit');await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText('Interpretation after a second visit',{timeout:30000});
   const created=(await f.workspace.read()).book.entries.find(e=>e.title==='Interpretation after a second visit');expect(created.relations).toEqual([expect.objectContaining({type:'Documents',target:{workspaceId:book.id,kind:'record',id:hive.id}})]);
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#entry-results')).toBeVisible();
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');await history.getByRole('button',{name:'Show linked records',exact:true}).click();await history.getByRole('link',{name:created.title,exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText(created.title);

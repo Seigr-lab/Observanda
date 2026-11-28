@@ -3,26 +3,29 @@ import assert from 'node:assert/strict';
 import {RecordValueTree} from '../src/record-value-tree.js';
 import {RecordDocument} from '../src/record-document.js';
 import {mergeRecordDocuments} from '../src/record-document-merge.js';
-import {reconcileRecords} from '../src/web/record-merge.js';
 import {digest,serialize} from '../src/storage-format.js';
 
 function memory(){const nodes=new Map();return {async put(kind,value){const raw=serialize(value),revision=digest(raw);nodes.set(kind+revision,raw);return revision;},async read(kind,revision){return JSON.parse(nodes.get(kind+revision));},tree(){return new RecordValueTree(this);}};}
 const section=id=>({id,title:id,body:'Source '+id});
 const record=ids=>({id:'record',title:'Record',body:'',notebookId:'book',share:true,createdAt:'original',updatedAt:'original',sections:ids.map(section),attachments:[],contributors:[],relations:[],figures:[]});
-async function compare(base,mine,stored,version){
+// Sections in their expected merged order; 'id:body' marks a section whose body changed.
+const sections=items=>items.map(item=>{const [id,body]=item.split(/:(.*)/s);return body===undefined?section(id):{...section(id),body};});
+async function compare(base,mine,stored,version,expected,paths){
  const blocks=memory(),tree=blocks.tree(),roots=await Promise.all([base,mine,stored].map(value=>tree.retain(value))),document=new RecordDocument(blocks,roots[2],{mutable:true}),conflicts=[];
  const merged=await mergeRecordDocuments(document,{base:roots[0],mine:roots[1],stored:roots[2],choose:async item=>{conflicts.push(item);return item[version];}});
- const plan=reconcileRecords([{base,record:mine}],[stored]),expected=plan.resolveVersions(new Map(plan.conflicts.map(item=>[item.key,{version}])))[0];
  assert.deepEqual(await tree.read(merged.root),expected);
- assert.deepEqual(conflicts.map(item=>JSON.stringify(['record',...item.path])).sort(),plan.conflicts.map(item=>item.key).sort());
+ assert.deepEqual(conflicts.map(item=>JSON.stringify(item.path)).sort(),paths.map(path=>JSON.stringify(path)).sort());
  for(const [i,root] of roots.entries())assert.deepEqual(await tree.read(root),[base,mine,stored][i]);
 }
 test('stored reconciliation agrees with ordinary independent edits, removals and conflicting orders',async()=>{
  const base=record(['a','b','c','d']),mine=record(['b','a','c','local','d']),stored=record(['a','b','remote','c','d']);mine.sections[0].body='My b';stored.sections.at(-1).body='Saved d';
- await compare(base,mine,stored,'mine');stored.sections.reverse();
- for(const version of ['mine','stored'])await compare(base,mine,stored,version);
+ // New sections stay beside the neighbour they followed in their own version.
+ await compare(base,mine,stored,'mine',{...stored,sections:sections(['b:My b','remote','a','c','local','d:Saved d'])},[]);stored.sections.reverse();
+ await compare(base,mine,stored,'mine',{...stored,sections:sections(['b:My b','a','c','local','remote','d:Saved d'])},[['sections','order']]);
+ await compare(base,mine,stored,'stored',{...stored,sections:sections(['d:Saved d','c','local','remote','b:My b','a'])},[['sections','order']]);
  mine.sections.splice(0,1);stored.sections.find(item=>item.id==='b').body='Concurrent removal conflict';
- for(const version of ['mine','stored'])await compare(base,mine,stored,version);
+ await compare(base,mine,stored,'mine',{...stored,sections:sections(['d:Saved d','c','local','remote','a'])},[['sections','b']]);
+ await compare(base,mine,stored,'stored',{...stored,sections:sections(['d:Saved d','c','local','remote','b:Concurrent removal conflict','a'])},[['sections','b']]);
 });
 test('moving or recovering a deleted entry through a merge withdraws both grants and preserves its section choices',async()=>{
  const base={...record(['a']),sharePdf:true};base.sections[0].sharePdf=true;
@@ -33,18 +36,26 @@ test('moving or recovering a deleted entry through a merge withdraws both grants
   const merged=await mergeRecordDocuments(document,{base:baseRef,mine:mineRef,stored:storedRef,choose:async choice=>choice.mine});
   const expected={...mine,share:false,sharePdf:false};
   assert.deepEqual(await tree.read(merged.root),expected);
-  const ordinary=reconcileRecords([{base,record:mine}],stored?[stored]:[]);
-  assert.deepEqual(ordinary.resolveVersions(new Map(ordinary.conflicts.map(item=>[item.key,{version:'mine'}])))[0],expected);
   assert.deepEqual(await tree.read(baseRef),base);
  }
 });
 test('stored reconciliation preserves exact result claims, optional removal and notebook privacy',async()=>{
  const base=record([]),mine=structuredClone(base),stored=structuredClone(base),statement=(id,text)=>({id,kind:'number',title:id,text,basis:'authored',source:null,limitations:'Declared scope'});
  base.results={version:1,statements:[statement('a','1/3'),statement('b','10')]};mine.results=structuredClone(base.results);stored.results=structuredClone(base.results);
- mine.results.statements[0].text='2/3';stored.results.statements[1].text='11';await compare(base,mine,stored,'mine');
+ mine.results.statements[0].text='2/3';stored.results.statements[1].text='11';
+ await compare(base,mine,stored,'mine',{...stored,results:{version:1,statements:[mine.results.statements[0],stored.results.statements[1]]}},[]);
+ // A result claim is one atomic evidence tuple: a concurrent change to it is a decision.
  stored.results.statements[0]={...stored.results.statements[0],basis:'retained',source:{kind:'analysis',id:'source',revision:'exact'},text:'Retained calculation'};
- for(const version of ['mine','stored'])await compare(base,mine,stored,version);
- delete mine.results;stored.body='Concurrent prose';mine.notebookId='new book';await compare(base,mine,stored,'mine');
+ for(const version of ['mine','stored'])await compare(base,mine,stored,version,{...stored,results:{version:1,statements:[(version==='mine'?mine:stored).results.statements[0],stored.results.statements[1]]}},[['results','statements','a']]);
+ // Moving to another notebook withdraws the publication grant.
+ delete mine.results;stored.body='Concurrent prose';mine.notebookId='new book';
+ const {results,...withoutResults}=stored;await compare(base,mine,stored,'mine',{...withoutResults,notebookId:'new book',share:false},[['results']]);
+});
+test('stored reconciliation preserves explicit optional-field removal and concurrent additions',async()=>{
+ const base={...record([]),results:{version:1,statements:[]}},mine=structuredClone(base),stored={...structuredClone(base),body:'Concurrent prose'};
+ delete mine.results;const {results,...removed}=stored;await compare(base,mine,stored,'mine',removed,[]);
+ delete base.results;mine.body='New local prose';stored.results={version:1,statements:[]};stored.body='';
+ await compare(base,mine,stored,'mine',{...stored,body:'New local prose'},[]);
 });
 test('stored conflict planning never reads complete arrays or records and cancels without publication',async()=>{
  const blocks=memory(),tree=blocks.tree(),base=record(Array.from({length:257},(_,i)=>'s'+i)),mine=structuredClone(base),stored=structuredClone(base);

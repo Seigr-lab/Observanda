@@ -15,6 +15,7 @@ import {ProjectStorage} from '../../src/project-storage.js';
 import {LabBookRegistry} from '../../src/lab-book-registry.js';
 import {LabBookStorage} from '../../src/lab-book-storage.js';
 import { test, expect } from '@playwright/test';
+import {pagePanel} from './website-page-panel-helper.js';
 import { mediaFixtures } from '../media-fixtures.js';
 import {mediaToolsAvailable} from '../media-tools.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -23,6 +24,9 @@ import path from 'node:path';
 import {testServer as startServer} from '../device-fixture.js';
 import { Workspace } from '../../src/storage.js';
 import { sampleNotebook } from '../../src/sample.js';
+import {newRecordOpened,setNewRecordTitle,openRecordWriting,openRecordDetail,saveRecordValue,saveNewRecord} from './record-editing-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
+import {figureDialog,figureArea,addFigureItem,setFigureProperty} from './figure-authoring-controls.js';
 
 let app, root, parent, deviceStore, databaseOwner, detachDatabase, workspaceVault;
 const serverOptions=()=>({root,port:0,headless:true,deviceStore,preferencesFile:path.join(parent,'preferences.json')});
@@ -38,9 +42,13 @@ async function encryptedSample(book=sampleNotebook()){
   await initializeLocation(root,book,access,workspaceVault);app=await startServer(serverOptions());
 }
 async function createdWorkspace(name){root=path.join(parent,name);workspaceVault=await verifyAccess(await readAccess(root),'','',{deviceStore});}
-// A new record keeps its parts in collapsible groups; open one before using its controls.
-async function openGroup(page,name){const group=page.locator('main details').filter({has:page.locator(':scope > summary',{hasText:name})}).first();if(!await group.evaluate(node=>node.open))await group.locator(':scope > summary').click();}
-async function saveChanges(page){const save=page.locator('.section-save [data-action=save]');if(await save.isEnabled())await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');}
+// A new record is written on the record page: its summary, sections and values each in their own dialog.
+async function writeSummary(page,text){const dialog=await openRecordWriting(page);await dialog.locator('.ProseMirror').fill(text);await saveRecordValue(dialog);}
+async function writeSection(page,title,text){
+  await page.locator('main .record-sections > section').filter({has:page.getByRole('heading',{name:title,exact:true})}).getByRole('button',{name:'Edit section',exact:true}).click();
+  const dialog=page.locator('dialog.record-writing[open]');await expect(dialog.locator('.ProseMirror')).toBeVisible();await dialog.locator('.ProseMirror').fill(text);await saveRecordValue(dialog);
+}
+async function shareOnWebsites(page){await page.locator('.record-editing [data-record-publication] [data-value-field="share"]').click();const dialog=page.locator('dialog.record-writing[open]');await dialog.locator('[data-record-value]').selectOption('true');await saveRecordValue(dialog);}
 test.beforeEach(async () => { parent=await mkdtemp(path.join(os.tmpdir(),'observanda-browser-'));root=path.join(parent,'A closer look');deviceStore=new DeviceStore({file:path.join(parent,'device.key')});app=await startServer(serverOptions()); });
 test.afterEach(async () => {
   try{await app.close();}finally{try{await databaseOwner?.close();}finally{detachDatabase?.();databaseOwner=detachDatabase=null;await clearVault(workspaceVault);workspaceVault=null;}}
@@ -65,27 +73,28 @@ test('create, edit, persist, customize, review, and download an independent note
   await page.getByRole('dialog').getByRole('button',{name:'Save lab book',exact:true}).click();
   await page.getByRole('button', { name: 'New record', exact: true }).click();
   await page.getByRole('button', { name: 'Create observation', exact: true }).click();
-  await page.getByLabel('Record title').fill('First green leaves');
-  await page.getByLabel('Summary / context',{exact:true}).fill('Two leaves opened today.\nThe soil was still damp.');
-  await page.getByLabel('Available for websites',{exact:true}).check();
-  await openGroup(page,'Evidence and results');await page.getByRole('button', { name: 'Add figure',exact:true }).click();
-  await page.getByRole('button',{name:'Add measurement',exact:true}).click();
-  await page.getByLabel('Coordinate 1',{exact:true}).fill('1');
-  await page.getByLabel('Coordinate 2',{exact:true}).fill('2');
-  await page.getByLabel('Value 1', { exact: true }).fill('3');
-  await page.getByLabel('Value 2', { exact: true }).fill('8');
+  await newRecordOpened(page);await setNewRecordTitle(page,'First green leaves');
+  await writeSummary(page,'Two leaves opened today.\nThe soil was still damp.');
+  await shareOnWebsites(page);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add figure',exact:true}),'Evidence and results')).click();
+  const figure=figureDialog(page);await expect(figure.locator('[data-authored-editor]')).toBeVisible();
+  for(const [x,y] of [['1','3'],['2','8']]){await figureArea(figure,'points');await addFigureItem(page,figure);await setFigureProperty(page,figure,'x',x);await setFigureProperty(page,figure,'y',y);}
+  await saveRecordValue(figure,{timeout:60000});
   let releaseCommit;const commitGate=new Promise(resolve=>{releaseCommit=resolve;});
   const applyRoute='**/api/**/research/drafts/review/apply';
   await page.context().route(applyRoute,async route=>{await commitGate;await route.continue();},{times:1});
   try{
     const committing=page.waitForRequest(applyRoute);
-    await page.locator('.section-save [data-action=save]').click();
+    await page.getByRole('button',{name:'Save record',exact:true}).click();
     await committing;
-    await expect(page.locator('#save-status')).toHaveText('Saving…');
-    await expect(page.locator('.section-save [data-action=save]')).toBeDisabled();
-    await expect(page.locator('.section-save [data-action=discard-section]')).toBeDisabled();
-    await expect(page.getByLabel('Record title')).toHaveValue('First green leaves');
+    // While the record is being saved it cannot be saved again or discarded, and what was written stays shown.
+    await expect(page.locator('.record-toolbar [role=status]')).toHaveText('Saving the record…');
+    await expect(page.getByRole('button',{name:'Save record',exact:true})).toBeDisabled();
+    await expect(page.getByRole('button',{name:'Discard record',exact:true})).toBeDisabled();
+    await expect(page.locator('main h1').first()).toHaveText('First green leaves');
   }finally{releaseCommit();}
+  // The save has finished once the saved record's page replaces the new record's.
+  await expect(page.getByRole('button',{name:'Save record',exact:true})).toHaveCount(0,{timeout:60000});
   await expect(page.locator('.record-editing')).toContainText('Two leaves opened today.',{timeout:15000});
   await page.context().unroute(applyRoute);
   await page.reload();await expect(page.locator('.record-reader')).toContainText('Two leaves opened today.');
@@ -108,7 +117,7 @@ test('create, edit, persist, customize, review, and download an independent note
   // Lab book records reach a website through a records list placed on its page.
   await navigate(page,'Website editor');
   const files=page.locator('[data-website-files-app]'),siteCanvas=page.frameLocator('#website-files-canvas'),feedDialog=page.locator('dialog[data-website-feed-dialog]');
-  await files.getByRole('button',{name:/^Lab book records/}).click();await expect(feedDialog).toBeVisible();
+  await pagePanel(page,'Add');await files.getByRole('button',{name:/^Lab book records/}).click();await expect(feedDialog).toBeVisible();
   await feedDialog.locator('[data-feed-heading]').fill('Garden notes');await feedDialog.locator('[data-feed-apply]').click();await expect(feedDialog).not.toBeVisible({timeout:30000});
   await expect(siteCanvas.locator('section[data-website-feed]')).toContainText('First green leaves');
   // Applying the list saves the page; a remaining edit is saved here.
@@ -191,7 +200,8 @@ test('a new entry defaults to the author local calendar date', async ({ browser 
     await page.goto(new URL('#/notebooks/'+sample.notebooks[0].id,app.url).href);
     await page.getByRole('button', { name: 'New record', exact: true }).click();
     await page.getByRole('button', { name: 'Create observation', exact: true }).click();
-    await expect(page.getByLabel('Record date',{exact:true})).toHaveValue('2026-09-25');
+    await newRecordOpened(page);const date=await openRecordDetail(page,'occurredOn');
+    await expect(date.getByLabel('Record date',{exact:true})).toHaveValue('2026-09-25');
   } finally { await context.close(); }
 });
 
@@ -214,33 +224,37 @@ test('build a project with structured research and playable media, place it on a
   await page.getByRole('button', { name: 'Save lab book', exact: true }).click();
   await page.getByRole('button', { name: 'New record', exact: true }).click();
   await page.getByRole('button', { name: 'Create experiment', exact: true }).click();
-  await page.getByLabel('Record title').fill('Comparing two room positions');
-  await page.getByLabel('Summary / context',{exact:true}).fill('A controlled listening experiment.');
-  await page.getByLabel('Question and objectives content', { exact: true }).fill('Does the recording position change the observed decay?');
-  const method=page.getByLabel('Method content', { exact: true });if(!await method.isVisible())await page.getByRole('button',{name:'Next sections',exact:true}).click();
-  await method.fill('Use the same source and repeat both positions.');
-  await openGroup(page,'Evidence and results');
+  await newRecordOpened(page);await setNewRecordTitle(page,'Comparing two room positions');
+  await writeSummary(page,'A controlled listening experiment.');
+  await writeSection(page,'Question and objectives','Does the recording position change the observed decay?');
+  await writeSection(page,'Method','Use the same source and repeat both positions.');
+  const upload=await revealInEditor(page,page.locator('main [data-upload="record-attachment"]'),'Evidence and results');
   for (const [index, kind] of ['image', 'audio', 'video'].entries()) {
-    await page.getByLabel('Add media', { exact: true }).setInputFiles(fixtures[kind].file);
-    const item = page.locator('.media-item').nth(index);
+    await expect(upload).toBeEnabled();await upload.setInputFiles(fixtures[kind].file);
+    const item = page.locator('main [data-record-media]').nth(index);
     await expect(item).toBeVisible({ timeout: 20000 });
-    await item.getByLabel('Caption', { exact: true }).fill(`Synthetic ${kind} evidence`);
-    await item.getByLabel('Include this media in website').check();
+    await item.locator('[data-value-field^="media:"]').click();
+    const details=page.getByRole('dialog',{name:'Edit media details',exact:true});
+    await details.getByLabel('Caption', { exact: true }).fill(`Synthetic ${kind} evidence`);
+    await details.getByLabel('Make this media available for website publication',{exact:true}).check();
+    if (kind !== 'image') await details.getByLabel('Transcript / extended description', { exact: true }).fill('Synthetic test recording.');
+    await saveRecordValue(details);
     if (kind !== 'image') {
-      await item.getByLabel('Transcript / extended description', { exact: true }).fill('Synthetic test recording.');
-      await expect.poll(() => item.locator(kind).evaluate(el => el.readyState)).toBeGreaterThanOrEqual(1);
-      await item.locator(kind).evaluate(el => el.play().catch(error=>{if(error.name!=='AbortError')throw error;}));
-      await expect.poll(() => item.locator(kind).evaluate(el => el.currentTime)).toBeGreaterThan(0);
+      const player=page.locator('main [data-record-media]').nth(index).locator(kind);
+      // The record page's players load nothing until played (preload none); playing loads the file.
+      await player.evaluate(el => el.play().catch(error=>{if(error.name!=='AbortError')throw error;}));
+      await expect.poll(() => player.evaluate(el => el.readyState)).toBeGreaterThanOrEqual(1);
+      await expect.poll(() => player.evaluate(el => el.currentTime)).toBeGreaterThan(0);
     }
   }
-  await page.getByLabel('Available for websites',{exact:true}).first().check();
-  await page.locator('.section-save [data-action=save]').click();
+  await shareOnWebsites(page);
+  await saveNewRecord(page);
   await expect(page.locator('.record-editing, .record-reader').first()).toContainText('Comparing two room positions',{timeout:60000});
   await page.screenshot({ path:test.info().outputPath('research-editor.png'), fullPage: true });
   // The website places the record through a records list and has a page of its own.
   await navigate(page,'Website editor');
   const files=page.locator('[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas'),feedDialog=page.locator('dialog[data-website-feed-dialog]');
-  await files.getByRole('button',{name:/^Lab book records/}).click();await expect(feedDialog).toBeVisible();
+  await pagePanel(page,'Add');await files.getByRole('button',{name:/^Lab book records/}).click();await expect(feedDialog).toBeVisible();
   await feedDialog.locator('[data-feed-heading]').fill('Acoustic studies');await feedDialog.locator('[data-feed-apply]').click();await expect(feedDialog).not.toBeVisible({timeout:30000});
   await expect(canvas.locator('section[data-website-feed]')).toContainText('Comparing two room positions');
   await files.getByRole('button',{name:'Add page',exact:true}).click();await files.getByLabel('Page title',{exact:true}).fill('About this work');
@@ -250,7 +264,7 @@ test('build a project with structured research and playable media, place it on a
   const paragraph=canvas.locator('main p, body > p').last();await paragraph.click();await paragraph.click({clickCount:3});await page.keyboard.type('A place for scientific and artistic investigation.');await expect(paragraph).toHaveText('A place for scientific and artistic investigation.');
   await files.getByRole('button',{name:'Save website',exact:true}).click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
   // A new page is private until its inclusion is reviewed.
-  await page.getByRole('navigation',{name:'Site tools',exact:true}).getByRole('button',{name:'Website pages',exact:true}).click();
+  await pagePanel(page,'Website pages');
   await files.getByRole('button',{name:'Review inclusion',exact:true}).click();
   await page.getByRole('region',{name:'Review publication changes'}).getByRole('button',{name:'Include in next publication'}).click();
   await files.getByRole('button',{name:'Back to the page',exact:true}).click();

@@ -7,7 +7,7 @@ const text=(key,parameters)=>t('researchPicker',key,parameters);
 
 // One page of record summaries. Saved record bodies are read only after an
 // explicit choice to retain a revision, by the existing materials service.
-export function researchTargetPicker({state,api,esc,field,showDialog,active=()=>['editor','record-reader'].includes(state.page),excludeId=()=>state.selected}){
+export function researchTargetPicker({state,api,esc,field,showDialog,active=()=>state.page==='record-reader',excludeId=()=>state.selected}){
  const limit=25;
  let session=null,controller=null,timer=null,generation=0;
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.projectOwner?.projectId??null,state.page,excludeId()]);

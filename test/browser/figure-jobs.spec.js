@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {figurePoints} from './figure-authoring-controls.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {openEvidence} from './record-editor-helper.js';
+import {saveRecordValue} from './record-editing-helper.js';
 const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not recorded'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 test('figure calculation survives a lost response, reload, cancellation and retry; coverage opens pinned rows',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(10000);
@@ -62,7 +64,8 @@ test('figure calculation survives a lost response, reload, cancellation and retr
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await dialog.screenshot({path:test.info().outputPath('figure-phone.png')});
   const first=(await materials.heads()).find(h=>h.kind==='analysis'),saved=await materials.read(first);
-  expect(saved.content.figure.series[0].points.map(p=>p.y)).toEqual([20,50]);
+  // The figure is retained as its own document.
+  expect((await figurePoints(f.workspace,saved.content.figure))[0][0].map(p=>p.y)).toEqual([20,50]);
   // An amended schema does not change the calculation's source inspection.
   const source=await materials.read(dataset),columns=await materials.datasetColumns(source);columns[1].unit='relative amplitude';
   await materials.dataset({recordId:record.id,id:dataset.id,expectedRevision:dataset.revision,baseDataset:dataset,title:source.title,artifact,columns});
@@ -82,7 +85,7 @@ test('figure calculation survives a lost response, reload, cancellation and retr
   await expect(dialog.locator('#material-form > p').first()).toContainText(first.revision);
   await dialog.getByRole('button',{name:'Add retained figure to record'}).click();
   await expect(dialog).not.toBeVisible();
-  await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await saveRecordValue(page.locator('dialog.record-writing[open]'));
   expect((await f.workspace.read()).book.entries.find(e=>e.id===record.id).figures.find(v=>v.id===saved.content.figure.id)).toEqual({...saved.content.figure,source:{kind:'analysis',id:first.id,revision:first.revision}});
   expect(errors).toEqual([]);
  }finally{await app.close();ResearchMaterials.prototype.preparePlot=prepare;await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

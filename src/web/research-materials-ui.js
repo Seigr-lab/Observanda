@@ -49,7 +49,6 @@ import {evidenceUploadUI,uploadText} from './evidence-upload-ui.js';
 import {figurePreviews} from './figure-preview.js';
 import {createFigure,FIGURE_TYPES} from './figure-model.js';
 import {FIGURE_OPERATIONS} from './figure-import-model.js';
-import {editableRecord} from './workspace-snapshot.js';
 import {createRun} from './record-workflow.js';
 import {materialSourcePicker} from './material-source-picker.js';
 import {selectionSize,selectionBatch} from './material-selection-pages.js';
@@ -87,7 +86,7 @@ const referenceSlot=slot=>mt(slot==='outputs'?'slotOutputs':'slotInputs');
 const materialJobState=state=>({queued:mt('stateQueued'),running:mt('stateRunning'),completed:mt('stateCompleted'),failed:mt('stateFailed'),cancelled:mt('stateCancelled')})[state]??state;
 const materialJobStage=stage=>({queued:mt('stateQueued'),preparing:mt('stagePreparing'),completed:mt('stateCompleted'),verifying:mt('verifyingOriginal'),'reading dataset':mt('stageReading'),'validating dataset rows':mt('stageValidating'),'calculating dataset rows':mt('stageCalculating'),'Calculating retained rows':mt('stageCalculating'),'Calculating retained graph rows':mt('stageCalculating'),"Grouping retained rows":t("datasetAggregation","groupingStage"),"Retaining grouped values":t("datasetAggregation","retainingGroupsStage"),"Retaining source positions":t("datasetAggregation","retainingMembersStage"),"Validating covariance model":t("statisticalUncertainty","progressCovariance"),"Validated uncertainty model":t("statisticalUncertainty","progressValidated"),"Reading spectral input":t("datasetSpectrum","progressInput"),"Calculating the declared Fourier transform":t("datasetSpectrum","progressTransform"),"Retaining spectral bins":t("datasetSpectrum","progressOutput"),"Reading CUSUM sources":t("datasetCusum","progressInput"),"Calculating declared CUSUM scores":t("datasetCusum","progressCalculation"),"Retaining CUSUM rows":t("datasetCusum","progressOutput")})[stage]??stage;
 
-export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,showFigureResults=null,currentRecordRevision=()=>null,access=run=>run()}){
+export function researchMaterialsUI({state,api,esc,field,showDialog,notify,render,revisions,create,getRecord=null,editRetainedFigure,refreshReader=null,showFigureResults=null,currentRecordRevision=()=>null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
  let figureReader=null,referenceContext=false,referenceOrigin=false,readingOverview=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
  const previews=figurePreviews();document.getElementById('dialog')?.addEventListener('close',()=>{referenceContext=false;previews.release();stopWatching();uploader.pause();});
@@ -596,13 +595,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    if(kind==='schema')await openSchema(recovery.begin(kind,base));else await plotForm();
   }
  }
- async function addFigure(figure){
-  if(state.page==='record-reader'&&editRetainedFigure){guard();document.getElementById('dialog').close();await editRetainedFigure({recordId:owner,figure});return;}
-  guard();const e=editableRecord(state.book,state.selected),existing=e.figures.findIndex(f=>f.id===figure.id);
-  if(existing>=0&&!await confirmAction(mt("replaceFigureConfirm"),{action:'replace'}))return;
-  if(existing>=0)e.figures[existing]=structuredClone(figure);else e.figures.push(structuredClone(figure));
-  dirty();document.getElementById('dialog').close();render();notify(mt("figureAdded"));
- }
+ // A retained figure is added to the record through the record page's figure value editor.
+ async function addFigure(figure){guard();document.getElementById('dialog').close();await editRetainedFigure({recordId:owner,figure});}
  async function openRevision(target,options){
   owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceContext=true;
   return retainedRecords.open(target,options);

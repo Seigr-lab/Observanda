@@ -8,6 +8,8 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
+import {newRecordOpened,setNewRecordTitle,saveNewRecord,saveRecordValue} from './record-editing-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('book, entry and section controls update an existing website placement and independently grant PDF parts',async({page})=>{
  test.setTimeout(240000);page.setDefaultTimeout(20000);await page.setViewportSize({width:1600,height:1000});
@@ -75,17 +77,17 @@ test('new entry authors choose both outputs for writing, media and entry parts b
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/notebooks/'+notebook.id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  await page.getByLabel('Record title',{exact:true}).fill('New visibility decisions');
-  const panel=page.locator('.record-draft-editor [data-record-publication]');
-  const website=panel.getByRole('checkbox',{name:'Available for websites',exact:true}),pdf=panel.getByRole('checkbox',{name:'Available for PDF',exact:true});
-  await expect(website).not.toBeChecked();await expect(pdf).not.toBeChecked();await website.check();await pdf.check();
-  await panel.locator('summary').click();await panel.getByRole('checkbox',{name:'PDF · Summary / context',exact:true}).uncheck();
-  await page.locator('[data-action="section-add"]').click();
-  const section=page.locator('[data-writing-section]').last();await section.locator('[data-writing-heading]').fill('Calibration detail');await section.locator('[data-writing-share]').uncheck();await section.locator('[data-writing-share-pdf]').check();
-  await page.locator('[data-disclosure="draft-evidence"] > summary').click();
-  await page.getByLabel('Add media',{exact:true}).setInputFiles(path.resolve('src/preview-assets/image.png'));
-  const media=page.locator('.media-item').last();await media.locator('[data-column="sharePdf"]').check();await expect(media.locator('[data-column="share"]')).not.toBeChecked();
-  const recordId=new URL(page.url()).hash.split('/')[2];await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('New visibility decisions',{timeout:20000});
+  // The new record is written on the record page: each choice is made in its own dialog and written into the draft.
+  const recordId=await newRecordOpened(page);await setNewRecordTitle(page,'New visibility decisions');
+  const panel=page.locator('.record-editing [data-record-publication]'),edit=async name=>{await panel.locator('[data-value-field="'+name+'"]').click();const dialog=page.locator('dialog.record-writing[open]');await expect(dialog).toBeVisible();return dialog;};
+  for(const name of ['share','sharePdf']){const choice=await edit(name);await expect(choice.locator('[data-record-value]')).toHaveValue('false');await choice.locator('[data-record-value]').selectOption('true');await saveRecordValue(choice);}
+  const parts=await edit('publication');await parts.getByRole('checkbox',{name:'PDF · Summary / context',exact:true}).uncheck();await saveRecordValue(parts);
+  await page.getByRole('button',{name:'Add writing section',exact:true}).click();
+  const section=page.locator('dialog.record-writing[open]');await expect(section.locator('.ProseMirror')).toBeVisible();await section.getByLabel('Section heading',{exact:true}).fill('Calibration detail');await section.locator('[data-writing-share]').uncheck();await section.locator('[data-writing-share-pdf]').check();await saveRecordValue(section);
+  await (await revealInEditor(page,page.locator('main [data-upload="record-attachment"]'),'Evidence and results')).setInputFiles(path.resolve('src/preview-assets/image.png'));
+  const media=page.locator('main [data-record-media]');await expect(media).toHaveCount(1,{timeout:20000});await media.locator('[data-value-field^="media:"]').click();
+  const details=page.getByRole('dialog',{name:'Edit media details',exact:true});await details.locator('[data-media-detail="sharePdf"]').check();await expect(details.locator('[data-media-detail="share"]')).not.toBeChecked();await saveRecordValue(details);
+  await saveNewRecord(page);await expect(page.locator('.record-editing h1')).toHaveText('New visibility decisions',{timeout:20000});
   const saved=(await fixture.workspace.read()).book.entries.find(item=>item.id===recordId);
   expect(saved).toMatchObject({share:true,sharePdf:true,publication:{pdf:{body:false},website:{body:true}}});
   expect(saved.sections.at(-1)).toMatchObject({title:'Calibration detail',share:false,sharePdf:true});expect(saved.attachments.at(-1)).toMatchObject({share:false,sharePdf:true});
