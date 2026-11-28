@@ -281,7 +281,7 @@ export class RecordDraftReview{
    const finish=async saved=>{
     await store.putObject(prefix+plan.id,{...plan,saved});
     const remaining=plan.format===3?await ledger.finish(plan):0;
-    if(!remaining)await this.drafts.removeLocked({id:plan.draftId,workspaceId:plan.workspaceId,expectedRevision:plan.draftRevision});
+    if(!remaining)await this.drafts.removeLocked({id:plan.draftId,workspaceId:plan.workspaceId,expectedRevision:plan.draftRevision},{store});
     return saved;
    };
    const snapshot=await store.snapshot(),row=await store.member(snapshot,plan.recordId),draft=await this.drafts.read(plan.draftId,{expand:false,header:true});
@@ -332,7 +332,9 @@ export async function verifyRecordDraftPlan(store,plan,{signal}={}){
  const review=new RecordDraftReview(store.workspace),fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};review.validate(plan);
  if((plan.choices?.count??0)!==plan.decided)fail();
  await withRecordBlockStore(store,plan.notebookId,plan.generation,blocks=>withRecordProjectionScratch(new RecordDocument(blocks,plan.roots.stored??plan.roots.mine),async document=>{
-   if(plan.editRevision){const edits=new RecordDraftEdits(store),node=await edits.node(plan.editRevision),root=node.notebookId===plan.notebookId&&node.generation===plan.generation?node.root:await edits.document(node,doc=>copyRecordValue(doc,document,doc.root,{signal}));if(!edits.matches(plan,node.owner)||root!==plan.roots.mine)fail();}
+   // A saved plan's edits are retired with its checkpoint; while kept, they are verified.
+   const edits=new RecordDraftEdits(store);
+   if(plan.editRevision&&!(plan.saved&&!await edits.has(plan.editRevision))){const node=await edits.node(plan.editRevision),root=node.notebookId===plan.notebookId&&node.generation===plan.generation?node.root:await edits.document(node,doc=>copyRecordValue(doc,document,doc.root,{signal}));if(!edits.matches(plan,node.owner)||root!==plan.roots.mine)fail();}
    if(await document.tree.arrayLength(plan.conflicts,[])!==plan.count)fail();
    for(const root of Object.values(plan.roots)){
     if(root===null)continue;

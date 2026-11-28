@@ -25,6 +25,8 @@ export class RecordDraftEdits{
  async head(plan){const identity=owner(plan),value=await this.store.object(headPrefix+hash(identity))??await recordOwnerDraftArchived(this.store,'head',hash(identity));if(value&&(!revisionId(value.revision)||hash(value.owner)!==hash(identity)))fail();if(value)return value.revision;return plan.origin?this.head({...plan.origin,sourcePosition:plan.origin.position}):null;}
  matches(plan,value){return hash(value)===hash(owner(plan))||plan.origin&&hash(value)===hash(owner({...plan.origin,sourcePosition:plan.origin.position}));}
  async plan(id){return await this.store.object('record-draft-review:'+id)??await recordOwnerDraftArchived(this.store,'review',id);}
+ // Whether an edit is still kept: a saved checkpoint's edits are retired with it.
+ async has(id){return revisionId(id)&&Boolean(await this.store.object(nodePrefix+id)??await recordOwnerDraftArchived(this.store,'edit',id));}
  async node(id){if(!revisionId(id))fail();const node=await this.store.object(nodePrefix+id)??await recordOwnerDraftArchived(this.store,'edit',id);if(!node||hash(node)!==id||![node.before,node.root,node.value,node.planId,node.requestHash,node.owner?.draftRevision].every(revisionId)||node.previous!==null&&!revisionId(node.previous)||![node.notebookId,node.operationId,node.owner?.workspaceId,node.owner?.recordId,node.owner?.draftId].every(researchId)||!Number.isSafeInteger(node.generation)||node.generation<1||!Number.isSafeInteger(node.owner.position)||node.owner.position<0)fail();if(node.field==='type'&&await catalogueFormat(this.store.db)<13)fail();return node;}
  async document(node,consume){return withRecordBlockStore(this.store,node.notebookId,node.generation,(blocks,owner)=>consume(new RecordDocument(blocks,node.root,{mutable:owner===this.store})));}
  async mine(plan,document,consume){
@@ -64,6 +66,22 @@ export class RecordDraftEdits{
    return {editRevision:revision,revision:hash(command.value),checkpointed:true};
   });
  }
+}
+// A record checkpoint that was saved or discarded keeps nothing that leads to what was
+// written into it: its edit history, edit heads, retry receipts, title note and unsaved
+// review plans go. A saved plan stays, so a repeated save after a lost reply answers again.
+export async function retireRecordDraftEdits(store,draftId,{signal}={}){
+ const nodes=[],plans=[],heads=[],operations=[];
+ for await(const id of store.objectIdEntries(nodePrefix,{signal}))if((await store.object(id))?.owner?.draftId===draftId)nodes.push(id.slice(nodePrefix.length));
+ const retired=new Set(nodes);
+ for await(const id of store.objectIdEntries(operationPrefix,{signal}))if(retired.has((await store.object(id))?.revision))operations.push(id);
+ for await(const id of store.objectIdEntries(headPrefix,{signal}))if((await store.object(id))?.owner?.draftId===draftId)heads.push(id);
+ for await(const id of store.objectIdEntries('record-draft-review:',{signal})){const plan=await store.object(id);if(plan?.draftId===draftId&&!plan.saved)plans.push(id);}
+ signal?.throwIfAborted();
+ // A record moved to another lab book keeps its draft objects under the move, which copied them there.
+ const remove=async id=>{try{await store.deleteObject(id);}catch(error){if(error.code!=='RECORD_RELOCATED')throw error;}};
+ for(const id of [...operations,...heads,...nodes.map(revision=>nodePrefix+revision),...plans,RECORD_DRAFT_TITLE_PREFIX+draftId])await remove(id);
+ return {nodes:nodes.length,plans:plans.length};
 }
 export async function verifyRecordDraftEdits(store,{signal}={}){
  const edits=new RecordDraftEdits(store),workspaceId=(await store.snapshot()).metadata.id,format=await catalogueFormat(store.db);

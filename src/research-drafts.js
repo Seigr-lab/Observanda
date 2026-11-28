@@ -161,7 +161,8 @@ export class ResearchDrafts {
     return this.workspace.withLock(()=>this.removeLocked(command));
   }
   // Compound recovery commits already own the workspace writer transaction.
-  async removeLocked(command){
+  // store: the open catalogue transaction when removal is part of a save.
+  async removeLocked(command,{store=null}={}){
     if(!keys(command,['id','workspaceId','expectedRevision'])||!id(command.id)||!id(command.workspaceId)||!revision(command.expectedRevision))throw new AppError('INVALID');
       if((await this.workspace.outline()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
       await this.index.ensureLocked(command.workspaceId);
@@ -169,6 +170,11 @@ export class ResearchDrafts {
       if(!current)return {ok:true};
       if(current.draft.workspaceId!==command.workspaceId||current.revision!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
       await this.index.removeLocked(current.draft);
+      // A record checkpoint also loses what was written into it through the record page.
+      if([1,2,3,4].includes(current.draft.formatVersion)){
+        const {retireRecordDraftEdits}=await import('./record-draft-edits.js');
+        await (store?retireRecordDraftEdits(store,command.id):this.workspace.catalogue(catalogue=>retireRecordDraftEdits(catalogue,command.id)));
+      }
       await new RecordDraftChunks(this.workspace,command.id).clear();
       await this.workspace.removeMetadata('.observanda/drafts/'+command.id+'.json');return {ok:true};
   }

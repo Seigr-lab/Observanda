@@ -91,3 +91,31 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  assert.deepEqual(entry.attachments.map(item=>[item.id,item.kind,item.caption]),[[second.id,'image',''],[first.id,'image','Bank edge']]);
  assert.deepEqual(entry.figures.map(item=>[item.id,item.title]),[[copyId,'Water level']]);assert.deepEqual(entry.contributors.map(person=>[person.id,person.name,person.role]),[[contributor,'Field assistant','Observer']]);
 });
+
+// A saved or discarded new record keeps nothing that leads to what was written into its draft.
+test('a saved or discarded new record draft leaves no edit history behind, and a repeated save still answers',async t=>{
+ const f=await figureValueFixture();t.after(f.close);
+ const notebookId=f.book.notebooks[0].id,now=new Date().toISOString(),review=new RecordDraftReview(f.workspace,new MediaStore(f.workspace.root,f.workspace.vault)),drafts=new ResearchDrafts(f.workspace);
+ const remaining=draftId=>f.workspace.catalogue(async store=>{const found=[];for(const prefix of ['record-draft-edit:','record-draft-edit-head:','record-draft-edit-operation:','record-draft-edit-title:'])for await(const id of store.objectIdEntries(prefix)){const value=await store.object(id);if(value?.owner?.draftId===draftId||id.endsWith(draftId)||prefix==='record-draft-edit-operation:')found.push(id);}const plans=[];for await(const id of store.objectIdEntries('record-draft-review:')){const plan=await store.object(id);if(plan.draftId===draftId)plans.push(plan);}return {found,plans};});
+ async function written(title){
+  const recordId=randomUUID(),record={id:recordId,notebookId,type:'observation',title:'Untitled observation',body:'',contributors:[],relations:[],tags:[],occurredOn:'2026-11-28',createdAt:now,updatedAt:now,share:false,figures:[],status:'draft',sections:[],attachments:[]};
+  const receipt=await new RecordConfigurationSeed(f.workspace).seed({id:randomUUID(),workspaceId:f.book.id,notebookId,recordId,configurationPin:null,sectionId:null,record});
+  const plan=await review.prepare({id:receipt.draft.id,workspaceId:f.book.id,expectedRevision:receipt.revision});
+  const selected=await review.editRead({...target(plan),field:'title'});
+  await review.editWrite({...target(plan),field:'title',value:{value:title},valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()});
+  assert.ok((await remaining(receipt.draft.id)).found.length>0);
+  return {receipt,recordId};
+ }
+ // Discarded: the checkpoint and everything written into it go.
+ const discarded=await written('Private working title');
+ await drafts.remove({id:discarded.receipt.draft.id,workspaceId:f.book.id,expectedRevision:discarded.receipt.revision});
+ assert.deepEqual(await remaining(discarded.receipt.draft.id),{found:[],plans:[]});
+ // Saved: the record exists; only the saved plan stays, and a repeated save answers from it.
+ const saved=await written('River bank survey');
+ const ready=await review.prepare({id:saved.receipt.draft.id,workspaceId:f.book.id,expectedRevision:saved.receipt.revision});
+ const result=await review.apply({...target(ready)});assert.equal(result.recordId,saved.recordId);
+ const after=await remaining(saved.receipt.draft.id);assert.deepEqual(after.found,[]);assert.deepEqual(after.plans.map(plan=>Boolean(plan.saved)),[true]);
+ assert.deepEqual(await review.apply({...target(ready)}),result);
+ assert.equal((await f.workspace.read()).book.entries.find(entry=>entry.id===saved.recordId).title,'River bank survey');
+ await f.workspace.catalogue(store=>verifyRecordDraftEdits(store));
+});
