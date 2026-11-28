@@ -281,7 +281,7 @@
   "UNSAFE": "Una ubicació de fitxer protegida no és segura. No s'ha modificat cap fitxer.",
   "PRIVACY_TEXT_COMPLEXITY": "Aquesta sortida conté una seqüència ininterrompuda de normalització Unicode de més de 65.536 unitats de codi. Divideix aquesta seqüència abans de publicar; no s'ha admès cap sortida.",
   "PRIVACY": "Exportació bloquejada: el contingut seleccionat conté un camí local o informació potencialment privada. Edita o desselecciona l'element afectat.",
-  "AUTH": "Aquesta sessió del navegador no està autoritzada. Torna a obrir l'enllaç d'inici que mostra Observanda.",
+  "AUTH": "Aquesta finestra ja no està connectada a Observanda. Tanca Observanda i torna-la a obrir.",
   "ORIGIN": "Aquesta petició no prové de l'aplicació local d'Observanda.",
   "LIMIT": "Aquesta petició supera la mida de petició admesa.",
   "STALE": "L'espai de treball ha canviat després de la previsualització. Crea una previsualització nova abans d'exportar.",

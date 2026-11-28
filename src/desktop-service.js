@@ -31,6 +31,8 @@ process.on('disconnect',()=>void stop());process.on('SIGTERM',()=>void stop());p
 process.on('message',async message=>{
   if(message?.type==='shutdown-status'&&Number.isSafeInteger(message.id)){send({type:'shutdown-status',id:message.id,phase,...(server?.shutdownStatus()??{busy:starting||stopping,failure:0})});return;}
   if(message?.type==='protected'){const item=pending.get(message.id);if(item){clearTimeout(item.timer);pending.delete(message.id);message.error?item.reject(new AppError('DEVICE_UNAVAILABLE')):item.resolve(message.value);}return;}
+  // A fresh one-use launch reconnects the window after its session ended.
+  if(message?.type==='launch'){if(server&&!stopping)send({type:'launch',url:server.url});return;}
   if(message?.type==='stop'){void stop();return;}
   if(message?.type!=='start'||starting||runtime||stopping)return;
   if(typeof message.preferencesFile!=='string'||!path.isAbsolute(message.preferencesFile))return;

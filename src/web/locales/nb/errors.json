@@ -281,7 +281,7 @@
   "UNSAFE": "En beskyttet filplassering er usikker. Ingen filer ble endret.",
   "PRIVACY_TEXT_COMPLEXITY": "Disse utdataene inneholder en uavbrutt Unicode-normaliseringssekvens på mer enn 65 536 kodeenheter. Del opp sekvensen før publisering; ingen utdata er godtatt.",
   "PRIVACY": "Eksport blokkert: valgt innhold inneholder en lokal bane eller potensielt privat informasjon. Rediger eller fjern det berørte elementet fra utvalget.",
-  "AUTH": "Denne nettleserøkten er ikke autorisert. Åpne oppstartslenken som Observanda skrev ut, på nytt.",
+  "AUTH": "Dette vinduet er ikke lenger koblet til Observanda. Lukk Observanda og åpne programmet igjen.",
   "ORIGIN": "Denne forespørselen kom ikke fra det lokale Observanda-programmet.",
   "LIMIT": "Denne forespørselen overskrider støttet forespørselsstørrelse.",
   "STALE": "Arbeidsområdet er endret etter forhåndsvisningen. Opprett en ny forhåndsvisning før eksport.",

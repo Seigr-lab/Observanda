@@ -167,6 +167,9 @@ import {WorkspaceFonts} from './workspace-fonts.js';
 import {MAX_FONT_BYTES} from './font-inspector.js';
 
 const assets=await createApplicationAssets();
+// A window's session ends this long after its last renewal. An open window renews
+// it (/api/session/renew), so it ends only once the window has gone.
+const SESSION_LIFETIME=8*60*60*1000;
 const mime = name => name.endsWith('.bin') ? 'application/octet-stream' : name.endsWith('.csv') ? 'text/csv; charset=utf-8' : name.endsWith('.png') ? 'image/png' : name.endsWith('.mp4') ? 'video/mp4' : name.endsWith('.wav') ? 'audio/wav' : name.endsWith('.ttf') ? 'font/ttf' : name.endsWith('.otf') ? 'font/otf' : name.endsWith('.woff2') ? 'font/woff2' : name.endsWith('.woff') ? 'font/woff' : name.endsWith('.txt') ? 'text/plain; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.svg') ? 'image/svg+xml' : name.endsWith('.json') ? 'application/json' : 'text/html; charset=utf-8';
 
 async function body(req,limit=MAX_BYTES,capacityOwner=null) {
@@ -294,7 +297,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     if(context.root!==source)return;
     await stopJobs(context);cancelFolderRequests();await context.calendarSources.clear();await clearVault(context.vault);context=makeContext(null);contextRequired=true;plans.clear();
     for(const session of sessions.values())session.access=null;
-    client.access='none';client.expires=Date.now()+8*60*60*1000;
+    client.access='none';client.expires=Date.now()+SESSION_LIFETIME;
   };
   const sessionResponse=(res,id)=>{res.setHeader('X-Observanda-Session',id);res.setHeader('Set-Cookie','observanda=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/');return {ok:true,session:id};};
   const contextAccess=async()=>{
@@ -389,7 +392,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     if(followSettings&&context.workspace&&context.vault.key&&vault?.key)await dashboardEdits.relocate(context.workspace,new Workspace(location,vault));
     if(context.root&&context.root!==location)await databaseProvider()?.closeWorkspace(context.root);
     savedDeletion.assertAvailable(location);
-    localPreferences.recent=[detail,...localPreferences.recent.filter(item=>item.path!==location&&item.path!==movingFrom)].slice(0,30);if(context.publisher)context.publisher.token=null;await context.calendarSources.clear();await clearVault(context.vault);context=makeContext(location,true,vault??{id:null,key:null});contextRequired=true;plans.clear();const access=await readAccess(location);context.protectedOnce=access.value!==null;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;activities.relocate(priorContextId,context.id);startJobs(context);
+    localPreferences.recent=[detail,...localPreferences.recent.filter(item=>item.path!==location&&item.path!==movingFrom)].slice(0,30);if(context.publisher)context.publisher.token=null;await context.calendarSources.clear();await clearVault(context.vault);context=makeContext(location,true,vault??{id:null,key:null});contextRequired=true;plans.clear();const access=await readAccess(location);context.protectedOnce=access.value!==null;client.access=access.etag;client.expires=Date.now()+SESSION_LIFETIME;activities.relocate(priorContextId,context.id);startJobs(context);
     }finally{priorContext.adopting=false;if(context===priorContext)priorContext.readers.open();}
   });
   const metadata=async()=>{
@@ -469,7 +472,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         // A workspace whose access file is missing is damaged; it never opens as an unprotected folder.
         if(await missingAccess(access))throw new AppError('ACCESS_FORMAT');
         if(sessions.size>=128)forgetSession(sessions.keys().next().value);
-        const local={access:access.value!==null?null:access.etag,expires:Date.now()+8*60*60*1000,filesOnly:data.filesOnly===true};
+        const local={access:access.value!==null?null:access.etag,expires:Date.now()+SESSION_LIFETIME,filesOnly:data.filesOnly===true};
         if(access.value?.formatVersion===3&&!context.manualLock&&!access.updateRequired){
          try{
           const vault=await diagnosticPhase('session-device',()=>verifyAccess(access,'','',{deviceStore}));
@@ -495,6 +498,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        target.search=target.searchParams.toString();const token=downloads.issue(session,context.id,target.pathname+target.search);target.searchParams.set('__observanda_download',token);
        return json({url:target.pathname+target.search});
       }
+      if(req.method==='POST'&&url.pathname==='/api/session/renew'){await body(req);client.expires=Date.now()+SESSION_LIFETIME;return json({ok:true});}
       if(req.method==='GET'&&url.pathname==='/api/health'){
        const health=await serviceHealth({root:context.root,workspace:context.workspace,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),authorize:async()=>!(await status(client)).locked,closing:shuttingDown,provider:databaseProvider()});
        return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats(),nativeResources:nativeResources.stats()},health.ready?200:503);
@@ -579,7 +583,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
            if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key))await clearVault(vault);
            else{drained=true;await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}
            if(!client.filesOnly)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);
-           client.access=state.access.etag;client.expires=Date.now()+8*60*60*1000;if(!client.filesOnly)startJobs(context);state=await status(client);
+           client.access=state.access.etag;client.expires=Date.now()+SESSION_LIFETIME;if(!client.filesOnly)startJobs(context);state=await status(client);
           }
          }catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
          finally{if(drained)selectedContext.readers.open();loginBusy=false;}
@@ -607,7 +611,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname==='/api/access/unlock'){
         if(changing||loginBusy)throw new AppError('LOCKED');
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(changing||loginBusy)throw new AppError('LOCKED');loginBusy=true;
-        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}if(data.filesOnly!==true)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;if(data.filesOnly!==true)startJobs(context);return json({ok:true});}
+        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}if(data.filesOnly!==true)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+SESSION_LIFETIME;if(data.filesOnly!==true)startJobs(context);return json({ok:true});}
         finally{selectedContext.readers.open();loginBusy=false;}
       }
       if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;deviceStore?.forgetPrivateKey?.();await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;await context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;return json({ok:true});}
@@ -799,7 +803,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);await context.calendarSources.clear();await clearVault(context.vault);plans.clear();
           context=makeContext(null);contextRequired=true;Object.assign(localPreferences,result.value);
           for(const session of sessions.values())session.access=null;
-          client.access='none';client.expires=Date.now()+8*60*60*1000;
+          client.access='none';client.expires=Date.now()+SESSION_LIFETIME;
           return json({storage:await metadata(),backup:result.backup});
         }finally{selectedContext.readers.open();changing=false;}
       }
@@ -810,7 +814,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        if(changing||loginBusy||activeWrites||publishing||importing)throw new AppError('LOCKED');
        changing=true;try{
         const result=await updateWorkspaceAccess(context.root,context.vault,data);
-        client.access=result.etag;client.expires=Date.now()+8*60*60*1000;return json(result);
+        client.access=result.etag;client.expires=Date.now()+SESSION_LIFETIME;return json(result);
        }finally{changing=false;}
       }
       // The owner creates, lists and revokes agent keys for the open, unlocked workspace.
@@ -1106,7 +1110,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{const data=await body(req);
         // A password-protected workspace changes its credentials only with its current password, even in an unlocked session. An empty password would fall back to this device's trust, so it is refused before checking.
         if(accessState.access.value?.password){if(typeof data.currentPassword!=='string'||!data.currentPassword)throw new AppError('ACCESS_DENIED');const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword);await clearVault(verified);}
-        const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce=true;client.access=next.etag;client.expires=Date.now()+8*60*60*1000;return json({...await accessSummary(next.value,deviceStore),locked:false});}
+        const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce=true;client.access=next.etag;client.expires=Date.now()+SESSION_LIFETIME;return json({...await accessSummary(next.value,deviceStore),locked:false});}
         finally{changing=false;}
       }
       if(!releaseRead)await waitForWriter(async()=>{if(changing||loginBusy)throw new AppError('LOCKED');});

@@ -28,3 +28,23 @@ test('expired browser bearers cannot enter exceptional routes, download grants o
  now-=8*60*60*1000;
  assert.equal((await fetch(app.origin+'/api/access/status',{headers})).status,401,'Removed expired entries cannot revive after a wall-clock rollback');
 });
+
+// An open window renews its session, so it never ends while the window is open;
+// a session that has already ended cannot be renewed.
+test('an open window renews its session past the lifetime, and an ended session stays ended',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-session-renew-')),app=await testServer({port:0,headless:true,preferencesFile:path.join(root,'preferences')});
+ t.after(async()=>{await app.close();assert.ok(path.basename(root).startsWith('observanda-session-renew-'));await rm(root,{recursive:true,force:true});});
+ let now=Date.now();t.mock.method(Date,'now',()=>now);
+ const login=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken,binding:'e'.repeat(64)})});
+ const token=(await login.json()).session,headers={Origin:app.origin,'Content-Type':'application/json','X-Observanda-Session':token};
+ const renew=()=>fetch(app.origin+'/api/session/renew',{method:'POST',headers,body:'{}'});
+ // Renewed every few hours, the session outlives several lifetimes.
+ for(let step=0;step<4;step++){now+=6*60*60*1000;const renewed=await renew();assert.equal(renewed.status,200);assert.deepEqual(await renewed.json(),{ok:true});}
+ const status=await fetch(app.origin+'/api/access/status',{headers});assert.equal(status.status,200);await status.json();
+ // Left for a whole lifetime without renewal, it ends and cannot be renewed.
+ now+=8*60*60*1000;
+ const late=await renew();assert.equal(late.status,401);assert.equal((await late.json()).code,'AUTH');
+ assert.equal((await fetch(app.origin+'/api/access/status',{headers})).status,401);
+ // Without a session nothing is renewed.
+ assert.equal((await fetch(app.origin+'/api/session/renew',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:'{}'})).status,401);
+});

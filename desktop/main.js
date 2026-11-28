@@ -4,7 +4,7 @@ import {launchService} from './service-process.js';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {windowPreferences,localUrl,externalUrl,launchUrl,deviceProtectionAvailable,protectDeviceValue} from './policy.js';
+import {windowPreferences,localUrl,externalUrl,launchUrl,reconnectRequest,deviceProtectionAvailable,protectDeviceValue} from './policy.js';
 import {windowIcon,followWindowTheme} from './branding.js';
 import {closeGuard} from './close-guard.js';
 import {ServiceSupervisor} from './service-supervisor.js';
@@ -20,7 +20,7 @@ const profile=development&&testLaunch?path.resolve(process.env.OBSERVANDA_DESKTO
 app.setPath('userData',path.join(profile??path.join(os.homedir(),'.observanda'),'window'));
 let main=null,child=null,origin=null,quitting=false,stopping=null,childExited,resolveExit,progress={stage:'startup'};
 const stateRequests=new Map();let stateSequence=0,closingGuard;
-let serviceDegraded=false,closeScheduled=false;
+let serviceDegraded=false,closeScheduled=false,reconnectWebsite=false;
 const resources=development?path.resolve(here,'../dist/desktop-resources'):process.resourcesPath;
 const preferencesFile=path.join(profile??path.join(os.homedir(),'.observanda'),'preferences.json');
 const localizationPath=development?path.resolve(here,'../src/desktop-localization.js'):path.join(resources,'service/src/desktop-localization.js');
@@ -61,7 +61,12 @@ function refreshNativeLanguage(){if(!main||main.isDestroyed())return;installMenu
 async function openExternal(value){const url=externalUrl(value);if(!url)return;const result=await dialog.showMessageBox({type:'question',title:dt('externalTitle'),message:dt('externalMessage'),detail:url,buttons:[dt('cancelAction'),dt('externalOpen')],defaultId:0,cancelId:0});if(result.response===1)await shell.openExternal(url);}
 function guardWindow(win){
   followWindowTheme(win,nativeTheme,here);
-  win.webContents.on('will-navigate',(event,url)=>{if(!localUrl(url,origin)){event.preventDefault();void openExternal(url);}});
+  win.webContents.on('will-navigate',(event,url)=>{
+    if(!localUrl(url,origin)){event.preventDefault();void openExternal(url);return;}
+    // The window's session has ended: give it a fresh launch instead of the reconnect page.
+    const request=win===main?reconnectRequest(url,origin):null;
+    if(request&&child?.connected&&!stopping){event.preventDefault();reconnectWebsite=request.website;child.send({type:'launch'});}
+  });
   win.webContents.on('will-redirect',(event,url)=>{if(!localUrl(url,origin))event.preventDefault();});
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
   win.webContents.setWindowOpenHandler(({url})=>{
@@ -123,6 +128,9 @@ else{
     if(message.type==='shutdown-status'&&Number.isSafeInteger(message.id)&&typeof message.busy==='boolean'&&Number.isFinite(message.failure)){const request=stateRequests.get(message.id);stateRequests.delete(message.id);request?.resolve({busy:message.busy,failure:message.failure,phase:message.phase});return;}
     if(message.type==='lifecycle')supervisor.progress(message.phase);
     if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){supervisor.ready();const url=new URL(message.url);origin=url.origin;if(process.argv.includes('--website'))url.searchParams.set('view','website');await main.loadURL(url.href);}
+    if(message.type==='launch'&&launchUrl(message.url)&&new URL(message.url).origin===origin&&main&&!stopping){const url=new URL(message.url);if(reconnectWebsite)url.searchParams.set('view','website');
+      // A launch differs from the open page only after '#', so load the opening page first to start the app afresh.
+      await main.loadURL(desktopStartupPage(localized.language,dt));if(main&&!stopping)await main.loadURL(url.href);}
     if(message.type==='progress'&&typeof message.message==='string')showProgress(message);
     if(message.type==='failed'&&typeof message.message==='string')void reportFailure(message);
     if(message.type==='protect'&&(process.platform==='darwin'||process.platform==='linux')&&Number.isSafeInteger(message.id)){

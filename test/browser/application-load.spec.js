@@ -51,3 +51,21 @@ test('a record route chosen while session establishment is pending survives the 
   await page.evaluate(id=>location.hash='#/records/'+id+'/read',record.id);release();await expect(page.locator('.record-reader')).toContainText(record.title);expect(new URL(page.url()).hash).toBe('#/records/'+record.id+'/read');
  }finally{release();await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });
+test('an open window renews its session, and a window whose session ended offers to reconnect once',async({page})=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-startup-')),f=await encryptedFixture(directory,startupBook()),root=f.workspace.root;
+ const app=await startServer({root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),real=Date.now;
+ try{
+  await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible({timeout:15000});
+  // Returning to the window renews its session.
+  const renewed=page.waitForResponse(response=>response.url().endsWith('/api/session/renew'));
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));expect((await renewed).status()).toBe(200);
+  // After the session has ended (here: the clock moves past its lifetime), the window asks to be reconnected.
+  // A browser has no desktop app to answer, so it shows the reconnect page once instead of reloading in a loop.
+  Date.now=()=>real()+9*60*60*1000;
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  const heading=page.getByRole('heading',{name:'This window is no longer connected',exact:true});await expect(heading).toBeVisible({timeout:15000});await expect(heading).toBeFocused();
+  expect(new URL(page.url()).searchParams.get('observanda-reconnect')).toBe('1');
+  await expect(page.getByText('Close Observanda and open it again',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Reconnect',exact:true})).toBeVisible();
+ }finally{Date.now=real;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});

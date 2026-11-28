@@ -22,3 +22,10 @@ export function externalUrl(value){
 export function launchUrl(value){
   try{const url=new URL(value);return url.protocol==='http:'&&url.hostname==='127.0.0.1'&&!!url.port&&url.pathname==='/'&&!url.search&&/^#[a-f0-9]{64}$/.test(url.hash)&&!url.username&&!url.password;}catch{return false;}
 }
+// A window whose session has ended asks to be reconnected by opening the app's
+// own address with this marker; the desktop app answers with a fresh launch.
+export function reconnectRequest(value,origin){
+  if(!localUrl(value,origin))return null;
+  const url=new URL(value);if(url.pathname!=='/'||url.searchParams.get('observanda-reconnect')!=='1')return null;
+  return {website:url.searchParams.get('view')==='website'};
+}

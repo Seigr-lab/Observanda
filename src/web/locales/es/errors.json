@@ -281,7 +281,7 @@
   "UNSAFE": "Una ubicación de archivo protegida no es segura. No se ha modificado ningún archivo.",
   "PRIVACY_TEXT_COMPLEXITY": "Esta salida contiene una secuencia ininterrumpida de normalización Unicode de más de 65.536 unidades de código. Divide esa secuencia antes de publicar; no se ha admitido ninguna salida.",
   "PRIVACY": "Exportación bloqueada: el contenido seleccionado contiene una ruta local o información potencialmente privada. Edita o deselecciona el elemento afectado.",
-  "AUTH": "Esta sesión del navegador no está autorizada. Vuelve a abrir el enlace de inicio mostrado por Observanda.",
+  "AUTH": "Esta ventana ya no está conectada a Observanda. Cierra Observanda y vuelve a abrirla.",
   "ORIGIN": "Esta solicitud no procede de la aplicación local de Observanda.",
   "LIMIT": "Esta solicitud supera el tamaño de solicitud admitido.",
   "STALE": "El espacio de trabajo ha cambiado después de la vista previa. Crea una vista previa nueva antes de exportar.",
