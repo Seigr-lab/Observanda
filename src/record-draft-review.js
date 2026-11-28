@@ -190,11 +190,12 @@ export class RecordDraftReview{
  }));}
  async content(command,{signal}={}){
   if(!natural(command?.offset))invalid();
-  return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
-   const mine=new RecordDocument(document.blocks,plan.roots.mine),title=(await mine.field(['title'],{signal})).value;
+  // A preview shows what the draft holds now, with every edit written into it.
+  return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>new RecordDraftEdits(store).mine(plan,document,async mine=>{
+   const title=(await mine.field(['title'],{signal})).value;
    const body=command.offset===0?(await mine.field(['body'],{signal})).value:null,sections=await mine.tree.page(mine.root,['sections'],{offset:command.offset,limit:4});
    signal?.throwIfAborted();return {id:plan.draftId,workspaceId:plan.workspaceId,revision:plan.draftRevision,recordId:plan.recordId,title,body,sections};
-  }));
+  })));
  }
  // A draft read the way the record page reads a saved record: the same header, collection
  // windows and section window, so a new record is written on the same page as every record.

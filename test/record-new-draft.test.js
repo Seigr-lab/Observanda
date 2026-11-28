@@ -46,6 +46,8 @@ test('a new built-in record is kept as a draft, read like a saved record, edited
  // The page reads the draft with its edits, as soon as each one is written.
  const edited=await review.reading({...target(plan)});assert.equal(edited.header.title,'River bank survey');assert.match(edited.editRevision,/^[a-f0-9]{64}$/);
  assert.equal(reading.editRevision,null);
+ // A recovery preview shows the draft with its edits too.
+ assert.equal((await review.content({...target(plan),offset:0})).title,'River bank survey');
  // A draft takes new parts as a saved record does: sections are inserted, moved and removed, tags and contributors added.
  const [observation,context]=record.sections.map(section=>section.id),methods=randomUUID(),notes=randomUUID();
  await write('sections',{action:'insert',sectionId:methods,beforeId:context,value:{title:'Methods',body:{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Transect walk.'}]}]}}});

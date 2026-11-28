@@ -15,6 +15,8 @@ import {copyRecordValue} from './record-document-copy.js';
 import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {selectDraftEdit,replaceDraftEdit,validDraftEdit} from './record-draft-edit-values.js';
 import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,requireDraftEdits,requireRecordTypeDrafts} from './catalogue-format.js';
+// The latest title written into a checkpoint's draft, so the recovery list can name it without reading the checkpoint.
+export const RECORD_DRAFT_TITLE_PREFIX='record-draft-edit-title:';
 const headPrefix='record-draft-edit-head:',nodePrefix='record-draft-edit:',operationPrefix='record-draft-edit-operation:';
 const hash=value=>digest(serialize(value)),fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const owner=plan=>({workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:plan.draftId,draftRevision:plan.draftRevision,position:plan.sourcePosition??0});
@@ -58,6 +60,7 @@ export class RecordDraftEdits{
    await this.store.putObject(nodePrefix+revision,node);
    await this.store.putObject(headPrefix+hash(node.owner),{owner:node.owner,revision});
    await this.store.putObject(operationPrefix+command.operationId,{revision});
+   if(command.field==='title'&&typeof command.value?.value==='string')await this.store.putObject(RECORD_DRAFT_TITLE_PREFIX+plan.draftId,{draftRevision:plan.draftRevision,title:command.value.value.slice(0,160)});
    return {editRevision:revision,revision:hash(command.value),checkpointed:true};
   });
  }

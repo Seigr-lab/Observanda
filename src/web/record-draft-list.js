@@ -97,18 +97,14 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
     if(!recoverSelected)throw Error(text('readFailed'));controller=null;close();await recoverSelected(header);
     if(current(epoch,workspaceId))await refresh();return;
    }
-   if([1,2,3].includes(header.draft.formatVersion)&&recoverDocument){
+   // Every record checkpoint is reviewed through its plan, so the preview shows the edits written into it.
+   if([1,2,3,4].includes(header.draft.formatVersion)&&recoverDocument){
     const position=header.draft.count>1?await selectRecord(header,options):0;if(position===null)return;
     if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
     const reviewPlan=await api('/api/research/drafts/review/prepare',{id:item.id,workspaceId,expectedRevision:header.revision,position},options);
     if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
     if(reviewPlan.saved){await load();return;}
     header={...header,reviewPlan};
-    if(!await preview(header,options))return;
-    if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
-    controller=null;close();await recoverDocument(header,options);if(current(epoch,workspaceId))await refresh();return;
-   }
-   if(header.draft.formatVersion===4&&recoverDocument){
     if(!await preview(header,options))return;
     if(request.signal.aborted||!current(epoch,workspaceId)||!dialog.open)return;
     controller=null;close();await recoverDocument(header,options);if(current(epoch,workspaceId))await refresh();return;

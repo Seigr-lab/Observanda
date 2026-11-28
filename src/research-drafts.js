@@ -99,7 +99,22 @@ export class ResearchDrafts {
     if(workspaceId!==null&&workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
     const owner=this.recoveryOwner(book);
     const presentSummary=includeRecovery?(result,sourceRevision)=>recordRecoverySummary(result,sourceRevision,owner):draftSummary;
-    return this.index.page(book.id,{cursor,excludeId,limit},{signal,presentSummary});
+    const page=await this.index.page(book.id,{cursor,excludeId,limit},{signal,presentSummary});
+    return {...page,drafts:await this.editedTitles(page.drafts,{signal})};
+  }
+  // A new record written on the record page keeps its edits beside its checkpoint, so the list
+  // names it by the title written into it; only that small note is read, never a checkpoint body.
+  async editedTitles(items,{signal}={}){
+    if(!items.length)return items;
+    const {RECORD_DRAFT_TITLE_PREFIX}=await import('./record-draft-edits.js');
+    return this.workspace.catalogue(async store=>{
+      const named=[];
+      for(const item of items){
+        signal?.throwIfAborted();const note=item.count===1?await store.object(RECORD_DRAFT_TITLE_PREFIX+item.id):null;
+        named.push(note?.draftRevision===item.revision&&typeof note.title==='string'&&note.title?{...item,titles:[note.title,...item.titles.slice(1)]}:item);
+      }
+      return named;
+    });
   }
   recoveryOwner(book){
     const labBookId=this.workspace.labBookId??null;
