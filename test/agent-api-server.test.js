@@ -95,6 +95,41 @@ test('agents learn the API from the app and work only through their key, scope a
  assert.equal((await result(await f.agent('/api/v1/agent/records/get',{key,data:{...place,recordId:created.id}}),401)).code,'ACCESS_LOCKED');
 });
 
+test('the workspace overview lists every reachable project with its lab books and record counts, within the key',{timeout:600000},async t=>{
+ const f=await agentServerFixture(t),{create}=await keys(f);
+ const software=await f.createProject('Software notes'),garden=await f.createProject('Garden');
+ const release=await f.createBook(software.projectId,'Release log'),design=await f.createBook(software.projectId,'Design notes'),beds=await f.createBook(garden.projectId,'Beds');
+ const key=await create({kind:'workspace'},'read'),writer=await create({kind:'workspace'});
+ for(const title of ['One','Two'])await result(await f.agent('/api/v1/agent/records/create',{key:writer,data:{projectId:software.projectId,labBookId:release.labBookId,record:{type:'note',title}}}));
+ await result(await f.agent('/api/v1/agent/records/create',{key:writer,data:{projectId:garden.projectId,labBookId:beds.labBookId,record:{type:'note',title:'Planted'}}}));
+ // The operation is published with the others; a read key may call it.
+ assert.ok((await result(await f.agent('/api/v1/openapi.json'))).paths['/api/v1/agent/workspace/overview'].post);
+ const shape=value=>value.projects.map(project=>[project.title,project.parentId,project.labBooks.map(book=>[book.title,book.recordCount]).sort((a,b)=>a[0].localeCompare(b[0])),project.labBooksCursor]).sort((a,b)=>a[0].localeCompare(b[0]));
+ const all=await result(await f.agent('/api/v1/agent/workspace/overview',{key,data:{}}));
+ assert.deepEqual(shape(all),[['Garden',null,[['Beds',1]],null],['Software notes',null,[['Design notes',0],['Release log',2]],null]]);assert.equal(all.nextCursor,null);
+ assert.ok(all.projects.every(project=>project.labBooks.every(book=>[release,design,beds].some(item=>item.labBookId===book.labBookId))));
+ assert.equal((await result(await f.agent('/api/v1/agent/workspace/overview',{key,data:{extra:true}}),422)).code,'INVALID');
+ // Projects come a page at a time; the cursor gives the rest.
+ const first=await result(await f.agent('/api/v1/agent/workspace/overview',{key,data:{limit:1}}));assert.equal(first.projects.length,1);assert.ok(first.nextCursor);
+ const second=await result(await f.agent('/api/v1/agent/workspace/overview',{key,data:{limit:1,cursor:first.nextCursor}}));assert.equal(second.projects.length,1);assert.equal(second.nextCursor,null);
+ assert.deepEqual([...first.projects,...second.projects].map(project=>project.title).sort(),['Garden','Software notes']);
+ // A lab book added later, and new records, appear on the next call.
+ const added=await result(await f.agent('/api/v1/agent/lab-books/create',{key:writer,data:{projectId:garden.projectId,title:'Seeds'}}));
+ await result(await f.agent('/api/v1/agent/records/create',{key:writer,data:{projectId:garden.projectId,labBookId:added.labBookId,record:{type:'note',title:'Sown'}}}));
+ assert.deepEqual(shape(await result(await f.agent('/api/v1/agent/workspace/overview',{key,data:{}})))[0],['Garden',null,[['Beds',1],['Seeds',1]],null]);
+ // A lab book locked with its own password is listed without a count; nothing is asked.
+ const locked=await f.createBook(garden.projectId,'Private log','a long lab book password');
+ await result(await f.owner('/api/projects/'+garden.projectId+'/lab-books/'+locked.labBookId+'/access/lock',{}));
+ assert.deepEqual(shape(await result(await f.agent('/api/v1/agent/workspace/overview',{key,data:{}})))[0],['Garden',null,[['Beds',1],['Private log',null],['Seeds',1]],null]);
+ // Project and lab book keys see only what they reach.
+ const project=await create({kind:'project',projectId:software.projectId},'read');
+ assert.deepEqual(shape(await result(await f.agent('/api/v1/agent/workspace/overview',{key:project,data:{}}))),[['Software notes',null,[['Design notes',0],['Release log',2]],null]]);
+ const book=await create({kind:'lab-book',projectId:software.projectId,labBookId:release.labBookId},'read');
+ assert.deepEqual(shape(await result(await f.agent('/api/v1/agent/workspace/overview',{key:book,data:{}}))),[['Software notes',null,[['Release log',2]],null]]);
+ // Reading the overview is not a change: the owner's agent activity lists only the writes.
+ assert.ok((await result(await f.owner('/api/security/agent-keys/activity',{}))).activity.every(entry=>entry.operation!=='workspace/overview'));
+});
+
 test('the owner creates scoped keys only for existing lab books, lists and revokes them',{timeout:600000},async t=>{
  const f=await agentServerFixture(t),project=await f.createProject('Software notes'),book=await f.createBook(project.projectId,'Release log');
  const created=await result(await f.owner('/api/security/agent-keys/create',{name:'Release agent',scope:{kind:'lab-book',projectId:project.projectId,labBookId:book.labBookId},access:'write'}));

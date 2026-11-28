@@ -7,7 +7,7 @@ const book='projects/{projectId}/lab-books/{labBookId}/';
 const step=value=>Object.freeze(value);
 export const AGENT_APP_GUIDE=Object.freeze([
  step({id:'lab-book-start',method:'POST',command:book+'workspace/read/start',summary:'Open a lab book for reading and writing; the reply\'s metadata.id is the lab book\'s workspaceId.',body:{},
-  notes:'projectId and labBookId come from the projects/list and lab-books/list operations. Pass metadata.id as workspaceId to the lab book commands below.'}),
+  notes:'projectId and labBookId come from the workspace/overview operation (or projects/list and lab-books/list). Pass metadata.id as workspaceId to the lab book commands below.'}),
  step({id:'record-read',method:'POST',command:book+'workspace/read/selection',summary:'Read whole records, including their attachments, sections and links.',body:{workspaceId:'{workspaceId}',ids:['{recordId}']},
   notes:'workspaceId comes from lab-book-start; record ids come from the records/list operation. Each record is in book.entries, with its files in attachments; recordRevisions gives each record\'s revision.'}),
  step({id:'record-share-read',method:'POST',command:book+'research/records/values/read',summary:'Read whether a record may appear on websites and other publications.',body:{workspaceId:'{workspaceId}',recordId:'{recordId}',field:'share'},

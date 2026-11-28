@@ -29,6 +29,7 @@ const recordFields={
  sections:{type:'array',maxItems:200,items:sectionInput,description:'The full list of sections, in order. Sections left out are removed.'}
 };
 const book={projectId:id,labBookId:id};
+const OVERVIEW_LAB_BOOKS=50;
 const recordOutput={type:'object',properties:{
  id,revision:{type:'string',description:'Pass this as expectedRevision when you update the record.'},type:{type:'string'},title:{type:'string'},status:{type:'string'},tags:{type:'array',items:{type:'string'}},
  occurredOn:{type:['string','object']},text:{type:'string',description:'The record text as plain text.'},
@@ -41,6 +42,11 @@ export const AGENT_OPERATIONS=Object.freeze([
  {name:'projects/list',method:'POST',access:'read',summary:'List the projects this key can reach, one page at a time.',
   input:{type:'object',additionalProperties:false,properties:{parentId:{...nullableId,description:'List the projects inside this project; null lists the top level.'},cursor,limit:limit(50)}},
   output:{type:'object',properties:{projects:{type:'array',items:{type:'object',properties:{projectId:id,parentId:nullableId,title:{type:'string'},description:{type:'string'},kind:{type:'string'}}}},nextCursor:cursor}}},
+ {name:'workspace/overview',method:'POST',access:'read',summary:'List the projects this key can reach, each with its lab books and their record counts, a page of projects at a time.',
+  description:'Each project lists up to '+OVERVIEW_LAB_BOOKS+' lab books; when it has more, labBooksCursor is set: pass it as cursor to lab-books/list for the rest. recordCount is null when a lab book cannot be read now, for example while it is locked with its own password; labBooks is null when the project itself cannot be read now.',
+  input:{type:'object',additionalProperties:false,properties:{cursor,limit:limit(20)}},
+  output:{type:'object',properties:{projects:{type:'array',items:{type:'object',properties:{projectId:id,parentId:nullableId,title:{type:'string'},kind:{type:['string','null']},
+   labBooks:{type:['array','null'],items:{type:'object',properties:{labBookId:id,title:{type:'string'},recordCount:{type:['integer','null']}}}},labBooksCursor:cursor}}},nextCursor:cursor}}},
  {name:'lab-books/list',method:'POST',access:'read',summary:'List the lab books of a project.',
   input:{type:'object',additionalProperties:false,required:['projectId'],properties:{projectId:id,cursor,limit:limit(50)}},
   output:{type:'object',properties:{labBooks:{type:'array',items:{type:'object',properties:{labBookId:id,title:{type:'string'}}}},nextCursor:cursor}}},
@@ -114,19 +120,62 @@ function decode(value){if(value==null)return null;try{return JSON.parse(Buffer.f
 const dateValue=value=>value===null?{kind:'unknown'}:value;
 const dateOutput=value=>typeof value==='string'?value:value?.kind==='unknown'?null:value;
 
+// Every project the key reaches, with its lab books and record counts. A count is
+// the lab book's own revision read (no record is loaded); a book that cannot be
+// read now, such as one locked with its own password, has a null count.
+async function overview(input,{key,run}){
+ const page=decode(input.cursor)??{offset:0},size=input.limit??10;if(!Number.isSafeInteger(page.offset)||page.offset<0)throw new AppError('INVALID',[{field:'input.cursor'}]);
+ const projectEntry=project=>({projectId:project.projectId,parentId:project.parentId??null,title:project.summary?.title??'',kind:project.summary?.kind??null});
+ let projects,nextCursor=null;
+ if(key.scope.kind==='workspace'){
+  const value=await run('/api/projects/list',{offset:page.offset,limit:size,revision:null});
+  projects=value.projects.map(projectEntry);
+  nextCursor=page.offset+value.projects.length<value.total?encode({offset:page.offset+value.projects.length}):null;
+ }else{
+  // A project or lab book key reaches one project: find it, whatever its place in the list.
+  projects=[];
+  for(let offset=0;page.offset===0;){
+   const value=await run('/api/projects/list',{offset,limit:100,revision:null}),found=value.projects.find(project=>project.projectId===key.scope.projectId);
+   if(found){projects=[projectEntry(found)];break;}
+   offset+=value.projects.length;if(!value.projects.length||offset>=value.total)break;
+  }
+ }
+ const unreadable=error=>{if(['SERVER_CLOSING','WORKSPACE_CHANGED'].includes(error.code))throw error;return null;};
+ const recordCount=async(projectId,item)=>{
+  try{const value=await run('/api/projects/'+projectId+'/lab-books/'+item.labBookId+'/workspace/read/version',{workspaceId:item.namespaceId});return Number.isSafeInteger(value?.recordCount)?value.recordCount:null;}
+  catch(error){return unreadable(error);}
+ };
+ // A lab book key reaches one lab book: its project's list is read until it is found.
+ const books=async projectId=>{
+  if(key.scope.kind!=='lab-book')return run('/api/projects/'+projectId+'/lab-books/list',{after:null,limit:OVERVIEW_LAB_BOOKS,revision:null});
+  for(let after=null;;){
+   const value=await run('/api/projects/'+projectId+'/lab-books/list',{after,limit:100,revision:null}),found=value.items.filter(item=>item.labBookId===key.scope.labBookId);
+   if(found.length||!value.next)return {items:found,next:null};after=value.next;
+  }
+ };
+ for(const project of projects){
+  const value=await books(project.projectId).catch(unreadable),labBooks=[];
+  if(!value){Object.assign(project,{labBooks:null,labBooksCursor:null});continue;}
+  for(const item of value.items.filter(item=>inScope(key,{projectId:project.projectId,labBookId:item.labBookId})))labBooks.push({labBookId:item.labBookId,title:item.directory,recordCount:await recordCount(project.projectId,item)});
+  Object.assign(project,{labBooks,labBooksCursor:value.next??null});
+ }
+ return {projects,nextCursor};
+}
+
 // run(route,data) executes one of the app's own commands through the owner's
 // session; the server enforces the key's read or write access on each command.
 export async function runAgentOperation(operation,input,{key,run,now=()=>new Date()}){
  if(operation.access==='write'&&key.access!=='write')forbidden();
  if(operation.input)check(operation.input,input??{});else if(input!==undefined&&input!==null)throw new AppError('INVALID');
  if(operation.name==='me')return {name:key.name,workspaceId:key.workspaceId,scope:key.scope,access:key.access,expiresAt:key.expiresAt,apiVersion:AGENT_API_VERSION};
- if(!inScope(key,{projectId:input.projectId??(operation.name==='projects/list'?key.scope.projectId??null:null),labBookId:input.labBookId??null})&&operation.name!=='projects/list')forbidden();
+ if(!inScope(key,{projectId:input.projectId??(operation.name==='projects/list'?key.scope.projectId??null:null),labBookId:input.labBookId??null})&&!['projects/list','workspace/overview'].includes(operation.name))forbidden();
  if(operation.name==='projects/list'){
   const page=decode(input.cursor)??{offset:0},size=input.limit??50;if(!Number.isSafeInteger(page.offset)||page.offset<0)throw new AppError('INVALID',[{field:'input.cursor'}]);
   const value=await run('/api/projects/list',{parentId:input.parentId??null,offset:page.offset,limit:size,revision:null});
   const projects=value.projects.filter(project=>inScope(key,{projectId:project.projectId})).map(project=>({projectId:project.projectId,parentId:project.parentId,title:project.summary.title,description:project.summary.description,kind:project.summary.kind}));
   return {projects,nextCursor:page.offset+value.projects.length<value.total?encode({offset:page.offset+value.projects.length}):null};
  }
+ if(operation.name==='workspace/overview')return overview(input,{key,run});
  if(operation.name==='lab-books/list'){
   const value=await run('/api/projects/'+input.projectId+'/lab-books/list',{after:input.cursor??null,limit:input.limit??50,revision:null});
   return {labBooks:value.items.filter(item=>inScope(key,{projectId:input.projectId,labBookId:item.labBookId})).map(item=>({labBookId:item.labBookId,title:item.directory})),nextCursor:value.next??null};
