@@ -37,20 +37,20 @@ async function fixture(t,count=45,{large=false}={}){
 }
 const requestFor=reader=>(route,data,options)=>route.endsWith('/start')?reader.start(options):reader.page(data,options);
 
-test('workspace version detects independent writes without loading record bodies or membership',async t=>{
+test('workspace version detects independent writes and counts records without loading record bodies or membership',async t=>{
  const f=await fixture(t,45),workspaceId=f.base.book.id;
  const {read,record}=ResearchCatalogue.prototype,members=SnapshotIndex.prototype.members;
  ResearchCatalogue.prototype.read=ResearchCatalogue.prototype.record=()=>{throw Error('Version read loaded record bodies');};
  SnapshotIndex.prototype.members=()=>{throw Error('Version read scanned membership');};
  try{
-  assert.deepEqual(await f.reader.version({workspaceId}),{workspaceId,etag:f.base.etag});
+  assert.deepEqual(await f.reader.version({workspaceId}),{workspaceId,etag:f.base.etag,recordCount:45});
   for(const command of [null,{}, {workspaceId:'invalid'},{workspaceId,extra:true}])await assert.rejects(f.reader.version(command),{code:'INVALID'});
   await assert.rejects(f.reader.version({workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
   await assert.rejects(f.reader.version({workspaceId},{signal:AbortSignal.abort()}),{name:'AbortError'});
  }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;SnapshotIndex.prototype.members=members;}
  const writer=new Workspace(f.workspace.root,f.vault),snapshot=await writer.read();
  const updated=await writer.save({...snapshot.book,title:'Changed by another writer'},snapshot.etag);
- assert.deepEqual(await f.reader.version({workspaceId}),{workspaceId,etag:updated.etag});
+ assert.deepEqual(await f.reader.version({workspaceId}),{workspaceId,etag:updated.etag,recordCount:45});
 });
 
 test('record labels are bounded, pinned and omit bodies, queries and unrelated metadata',async t=>{

@@ -20,10 +20,12 @@ export class WorkspaceReader {
   const {workspaceId}=command;
   signal?.throwIfAborted();
   if(!this.workspace)throw new AppError('MISSING');
-  const {metadata,etag}=await this.workspace.outline();
+  // The outline already holds the snapshot's record count: a lab book's count
+  // is read with its revision, without reading any record.
+  const {metadata,etag,recordCount}=await this.workspace.outline();
   signal?.throwIfAborted();
   if(metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  return {workspaceId,etag};
+  return {workspaceId,etag,recordCount};
  }
  async start({signal,snapshotId=null,workspaceId=null}={}){
   if(snapshotId!==null&&(!revisionId(snapshotId)||!researchId(workspaceId)))throw new AppError('INVALID');

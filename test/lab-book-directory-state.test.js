@@ -85,3 +85,34 @@ test('visible directory failures remain actionable and retry preserves existing 
  assert.equal(f.directory.page(f.projectId).error,'Unlock this project');assert.deepEqual(f.directory.page(f.projectId).items,retained);const before=f.calls.length;await f.directory.bind();assert.equal(f.calls.length,before);
  f.setHandler(()=>result([row('Available again')]));await f.directory.refresh(f.projectId);assert.equal(f.directory.page(f.projectId).error,'');assert.equal(f.directory.page(f.projectId).items[0].directory,'Available again');
 });
+
+test('record counts are read after the list, one lab book at a time, kept, and read again only when that lab book changes',async()=>{
+ const projectId=randomUUID(),open=row('Open book'),locked=row('Locked book'),state={book:{},page:'project',projectOwner:{projectId},storage:{contextId:'workspace',available:true}};
+ const versions=[],counts=new Map([[open.labBookId,3]]);let active=0,most=0,painted=0;
+ const directory=labBookDirectoryState({state,changed:()=>{},counted:()=>painted++,api:async(route,input,options)=>{
+  assert.equal(options.adopt,false);
+  if(route.endsWith('/lab-books/list'))return result([open,locked]);
+  const book=route.split('/')[5];assert.match(route,/\/workspace\/read\/version$/);versions.push(book);
+  active++;most=Math.max(most,active);await new Promise(done=>setImmediate(done));active--;
+  const entry=[open,locked].find(item=>item.labBookId===book);assert.deepEqual(input,{workspaceId:entry.namespaceId});
+  // A book locked with its own password refuses; the directory asks for nothing.
+  if(book===locked.labBookId)throw {code:'ACCESS_LOCKED',projectId,labBookId:book};
+  return {workspaceId:entry.namespaceId,etag:'a'.repeat(64),recordCount:counts.get(book)};
+ }});
+ const settle=async()=>{for(let i=0;i<20;i++)await new Promise(done=>setImmediate(done));};
+ directory.loadCounts(projectId);await settle();assert.deepEqual(versions,[]);
+ await directory.bind();directory.loadCounts(projectId);directory.loadCounts(projectId);await settle();
+ assert.deepEqual(versions.sort(),[open.labBookId,locked.labBookId].sort());assert.equal(most,1);
+ assert.equal(directory.recordCount(open),3);assert.equal(directory.recordCount(locked),null);assert.equal(painted,1);
+ // Painting again reads nothing.
+ directory.loadCounts(projectId);await settle();assert.equal(versions.length,2);
+ // A finished record save in a lab book reads only that book's count again.
+ counts.set(open.labBookId,4);versions.length=0;
+ await directory.activity({contextId:'workspace',operations:[{id:randomUUID(),kind:'/api/projects/'+projectId+'/lab-books/'+open.labBookId+'/research/records/save',state:'completed'}]});await settle();
+ assert.deepEqual(versions,[open.labBookId]);assert.equal(directory.recordCount(open),4);
+ // Each refresh check reads one shown book again, in turn, so changes made elsewhere appear.
+ versions.length=0;counts.set(open.labBookId,5);await directory.check();await settle();await directory.check();await settle();
+ assert.deepEqual(versions.sort(),[open.labBookId,locked.labBookId].sort());assert.equal(directory.recordCount(open),5);
+ // Another workspace starts with no counts.
+ state.storage.contextId='second';assert.equal(directory.recordCount(open),null);
+});
