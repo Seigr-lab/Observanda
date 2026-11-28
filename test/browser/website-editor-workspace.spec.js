@@ -24,7 +24,7 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
-  const canvas=page.frameLocator('#website-files-canvas'),label='Log the instrument serial number.',paragraph=canvas.getByText(label,{exact:true}),tools=page.getByRole('navigation',{name:'Site tools',exact:true});
+  const canvas=page.frameLocator('#website-files-canvas'),label='Log the instrument serial number.',paragraph=canvas.getByText(label,{exact:true}),tools=page.getByRole('complementary',{name:'Site tools',exact:true});
   await expect(paragraph).toBeVisible();
   const finder=page.getByRole('button',{name:'Find pages and tools'});await finder.click();
   const search=page.getByRole('combobox',{name:'Search by name or path'});await search.fill('Themes');await expect(page.getByRole('option',{name:'Themes',exact:true})).toBeVisible();await search.press('Escape');
@@ -50,6 +50,15 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollHeight-document.documentElement.clientHeight)).toBeLessThanOrEqual(1);
   }
   if(process.env.OBSERVANDA_WORKSPACE_SCREENSHOT)await page.screenshot({path:process.env.OBSERVANDA_WORKSPACE_SCREENSHOT});
+  // Either side collapses to a slim strip and the page takes the room; selecting a part leaves the properties collapsed.
+  const edited=canvas.locator('article p');const frameWidth=async()=>(await page.locator('#website-files-canvas').boundingBox()).width,wide=await frameWidth();
+  await tools.getByRole('button',{name:'Collapse site tools',exact:true}).click();await page.getByRole('button',{name:'Collapse appearance',exact:true}).click();
+  await expect.poll(frameWidth).toBeGreaterThan(wide+300);
+  await edited.click();await expect(page.locator('.website-files-inspection')).toHaveAttribute('data-collapsed','');
+  // Both choices are remembered; a picture in the strip expands the sidebar with its section open, and Edit section opens the properties.
+  await page.reload();await expect(edited).toBeVisible();await expect(tools.getByRole('button',{name:'Expand site tools',exact:true})).toBeVisible();
+  await tools.getByRole('button',{name:'Layers',exact:true}).click();await expect(tools.getByRole('button',{name:'Layers',exact:true})).toHaveAttribute('aria-expanded','true');
+  await edited.click();await canvas.getByRole('button',{name:'Edit section',exact:true}).click();await expect(page.getByRole('button',{name:'Collapse appearance',exact:true})).toBeVisible();
   await tools.getByRole('button',{name:'Website menu',exact:true}).click();
   await expect(page.locator('.website-workspace-identity')).toContainText('Website menu');await expect(save).toHaveCount(0);
   // A docked tool fits its panel: nothing scrolls sideways or runs past its edge.

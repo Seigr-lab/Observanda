@@ -15,7 +15,8 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 
 test.use({screenshot:'off',trace:'off',video:'off'});
-const action=(page,key)=>page.locator('[data-action="website-files-'+key+'"]');
+// A site tool has a section heading and, in the collapsed strip, an icon; only the visible one is used.
+const action=(page,key)=>page.locator('[data-action="website-files-'+key+'"]').filter({visible:true});
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const galleryPage='atlas/plates.html';
 const sampleImage=color=>Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="'+color+'"/><path d="M20 867h150" stroke="white" stroke-width="8"/></svg>');
@@ -96,6 +97,8 @@ async function reopenGallery(page,name){
 }
 
 async function publish(page,directory){
+ // Publishing to a folder is a step of the Publish panel.
+ if(!await action(page,'folder').count())await page.getByRole('button',{name:'Publish',exact:true}).click();
  await action(page,'folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(directory);
  await page.getByRole('button',{name:'Review file changes',exact:true}).click();
  await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files',exact:true}).click();
@@ -119,7 +122,7 @@ async function session(browser,fixture,directory,website,run){
   page.on('pageerror',error=>errors.push(error.message));
   context.on('request',request=>{
    const route=new URL(request.url()).pathname;
-   if(website&&route.startsWith('/api/')&&!route.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/interface','/api/language','/api/website-record-updates/check','/api/website-analysis/check'].includes(route))unexpected.push(route);
+   if(website&&route.startsWith('/api/')&&!route.startsWith('/api/website-files/')&&!['/api/session','/api/session/renew','/api/access/status','/api/interface','/api/language','/api/website-record-updates/check','/api/website-analysis/check'].includes(route))unexpected.push(route);
   });
   await page.goto(website?app.origin+'/?view=website#'+app.launchToken:app.url);
   if(website){

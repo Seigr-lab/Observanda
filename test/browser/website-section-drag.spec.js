@@ -11,7 +11,8 @@ import {testServer} from '../device-fixture.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 
 async function drag(page,source,target,edge,{outline=false,capture=false}={}){
- await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await target.boundingBox();
+ // The target is brought into view first, as an author scrolls to where they will drop.
+ if(outline)await target.scrollIntoViewIfNeeded();await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await target.boundingBox();
  const x=b.x+b.width*.55,y=b.y+(edge==='before'?3:edge==='after'?b.height-3:b.height/2);
  await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();
  await page.mouse.move(a.x+a.width/2+9,a.y+a.height/2,{steps:4});

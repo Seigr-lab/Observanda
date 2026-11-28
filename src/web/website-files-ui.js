@@ -13,7 +13,7 @@ import {destinationPlanRows,destinationConflictCount} from './publication-review
 import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-remote-receipt.js';
 import {createBlock,duplicateBlock} from './website-files-blocks.js';
 import {websiteElementLibrary,elementGroups} from './website-element-library.js';
-import {websiteToolRail} from './website-tool-rail.js';
+import {websiteEditorSidebar,websiteEditorLayout,panelToggleIcon} from './website-files-sidebar.js';
 import {websiteSiteMenu} from './website-site-menu.js';
 import {websitePageStarters} from './website-page-starters.js';
 import {sectionTemplates,createSection,sectionCSS} from './website-section-templates.js';
@@ -76,8 +76,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let remoteEdition='website';
- // The page editor's left column shows one panel at a time: adding, the page's layers, or lab book content.
- let leftPanel='add',railObserver=null;
+ // The left sidebar's open sections and both side panels' collapsed state, as each viewer last left them.
+ const layout=websiteEditorLayout();let shownTool=null;
  let visual=null,selected=null,anchor='',trail=[],step=-1;
  const viewport=websiteFileViewport({esc,t:tr,getRanges:()=>opened?.site.breakpoints??defaultBreakpoints(),changed:()=>visual?.viewportChanged()});
  let awaitingAccess=false,conflictingPage=null;
@@ -174,7 +174,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
- const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc}),siteMenu=websiteSiteMenu({esc}),sizeMenu=websiteSiteMenu({esc,name:'size'}),pageStarters=websitePageStarters({t:tr,esc});
+ const library=websiteElementLibrary({t:tr,esc}),sidebar=websiteEditorSidebar({t:tr,esc,layout}),siteMenu=websiteSiteMenu({esc}),sizeMenu=websiteSiteMenu({esc,name:'size'}),pageStarters=websitePageStarters({t:tr,esc});
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -305,9 +305,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   snapshot:()=>{flushCanvas();return html;},read:()=>websiteHTML(html),edit:documentChange,button,escape:esc,
   elements:()=>elementGroups.flatMap(([,keys])=>keys).map(key=>({name:tr('element_'+key),run:()=>void action({dataset:{action:'website-files-add-block',block:key}})})),
   // Found by name from any panel: each opens its panel, then itself.
-  panelTools:()=>[['componentLibrary','add','component-browse'],['pickerBrowse','content','picker-open']].map(([key,panel,operation])=>({name:tr(key),run:()=>void(async()=>{
-   if(mode!=='visual'||leftPanel!==panel)await action({dataset:{action:'website-files-left-'+panel}});
-   await action({dataset:{action:'website-files-'+operation}});
+  panelTools:()=>[['railAdd','add',null],['railLayers','layers',null],['railContent','content',null],['componentLibrary','add','component-browse'],['pickerBrowse','content','picker-open']].map(([key,panel,operation])=>({name:tr(key),run:()=>void(async()=>{
+   if(mode!=='visual'||layout.collapsed||!layout.isOpen(panel))await action({dataset:{action:'website-files-left-'+panel}});
+   if(operation)await action({dataset:{action:'website-files-'+operation}});
   })()})),
   openPage:path=>run(async()=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}}),
   selectLayer:path=>{if(mode==='visual'&&visual){visual.select(path);return;}void run(async()=>{if(await beforeLeave(true)){mode='visual';selected=path;render();}});},
@@ -890,16 +890,39 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return '<div class="website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+'</div><div class="website-canvas-tools">'+size+'</div></div>';
  }
  function editorView(panel=''){
-  if(mode!=='visual'&&!panel)return '<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+'<div>'+sourcePane.view(mode)+'</div></div>';
-  const blocks=library.view();
-  // An open site tool takes the left column; the page stays in view beside it.
-  // One way back from a docked tool: its own close, which keeps or discards what it holds.
-  const close=DOCK_CLOSE[mode]??'visual';
-  const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head">'+button('closePanel',close)+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
-   :leftPanel==='layers'?'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'"><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section></aside>'
-   :leftPanel==='content'?'<aside tabindex="0" aria-label="'+esc(tr('railContent'))+'">'+library.labBookView()+picker.view()+'</aside>'
-   :'<aside tabindex="0" aria-label="'+esc(tr('elementLibrary'))+'">'+blocks+components.opener()+components.view()+'</aside>';
-  return '<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools'),left:leftPanel})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
+  // One sidebar on the left: the page panels (adding, layers, lab book content), and an open site
+  // tool inside its own section while the page stays in view beside it. One way back from a docked
+  // tool: its own close, which keeps or discards what it holds.
+  const visual=mode==='visual'&&!panel;
+  // A tool that opens shows itself: a collapsed sidebar expands for it.
+  if(panel&&mode!==shownTool&&layout.collapsed)layout.collapsed=false;shownTool=panel?mode:null;
+  const bodies=visual?{add:library.view()+components.opener()+components.view(),layers:'<ol class="website-files-structure" data-website-files-structure></ol>',content:library.labBookView()+picker.view()}:{};
+  const left=sidebar.view({mode,visual,panel,close:DOCK_CLOSE[mode]??'visual',bodies});
+  const collapsed=layout.collapsed?' data-sidebar-collapsed':'';
+  if(mode!=='visual'&&!panel)return '<div class="website-files-code-layout"'+collapsed+'>'+left+'<div>'+sourcePane.view(mode)+'</div></div>';
+  return '<div class="website-files-editor"'+(sourcePane.active?' data-source-open':'')+(panel?' data-panel-open':'')+collapsed+(!panel&&layout.inspector?' data-inspector-collapsed':'')+'>'+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':inspectorView())+'</div>';
+ }
+ // The selected part's properties, on the right; it collapses to a slim strip with the way to open it again.
+ function inspectorView(){
+  const collapsed=layout.inspector;
+  return '<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"'+(collapsed?' data-collapsed':'')+'><div class="website-inspector-head">'+inspectorToggle(collapsed)+'</div><div class="website-inspector-body" id="website-inspector-body"'+(collapsed?' hidden':'')+'><section data-website-visual-inspector></section></div></aside>';
+ }
+ function inspectorToggle(collapsed){
+  const label=esc(tr(collapsed?'inspectorExpand':'inspectorCollapse'));
+  return '<button type="button" class="website-panel-toggle" data-action="website-files-inspector-toggle" aria-expanded="'+!collapsed+'" aria-controls="website-inspector-body" aria-label="'+label+'" title="'+label+'">'+panelToggleIcon('end',!collapsed)+'</button>';
+ }
+ // Collapsing or expanding a side panel changes the screen in place: the page stays loaded and the canvas takes the room.
+ function showInspector(open){
+  layout.inspector=!open;
+  const aside=document.querySelector('.website-files-inspection');if(!aside)return;
+  aside.toggleAttribute('data-collapsed',!open);aside.closest('.website-files-editor')?.toggleAttribute('data-inspector-collapsed',!open);
+  aside.querySelector('.website-inspector-body').hidden=!open;
+  const head=aside.querySelector('.website-inspector-head'),focused=head.contains(document.activeElement);head.innerHTML=inspectorToggle(!open);
+  if(focused)head.querySelector('button').focus();
+ }
+ function showSidebar(open,focus=true){
+  layout.collapsed=!open;sidebar.paint(document);
+  if(focus)document.querySelector(open?'[data-action="website-files-sidebar-collapse"]':'[data-action="website-files-sidebar-expand"]')?.focus();
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}
@@ -921,10 +944,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function bind(){
   recovery.paint();
   viewport.bind();
-  // A rail with more tools below its edge fades there until it is scrolled to the end.
-  railObserver?.disconnect();railObserver=null;
-  const rail=document.querySelector('.website-tool-rail');
-  if(rail){const edge=()=>rail.toggleAttribute('data-more',rail.scrollTop+rail.clientHeight<rail.scrollHeight-4);rail.onscroll=edge;railObserver=new ResizeObserver(edge);railObserver.observe(rail);edge();}
+  sidebar.bind(document);
   sourcePane.bind();
   visual?.destroy();visual=null;
   const designFilter=document.querySelector('[data-website-file-field="designSearch"]');
@@ -963,7 +983,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    editWebsiteCanvas(doc);
    components.bindCanvas(doc);library.bindCanvas(doc,{main,place:(type,node,where)=>void run(()=>addElement(type,document.querySelector('.element-card[data-block="'+type+'"]'),{node,where}))});bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
-   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,uploadPicture:file=>gallery.addPicture(file),resource:recoveredResource,
+   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,uploadPicture:file=>gallery.addPicture(file),resource:recoveredResource,revealInspector:()=>{if(layout.inspector)showInspector(true);},
     menuTarget:menuCanvasTarget,openMenu:nav=>void run(()=>openMenu(nav.dataset.websiteMenuId??null)),
    getWidth:viewport.width,previewWidth:viewport.previewWidth,getRanges:()=>opened.site.breakpoints??defaultBreakpoints(),manageRanges:()=>void run(manageBreakpoints).catch(()=>{}),
    beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:canvasURL(opened.site.cssPath),getViewport:viewport.breakpoint,onSelect:item=>{
@@ -1099,15 +1119,28 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    try{await request('recovery/validate',{siteId:siteId(),path:opened.path,expectedRevision:opened.site.revision,html,css},{signal:controller.signal});recoveringSource=false;}
    catch(reason){if(['AUTH','ACCESS_LOCKED','CONFLICT'].includes(reason.code))hideUnverifiedPage(true);else notify(tr('recoverySourceCorrect'),true);return true;}
   }
-  // Add, Layers and Lab book content close an open docked tool the way its own close does, then show their panel.
+  // The side panels collapse and expand in place.
+  if(operation==='sidebar-collapse'||operation==='sidebar-expand'){showSidebar(operation==='sidebar-expand');return true;}
+  if(operation==='inspector-toggle'){showInspector(layout.inspector);return true;}
+  // A picture in the collapsed sidebar expands it with that section open; a tool that opens beside the page just opens.
+  const reveal=element.dataset?.sidebarReveal&&element.closest?.('.website-sidebar-strip');
+  if(reveal&&!['appearance','themes','styles'].includes(operation))showSidebar(true,false);
+  // Add, Layers and Lab book content: their heading opens or closes the section in place. Opened from
+  // elsewhere (a picture, the finder), the section opens; an open docked tool closes the way its own close does first.
   if(operation.startsWith('left-')){
-   const next=operation.slice(5);if(!['add','layers','content'].includes(next))return true;
-   if(mode!=='visual'){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});if(mode!=='visual')return true;}
-   leftPanel=next;render();return true;
+   const next=operation.slice(5);if(!sidebar.pageSections.includes(next))return true;
+   if(layout.collapsed)showSidebar(true,false);
+   const heading=element.closest?.('.website-sidebar-heading');
+   if(mode==='visual'&&heading&&layout.isOpen(next)){layout.setOpen(next,false);sidebar.paintSection(next,false);return true;}
+   if(mode!=='visual'){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});if(mode!=='visual')return true;layout.setOpen(next,true);render();}
+   else{layout.setOpen(next,true);sidebar.paintSection(next,true);}
+   const section=document.querySelector('.website-sidebar [data-sidebar-section="'+next+'"]');
+   sidebar.reveal(next);if(reveal||!heading)section?.querySelector('.website-sidebar-toggle')?.focus({preventScroll:true});
+   return true;
   }
-  // The open tool's rail button closes it, exactly as the tool's own close does.
-  const railMode={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'}[operation];
-  if(railMode&&railMode===mode&&element.closest?.('.website-tool-rail')){await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});return true;}
+  // An open tool's section heading closes it, exactly as the tool's own close does; its picture in the strip only shows it.
+  const toolMode=sidebar.toolMode(operation);
+  if(toolMode&&toolMode===mode&&element.closest?.('.website-sidebar')){if(!reveal)await action({dataset:{action:'website-files-'+(DOCK_CLOSE[mode]??'visual')}});return true;}
   if(operation==='check-access'){await poll();return true;}
   if(operation==='resume-preparation'){const result=await request('preparation/resume',{},{signal:controller.signal});session.preparation=result.preparation?.state==='cancelled'?{...result.preparation,state:'preparing'}:result.preparation;render();waitForPreparation();return true;}
   // A pending source check holds the editor busy, so a second click waits visibly

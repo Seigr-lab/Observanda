@@ -36,7 +36,9 @@ test('website editor labels and accessibility names follow the selected language
    // The editor bar: website and page pickers, the Websites menu and Publish.
    for(const key of ['site','page'])await expect(commands.getByRole('combobox',{name:text(key),exact:true})).toBeVisible();
    await expect(page.locator('[data-website-site-menu="site"] summary')).toHaveAccessibleName(text('sitesMenu'));
-   await expect(page.getByRole('navigation',{name:text('siteTools'),exact:true}).getByRole('button',{name:text('designThemes'),exact:true})).toBeVisible();
+   await expect(page.getByRole('complementary',{name:text('siteTools'),exact:true}).getByRole('button',{name:text('designThemes'),exact:true})).toBeVisible();
+   // The side panels' collapse buttons are named in the chosen language.
+   await expect(page.getByRole('button',{name:text('sidebarCollapse'),exact:true})).toBeVisible();await expect(page.getByRole('button',{name:text('inspectorCollapse'),exact:true})).toBeVisible();
    await expect(page.getByRole('button',{name:text('publishOpen'),exact:true})).toBeVisible();
    // Formatting controls appear, with translated names, once the cursor is in the page.
    await paragraph.click();

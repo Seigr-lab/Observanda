@@ -81,7 +81,7 @@ function styleRange(range, body) {
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
 // The properties tab the author chose stays while they select other parts.
 let inspectorTab='style';
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css',uploadPicture=null,resource=null}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css',uploadPicture=null,resource=null,revealInspector=()=>{}}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -287,9 +287,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     text.parentElement.closest('[contenteditable="true"]')?.focus({preventScroll:true});const caret=document.createRange();caret.setStart(text,text.data.length);caret.collapse(true);
     const selection=win.getSelection();selection.removeAllRanges();selection.addRange(caret);node.scrollIntoView({block:'nearest'});pointed=node;schedule();
   }
-  // Edit section opens the section's texts in the Content tab; a section without plain texts gets the cursor in its first text.
+  // Edit section opens the section's texts in the Content tab, opening a collapsed inspector; a section without plain texts gets the cursor in its first text.
   function editSelected(){
-    showTab('content',true);if(contentFields.focusFirst())return;
+    revealInspector();showTab('content',true);if(contentFields.focusFirst())return;
     const text=editableText(selected,document);if(text)caretIn(text.parentElement);
   }
   listen(action,'click',()=>{const node=hover??selected,menu=openMenu&&menuTarget?.(node);if(menu){openMenu(menu);return;}setSelected(node);editSelected();});

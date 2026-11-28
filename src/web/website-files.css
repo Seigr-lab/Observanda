@@ -207,7 +207,6 @@
    the space left by the real toolbar, including translated or wrapped text. */
 .website-files-editor .website-files-structure { max-height:none;overflow:visible }
 .website-files-editor>aside:focus-visible { outline:2px solid var(--accent,var(--ui-accent));outline-offset:-2px }
-.website-files-editor[data-source-open] { grid-template-columns:minmax(10rem,15rem) minmax(0,1fr) minmax(17rem,.8fr) }
 .website-files-editor[data-source-open] > .website-files-inspection { display:none }
 .website-source-pane { box-sizing:border-box; min-width:0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; background:var(--ui-surface,var(--ui-surface)); border:1px solid var(--ui-border,var(--ui-border)); border-radius:.35rem }
 .website-source-pane > header { display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.4rem .55rem; margin:0; border-block-end:1px solid var(--ui-border,var(--ui-border)) }
@@ -258,8 +257,9 @@
  .website-gallery-panes>section { overflow:auto;overscroll-behavior:contain }
 }
 .website-files-editor dialog:not([data-placement-dock]) [data-picker-drag-handle] { display:none }
-.website-files-editor>aside:has([data-placement-dock]) {overflow:hidden;min-width:0;scrollbar-gutter:auto}
-.website-files-editor>aside:has([data-placement-dock])>:not([data-website-picker]),[data-website-picker]:has([data-placement-dock])>:not(dialog) {display:none}
+.website-sidebar:has([data-placement-dock]) {overflow:hidden;min-width:0;scrollbar-gutter:auto}
+.website-sidebar:has([data-placement-dock]) :is(.website-sidebar-head,.website-sidebar-section:not(:has([data-placement-dock])),.website-sidebar-section:has([data-placement-dock])>.website-sidebar-heading,.website-sidebar-body:has([data-placement-dock])>:not([data-website-picker])),[data-website-picker]:has([data-placement-dock])>:not(dialog) {display:none}
+.website-sidebar:has([data-placement-dock]) :is(.website-sidebar-panel,.website-sidebar-sections,.website-sidebar-section,.website-sidebar-body) {height:100%;min-height:0;padding:0;margin:0;border:0}
 .website-files-editor [data-website-picker]:has([data-placement-dock]) {height:100%;padding:0;border:0;margin:0}
 .website-files-editor dialog[data-placement-dock][open] {position:static;inset:auto;margin:0;width:100%;max-width:100%;height:100%;max-height:none;display:grid;grid-template-rows:auto auto minmax(0,1fr);box-shadow:none}
 @media(max-height:37.999rem),(max-width:61.999rem) {
@@ -280,7 +280,6 @@
  }
  .website-files-editor { flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch;grid-template-columns:minmax(16rem,18%) minmax(0,1fr) minmax(13rem,20%) }
  .website-files-editor>aside { min-height:0;max-height:none;overflow-y:auto;overscroll-behavior-y:contain }
- .website-files-editor>.website-tool-rail,.website-files-code-layout>.website-tool-rail { max-height:none;min-height:0;align-self:stretch }
  .website-files-viewport,.website-files-stage .website-files-canvas { height:100%;min-height:0 }
  .website-file-controls>.website-files-viewport { flex:1;height:0;min-height:0 }
 }
@@ -304,7 +303,7 @@
 .component-rail-tabs { display:flex; gap:.15rem; background:var(--background,var(--ui-surface)); position:sticky; top:0; z-index:1; padding:.25rem 0 .4rem }
 .component-rail-tabs button { flex:1; min-width:0; padding:.35rem .4rem; font-size:.87em }
 .component-rail-tabs [aria-pressed=true] { border-color:var(--accent,var(--ui-accent)); color:var(--accent,var(--ui-accent)); font-weight:650 }
-.website-files-editor>aside:has(>[data-website-components]:not([hidden]))>:not(.component-rail-tabs,[data-website-components]) { display:none }
+.website-sidebar-body:has(>[data-website-components]:not([hidden]))>:not([data-website-components]) { display:none }
 .website-files-components[hidden],.website-files-components [hidden] { display:none }
 .website-files-components { overflow-wrap:anywhere }
 .website-files-components h2,.website-files-components p { margin:.3rem 0 .55rem }
@@ -438,16 +437,9 @@
 .website-team-review-list>li[data-resolved]{opacity:.75}.website-team-review label{display:grid;gap:.25rem;margin-block:.4rem}
 .website-team-review-replies{padding-inline-start:1rem}
 .website-files-publish label.website-inline-check{display:flex;gap:.5rem;align-items:center}
-/* A site tool docked beside the page: the tool on the left, the page in view (read-only) in the middle. */
-.website-files-editor[data-panel-open] { grid-template-columns:minmax(22rem,34%) minmax(0,1fr) }
-.website-files-dock { max-height:78vh; overflow:auto; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius); box-shadow:0 1px 2px color-mix(in srgb,var(--ui-text) 8%,transparent) }
-.website-files-dock-head { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.75rem 1rem; background:var(--ui-surface); border-bottom:1px solid var(--ui-border) }
-.website-files-dock-body { padding:.75rem 1rem 1rem }
-.website-files-dock-body > .panel { border:0; padding:0; box-shadow:none }
+/* A site tool open in its sidebar section: the page stays in view (read-only) beside it. */
 .website-files-editor[data-panel-open] .website-files-stage { opacity:.92 }
-@media (max-width:1100px){ .website-files-editor[data-panel-open] { grid-template-columns:1fr } }
 /* Element library: picture cards an author drags onto the page or clicks to add. */
-.website-files-editor { grid-template-columns:minmax(17rem,21%) minmax(0,1fr) minmax(15rem,19%) }
 .element-library h2 { margin:0 0 .25rem }
 .element-library > .hint { margin:0 0 .6rem; font-size:.8rem; color:var(--ui-muted) }
 .element-search { display:grid; gap:.3rem; font-size:.8rem; font-weight:600; margin-bottom:.6rem }
@@ -463,28 +455,6 @@
 .element-card small { font-size:.72rem; line-height:1.3; color:var(--ui-muted); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
 .element-card[hidden],.element-group[hidden] { display:none }
 .element-card-icon svg { width:1.55rem; height:1.55rem }
-/* Site tools rail: the first column beside the page, in every editing view. */
-.website-files-editor { grid-template-columns:6.5rem minmax(17rem,21%) minmax(0,1fr) minmax(15rem,19%) }
-.website-files-editor[data-source-open] { grid-template-columns:6.5rem minmax(10rem,15rem) minmax(0,1fr) minmax(17rem,.8fr) }
-.website-files-editor[data-panel-open] { grid-template-columns:6.5rem minmax(22rem,34%) minmax(0,1fr) }
-.website-files-code-layout { display:grid; grid-template-columns:6.5rem minmax(0,1fr); gap:.75rem; align-items:start }
-.website-tool-rail { position:sticky; top:.5rem; display:grid; align-content:start; gap:.3rem; padding:.3rem; max-height:76vh; overflow-y:auto; scrollbar-width:thin; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius) }
-.website-tool { display:grid; justify-items:center; gap:.05rem; padding:.25rem .1rem; font:inherit; font-size:.75rem; line-height:1.15; text-align:center; color:var(--ui-muted); background:transparent; border:1px solid transparent; border-radius:var(--ui-control-radius); cursor:pointer }
-.website-tool:hover,.website-tool:focus-visible { color:var(--ui-accent); background:var(--ui-tint) }
-.website-tool[aria-current=true] { color:var(--ui-accent); background:var(--ui-tint); border-color:var(--ui-accent) }
-.website-tool svg { width:1.25rem; height:1.25rem }
-/* Groups: a line between them, so building, style, media and site tools read apart; each is named for assistive technology. */
-.website-tool-group { display:grid; gap:.1rem }
-.website-tool-group+.website-tool-group { border-block-start:1px solid var(--ui-border); padding-block-start:.3rem }
-.website-tool-group-name { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
-/* More tools below: the rail's lower edge fades until it is scrolled to the end. */
-.website-tool-rail[data-more] { mask-image:linear-gradient(to bottom,#000 calc(100% - 2.5rem),transparent); }
-/* Narrower windows keep every column, slimmer; the stacked layout below 62rem lays the rail out as a row. */
-@media (max-width:1100px){ .website-files-editor { grid-template-columns:4.75rem minmax(13rem,24%) minmax(0,1fr) minmax(12rem,20%) } .website-files-editor[data-panel-open] { grid-template-columns:4.75rem minmax(18rem,38%) minmax(0,1fr) } .website-tool { font-size:.75rem } }
-/* The docked content library takes the library column; the rail keeps its own. */
-@media (min-width:62rem){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:6.5rem minmax(16rem,26%) minmax(0,1fr) minmax(13rem,20%) } }
-@media (min-width:62rem) and (max-width:1100px){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:4.75rem minmax(14rem,28%) minmax(0,1fr) minmax(12rem,20%) } }
-@media (max-width:61.999rem),(max-height:37.999rem){ .website-tool-rail { position:static; max-height:none; grid-template-columns:repeat(auto-fill,minmax(4.75rem,1fr)) } .website-files-code-layout { grid-template-columns:1fr } }
 /* Properties of the selected part, in tabs. */
 /* Tab names never break inside a word; a narrow panel wraps the tabs onto a second row. */
 .inspector-tabs { display:flex; flex-wrap:wrap; gap:.2rem; margin:.5rem 0 .75rem; padding:.2rem; background:var(--ui-soft); border:1px solid var(--ui-border); border-radius:var(--ui-control-radius) }
@@ -515,5 +485,75 @@
 .website-side-sheet.website-appearance-live .website-appearance-columns > :last-child { display:block; background:none; border:0 }
 .website-side-sheet .website-token-columns { grid-template-columns:minmax(0,1fr) }
 .website-side-sheet .website-token-columns>section { border-inline-end:0; padding-inline-end:0 }
-/* Short windows: tighter rail tiles, so every tool fits without scrolling. */
-@media (max-height:820px) { .website-tool-rail { gap:.2rem } .website-tool { padding:.15rem .1rem; gap:0 } .website-tool svg { width:1.1rem; height:1.1rem } .website-tool-group+.website-tool-group { padding-block-start:.2rem } }
+
+/* The editor's columns: one sidebar of site tools, the page, and the selected part's properties.
+   Either side collapses to a slim strip, and the page takes the room. */
+@media (min-width:62rem) {
+ .website-files-editor { --editor-start:minmax(16rem,20%); --editor-end:minmax(15rem,19%); grid-template-columns:var(--editor-start) minmax(0,1fr) var(--editor-end) }
+ .website-files-editor[data-source-open] { --editor-start:minmax(14rem,17%); --editor-end:minmax(17rem,.8fr) }
+ .website-files-editor:has([data-placement-dock]) { --editor-start:minmax(16rem,26%) }
+ .website-files-editor[data-panel-open] { --editor-start:minmax(22rem,32%); grid-template-columns:var(--editor-start) minmax(0,1fr) }
+ .website-files-editor[data-sidebar-collapsed] { --editor-start:var(--website-strip) }
+ .website-files-editor[data-inspector-collapsed] { --editor-end:var(--website-strip) }
+ .website-files-editor[data-source-open][data-inspector-collapsed] { --editor-end:minmax(17rem,.8fr) }
+}
+@media (min-width:761px) and (max-width:61.999rem) {
+ .website-files-editor[data-sidebar-collapsed] { grid-template-columns:var(--website-strip) minmax(0,1fr) }
+}
+.website-files-editor,.website-files-code-layout { --website-strip:3.25rem }
+.website-files-code-layout { display:grid; grid-template-columns:minmax(14rem,17%) minmax(0,1fr); gap:.75rem; align-items:start }
+.website-files-code-layout[data-sidebar-collapsed] { grid-template-columns:var(--website-strip) minmax(0,1fr) }
+.website-files-code-layout>.website-sidebar { max-height:76vh }
+@media (max-width:61.999rem),(max-height:37.999rem){ .website-files-code-layout { grid-template-columns:1fr } }
+
+/* The sidebar: a heading with its collapse button, then the sections. It scrolls on its own. */
+.website-sidebar { display:flex; flex-direction:column; min-width:0; box-sizing:border-box; padding:0; background:var(--ui-surface); border:1px solid var(--ui-border); border-radius:var(--ui-radius); overflow-y:auto; overscroll-behavior-y:contain; scrollbar-width:thin; scrollbar-gutter:auto }
+.website-sidebar-panel,.website-sidebar-strip { min-width:0 }
+.website-sidebar-panel[hidden],.website-sidebar-strip[hidden],.website-sidebar-body[hidden] { display:none }
+.website-sidebar-head { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:.5rem; min-height:3rem; box-sizing:border-box; padding:.375rem .375rem .375rem .875rem; background:var(--ui-surface); border-block-end:1px solid var(--ui-border) }
+.website-sidebar-head h2 { margin:0; font-size:.75rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ui-muted) }
+.website-panel-toggle { display:inline-grid; place-items:center; flex:none; width:2.25rem; height:2.25rem; padding:0; color:var(--ui-muted); background:transparent; border:1px solid transparent; border-radius:var(--ui-control-radius); cursor:pointer }
+.website-panel-toggle:hover,.website-panel-toggle:focus-visible { color:var(--ui-accent); background:var(--ui-tint) }
+.website-panel-toggle:focus-visible,.website-sidebar-toggle:focus-visible,.website-sidebar-icon:focus-visible { outline:2px solid var(--ui-accent); outline-offset:-2px }
+.website-sidebar-sections { display:grid; align-content:start; padding:.375rem }
+.website-sidebar-section[data-sidebar-group] { margin-block-start:.375rem; padding-block-start:.375rem; border-block-start:1px solid var(--ui-border) }
+/* Every section heading looks the same: picture, name and a chevron that turns when the section is open. */
+.website-sidebar-heading { margin:0; font:inherit }
+.website-sidebar-toggle { display:flex; align-items:center; gap:.625rem; width:100%; min-height:2.5rem; box-sizing:border-box; padding:.375rem .625rem; font:inherit; font-size:.875rem; font-weight:600; line-height:1.25; color:var(--ui-text); text-align:start; background:transparent; border:0; border-radius:var(--ui-control-radius); cursor:pointer }
+.website-sidebar-toggle>svg:first-child { flex:none; width:1.25rem; height:1.25rem; color:var(--ui-muted) }
+.website-sidebar-label { flex:1; min-width:0; overflow-wrap:anywhere }
+.website-sidebar-chevron { flex:none; color:var(--ui-muted); transition:transform .15s ease }
+.website-sidebar-toggle:hover { background:var(--ui-tint) }
+.website-sidebar-toggle:hover>svg,.website-sidebar-toggle[aria-expanded=true]>svg { color:var(--ui-accent) }
+.website-sidebar-toggle[aria-expanded=true] { color:var(--ui-accent) }
+.website-sidebar-toggle[aria-expanded=true] .website-sidebar-chevron { transform:rotate(180deg) }
+/* An open section's heading stays in view under the sidebar heading while its contents scroll. */
+.website-sidebar-section[data-open]>.website-sidebar-heading { position:sticky; top:3rem; z-index:1; background:var(--ui-surface) }
+.website-sidebar-body { padding:.25rem .25rem .75rem; min-width:0 }
+.website-sidebar-body>.panel,.website-sidebar-body>section>.panel { padding:.25rem; background:transparent; border:0; box-shadow:none }
+.website-sidebar-body>.panel+.panel { margin-block-start:.75rem }
+/* The section heading already names what is inside. */
+.website-sidebar-section[data-sidebar-section=add] .element-library>h2 { display:none }
+.website-sidebar-body .element-library>h2,.website-sidebar-body .website-files-picker>h2 { margin:0 0 .25rem; font-size:.875rem }
+.website-files-dock-head { display:flex; justify-content:flex-end; padding:0 .25rem .5rem }
+/* Collapsed: a slim strip of section pictures, each named by its tooltip and for assistive technology. */
+.website-sidebar[data-collapsed] { overflow-x:hidden }
+.website-sidebar-strip { display:flex; flex-direction:column; align-items:center; gap:.125rem; padding:.375rem 0 }
+.website-sidebar-icon { display:grid; place-items:center; flex:none; width:2.375rem; height:2.375rem; padding:0; color:var(--ui-muted); background:transparent; border:1px solid transparent; border-radius:var(--ui-control-radius); cursor:pointer }
+.website-sidebar-icon:hover,.website-sidebar-icon:focus-visible { color:var(--ui-accent); background:var(--ui-tint) }
+.website-sidebar-icon[aria-current=true] { color:var(--ui-accent); background:var(--ui-tint); border-color:var(--ui-accent) }
+.website-sidebar-rule { display:block; flex:none; width:1.5rem; height:1px; margin:.25rem 0; background:var(--ui-border) }
+@media (max-height:820px) { .website-sidebar-icon { width:2.125rem; height:2.125rem } .website-sidebar-strip { gap:0 } .website-sidebar-toggle { min-height:2.25rem; padding-block:.25rem } }
+
+/* The properties panel: its collapse button sits at its top edge; collapsed, only that button shows. */
+.website-inspector-head { position:sticky; top:0; z-index:2; display:flex; justify-content:flex-end; height:0; margin-inline-end:-.375rem }
+.website-inspector-head>.website-panel-toggle { margin-block-start:-.375rem; background:var(--ui-surface) }
+.website-files-inspection>.website-inspector-body>[data-website-visual-inspector]>form>h3:first-child { padding-inline-end:2.25rem }
+.website-files-inspection[data-collapsed] { display:flex; flex-direction:column; align-items:center; padding:.375rem 0; overflow:hidden }
+.website-files-inspection[data-collapsed]>.website-inspector-head { position:static; height:auto; margin:0 }
+.website-files-inspection[data-collapsed]>.website-inspector-head>.website-panel-toggle { margin:0 }
+.website-inspector-body[hidden] { display:none }
+.website-sidebar-icon svg,.website-panel-toggle svg { width:1.25rem; height:1.25rem }
+/* The sidebar scrolls within the window even where the editor is not given the window's height, and
+   a part scrolled into view stops below the sticky sidebar and section headings, never under them. */
+.website-files-editor>.website-sidebar { max-height:calc(100dvh - 1rem); position:sticky; top:.5rem; scroll-padding-block-start:5.75rem }
