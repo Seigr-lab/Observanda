@@ -65,7 +65,15 @@ export function labBookDirectoryState({state,api,changed}){
  // The navigation lists every project's lab books: a project's list is read
  // once when the project is shown, never again after it failed or loaded.
  function ensure(projectIds){sync();if(!available())return;for(const id of projectIds){if(!researchId(id))continue;const value=page(id);if(!value.loaded&&!value.task&&!value.error)void request(id);}}
- return {page,activity,ensure,entries(){sync();return [...pages.values()].flatMap(value=>value.items.map(entry=>({...entry,projectId:value.projectId})));},
+ // Lab books added or removed outside this window (another window, an agent) change the list's
+ // revision without changing the project's records: the open project's list is checked on its own.
+ async function check(){
+  sync();if(!available())return;const id=state.page==='project'?state.projectOwner?.projectId:null;if(!researchId(id))return;
+  const value=page(id);if(!value.loaded||value.task)return;
+  const result=await api('/api/projects/'+id+'/lab-books/list',{after:null,limit:1,revision:null},{adopt:false}).catch(()=>null);
+  if(result&&page(id)===value&&!value.task&&result.revision!==value.revision)await request(id,{invalidate:true});
+ }
+ return {page,activity,ensure,check,entries(){sync();return [...pages.values()].flatMap(value=>value.items.map(entry=>({...entry,projectId:value.projectId})));},
   refresh:projectId=>request(projectId,{invalidate:true}),more:projectId=>request(projectId,{more:true}),
   bind(){sync();if(!available()){entered=null;return;}const id=state.projectOwner?.projectId,view=state.page==='project'?id:null,entering=!!view&&view!==entered;entered=view;if(!id)return;const value=page(id);if(entering||view&&value.stale)return request(id,{invalidate:value.loaded});if(!value.loaded&&!value.error)return request(id);}
  };

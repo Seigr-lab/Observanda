@@ -32,6 +32,7 @@ export function labBookDirectory({state,api,esc,changed,directoryChanged=changed
  }
  function entries(){return cache.entries().filter(entry=>!hidden(entry.projectId).has(entry.labBookId));}
  return {
+  check:()=>cache.check(),
   deleteBook:(projectId,item)=>deletions.start(projectId,item),
   entries,owner(id){const entry=entries().find(entry=>entry.labBookId===id);return entry?{projectId:entry.projectId,labBookId:id}:null;},
   navigation(book){const shown=book.projects.map(p=>p.id);queueMicrotask(()=>cache.ensure(shown));const combined=new Map(book.notebooks.map(n=>[n.id,n]));for(const entry of entries())if(!combined.has(entry.labBookId))combined.set(entry.labBookId,{id:entry.labBookId,projectId:entry.projectId,title:entry.directory,dedicated:true});return {...book,notebooks:[...combined.values()].sort((a,b)=>String(a.title).localeCompare(String(b.title),language(),{sensitivity:'base',numeric:true})||a.id.localeCompare(b.id))};},

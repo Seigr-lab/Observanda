@@ -5,7 +5,7 @@ import {t} from './i18n/index.js';
 
 // Observe durable workspace revisions, including commits made by another process.
 // A response may only replace the clean view whose identity/revision requested it.
-export function workspaceRefresh({state,api,version:readVersion,read,apply,blocked,notify,onAccessError,interval=5000}){
+export function workspaceRefresh({state,api,version:readVersion,read,apply,blocked,notify,onAccessError,interval=5000,alsoCheck=()=>{}}){
  let task=null,controller=null,stopped=false,pending=false,failure=false,manualBusy=false,owner=null;
  const text=key=>t('workspaceRead',key);
  const identity=()=>!state.filesMode&&!(state.page==='module'&&state.moduleId==='pdf-editor')&&state.book&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace?
@@ -55,7 +55,8 @@ export function workspaceRefresh({state,api,version:readVersion,read,apply,block
   })();
   return task;
  }
- const focused=()=>void check({background:true}),visible=()=>{if(!document.hidden)void check({background:true});};
+ // Each automatic check also looks at what the project's records do not show, such as its lab book list.
+ const focused=()=>{void check({background:true});void Promise.resolve().then(alsoCheck).catch(()=>{});},visible=()=>{if(!document.hidden)focused();};
  const timer=setInterval(focused,interval);
  window.addEventListener('focus',focused);document.addEventListener('visibilitychange',visible);
  return {
