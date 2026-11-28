@@ -1,3 +1,4 @@
+import {retryModule} from './retry-module.js';
 import {deferredDialog} from './deferred-dialog.js';
 import {researchContext} from './project-context.js';
 import {t} from './i18n/index.js';
@@ -17,5 +18,7 @@ export function deferredRecordEditor(options,load){
  };
 }
 
-export const recordWritingUI=options=>deferredRecordEditor(options,()=>import('./record-writing-ui.js').then(module=>module.recordWritingUI));
-export const recordValuesUI=options=>deferredRecordEditor(options,()=>import('./record-values-ui.js').then(module=>module.recordValuesUI));
+// A dialog whose code failed to load once is fetched again on the next open (retry-module.js).
+const writingModule=retryModule(()=>import('./record-writing-ui.js'),'/record-writing-ui.js'),valuesModule=retryModule(()=>import('./record-values-ui.js'),'/record-values-ui.js');
+export const recordWritingUI=options=>deferredRecordEditor(options,()=>writingModule().then(module=>module.recordWritingUI));
+export const recordValuesUI=options=>deferredRecordEditor(options,()=>valuesModule().then(module=>module.recordValuesUI));
