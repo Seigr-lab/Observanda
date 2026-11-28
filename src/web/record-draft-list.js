@@ -8,7 +8,8 @@ import {language as appLanguage} from './i18n/index.js';
 const text=(key,args)=>t('recordDrafts',key,args);
 const validItem=item=>item&&researchId(item.id)&&revisionId(item.revision)&&typeof item.updatedAt==='string'&&Number.isFinite(Date.parse(item.updatedAt))&&Number.isSafeInteger(item.count)&&item.count>0&&Array.isArray(item.titles)&&item.titles.length===Math.min(item.count,3)&&item.titles.every(title=>typeof title==='string'&&title.length<=160);
 // Discovery owns one page. No checkpoint body is loaded until Review draft.
-export function recordDraftList({api,esc,onChange,recover,recoverWriting,recoverValue,recoverDocument,checkpoint,notify}){
+// openDraft names the new record being written on the record page: it is open, not waiting for recovery.
+export function recordDraftList({api,esc,onChange,recover,recoverWriting,recoverValue,recoverDocument,checkpoint,notify,openDraft=()=>null}){
  const preview=recordDraftPreview({api,esc}),selectRecord=recordDraftRecords({api,esc});
  let owner=null,generation=0,controller=null,page=null,cursor=null,available=false,failed=false,busy=false,focusBefore=null;
  const dialog=document.createElement('dialog');dialog.className='record-recovery record-draft-list';dialog.setAttribute('aria-labelledby','draft-list-title');document.body.append(dialog);
@@ -36,7 +37,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   if(!preview){cursor=next;frame('<p role="status">'+esc(text('loading'))+'</p>');}
   const limit=preview?1:10;
   try{
-   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:owner.id,limit},{adopt:false,signal:request.signal});
+   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:openDraft()??owner.id,limit},{adopt:false,signal:request.signal});
    if(request.signal.aborted||!current(epoch,workspaceId))return;
    if(result?.workspaceId!==workspaceId||!Array.isArray(result.drafts)||result.drafts.length>limit||!result.drafts.every(validItem)||new Set(result.drafts.map(d=>d.id)).size!==result.drafts.length||result.drafts.some(d=>d.id===owner.id)||![result.previousCursor,result.nextCursor].every(v=>v===null||typeof v==='string'&&v.length>0&&v.length<=4096))throw Error(text('invalidPage'));
    available=Boolean(result.drafts.length||result.nextCursor||result.previousCursor);failed=false;

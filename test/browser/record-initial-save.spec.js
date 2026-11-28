@@ -5,64 +5,81 @@ import os from 'node:os';
 import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {clearVault} from '../../src/encryption.js';
-import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
 import {withRecordDocument} from '../../src/record-document.js';
 import {proseText} from '../../src/web/prose-model.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
-import {openRecordWriting} from './record-editing-helper.js';
+import {openRecordDetail,openRecordWriting} from './record-editing-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 
-async function create(page,notebookId,title){
+// A new record is written on the record page as a draft: nothing is added to the lab book
+// until Save record, and Discard record leaves nothing behind.
+async function create(page,notebookId){
  await page.evaluate(id=>location.hash='#/notebooks/'+id,notebookId);await page.getByRole('button',{name:'New record',exact:true}).click();
  const dialog=page.locator('#dialog'),general=dialog.locator('details').filter({hasText:'General record types'});if(!await general.evaluate(element=>element.open))await dialog.getByText('General record types',{exact:true}).click();await dialog.getByRole('button',{name:'Create free-form note',exact:true}).click();
- await page.getByLabel('Record title',{exact:true}).fill(title);return new URL(page.url()).hash.split('/')[2];
+ await expect(page.getByRole('button',{name:'Save record',exact:true})).toBeVisible();return new URL(page.url()).hash.split('/')[2];
 }
-async function writeLarge(page){
- const sections=[];
- for(let i=0;i<12;i++){
-  await page.getByRole('button',{name:'Add section',exact:true}).click();const section=page.locator('.record-section').last(),title='Initial observation '+(i+1),body='Exact acquisition '+i+' '+('\u754c'.repeat(59900));
-  await section.getByLabel('Section heading',{exact:true}).fill(title);await section.locator('[contenteditable=true]').fill(body);sections.push({id:await section.getAttribute('data-writing-section'),title,body});
- }
- return sections;
+async function setTitle(page,title){
+ const dialog=await openRecordDetail(page);await dialog.getByLabel('Record title',{exact:true}).fill(title);await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.locator('main h1').first()).toHaveText(title);
 }
-async function inspect(workspace,id){return workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,id);return {count:snapshot.count,row};});}
+async function addSection(page,title,body){
+ await page.getByRole('button',{name:'Add writing section',exact:true}).click();
+ const dialog=page.locator('dialog.record-writing[open]');await expect(dialog.locator('.ProseMirror')).toBeVisible();
+ await dialog.getByLabel('Section heading',{exact:true}).fill(title);await dialog.locator('.ProseMirror').fill(body);
+ await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.locator('main')).toContainText(title);await expect(page.locator('main')).toContainText(body.slice(0,20));
+}
+const inspect=(workspace,id)=>workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,id);return {count:snapshot.count,row};});
 
-test('initial record Save streams large authoring, replays lost acknowledgements and preserves newer work and recovery',async({page})=>{
- test.setTimeout(180000);page.setDefaultTimeout(15000);
+test('a new record is written on the record page as a draft, saved once with a replayed acknowledgement, discarded or recovered',async({page})=>{
+ test.setTimeout(240000);page.setDefaultTimeout(20000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-initial-record-')),book=upgradeNotebook(sampleNotebook());book.entries=[];
- const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),drafts=new ResearchDrafts(f.workspace),original=ResearchCatalogue.prototype.record;
- const errors=[],requests=[],applyCommands=[];let releaseCheckpoint,releaseApply;
- page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());page.on('request',request=>{const route=new URL(request.url()).pathname;if(route.startsWith('/api/'))requests.push({route,body:request.method()==='POST'?request.postDataJSON():null});});
+ const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),drafts=new ResearchDrafts(f.workspace);
+ const errors=[],requests=[];
+ page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{const route=new URL(request.url()).pathname;if(route.startsWith('/api/'))requests.push(route);});
  try{
   await page.goto(app.url);await expect(page.locator('.brand[data-action=workspace-refresh]')).toBeVisible();
-  ResearchCatalogue.prototype.record=()=>{throw Error('Initial creation reconstructed a saved record');};
-  const cancelled=await create(page,book.notebooks[0].id,'Cancelled before Save');await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Record title',{exact:true})).toHaveCount(0);
+  // Discard record removes the draft; the lab book never held the record.
+  const cancelled=await create(page,book.notebooks[0].id);await setTitle(page,'Cancelled before Save');
+  expect((await inspect(f.workspace,cancelled)).row).toBe(null);
+  const discard=page.getByRole('button',{name:'Discard record',exact:true});await discard.click();await page.getByRole('button',{name:'Discard this new record?',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Save record',exact:true})).toHaveCount(0);
   expect((await inspect(f.workspace,cancelled)).row).toBe(null);expect((await drafts.list({workspaceId:book.id})).drafts).toEqual([]);
-  const id=await create(page,book.notebooks[0].id,'Initial growing record');let checkpointEntered;const checkpointHeld=new Promise(resolve=>checkpointEntered=resolve);let lostCheckpoint=false;
-  await page.context().route('**/api/research/drafts/transfer/finish',async route=>{
-   if(lostCheckpoint)return route.continue();lostCheckpoint=true;await route.fetch();checkpointEntered();await new Promise(resolve=>releaseCheckpoint=resolve);await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost checkpoint acknowledgement'}});
-  });
-  const sections=await writeLarge(page);await checkpointHeld;await page.getByLabel('Record title',{exact:true}).fill('Typed while checkpoint was streaming');releaseCheckpoint();releaseCheckpoint=null;
-  await expect(page.locator('[data-record-checkpoint]')).toContainText('not checkpointed');expect((await inspect(f.workspace,id)).row).toBe(null);
-  let applyEntered;const applyHeld=new Promise(resolve=>applyEntered=resolve);let lostApply=false;
-  await page.context().route('**/api/research/drafts/review/apply',async route=>{
-   applyCommands.push(route.request().postDataJSON());if(lostApply)return route.continue();lostApply=true;await route.fetch();applyEntered();await new Promise(resolve=>releaseApply=resolve);await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost creation acknowledgement'}});
-  });
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await applyHeld;
-  const first=await inspect(f.workspace,id);expect(first.count).toBe(1);expect(first.row.bytes).toBeGreaterThan(2*1024*1024);
-  await page.getByLabel('Record title',{exact:true}).fill('Typed while initial Save was committing');releaseApply();releaseApply=null;await expect(page.locator('#notice')).toContainText('Synthetic lost creation acknowledgement');
-  await expect.poll(async()=>{const items=await drafts.list({workspaceId:book.id});return items.drafts.some(item=>item.titles.includes('Typed while initial Save was committing'));}).toBe(true);
-  // This click retries the identical already-committed plan. Newer typing is
-  // retained as unsaved work; it cannot become a second record or disappear.
-  const replay=page.waitForResponse(response=>response.url().endsWith('/api/research/drafts/review/apply')&&response.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await replay;await expect(page.getByRole('button',{name:'Save record',exact:true})).toBeEnabled();await expect(page.locator('#save-status')).toHaveText('Unsaved changes');await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Typed while initial Save was committing');expect(applyCommands).toHaveLength(2);expect(applyCommands[1]).toEqual(applyCommands[0]);expect((await inspect(f.workspace,id)).count).toBe(1);
-  const continuation=page.waitForResponse(response=>response.url().endsWith('/api/research/drafts/review/apply')&&response.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await continuation;await expect(page.locator('.record-editing h1')).toHaveText('Typed while initial Save was committing');await expect(page.locator('dialog.record-draft-review[open]')).toHaveCount(0);
-  await f.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),id);expect(row.bytes).toBeGreaterThan(2*1024*1024);await withRecordDocument(store,id,row.revision,async document=>{for(let i=0;i<sections.length;i++){const saved=(await document.field(['sections',String(i)])).value;expect(saved.id).toBe(sections[i].id);expect(saved.title).toBe(sections[i].title);expect(proseText(saved.body)).toBe(sections[i].body);}});});
-  await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Typed while initial Save was committing');const writing=await openRecordWriting(page);await writing.locator('.ProseMirror').fill('Continued through the normal selected editor');await writing.getByRole('button',{name:'Save changes',exact:true}).click();await expect(writing).not.toBeVisible();
-  await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page.locator('.record-reader')).toContainText('Continued through the normal selected editor');
-  await page.getByRole('button',{name:'Back to records',exact:true}).click();const recovered=await create(page,book.notebooks[0].id,'Reloadable initial checkpoint');await page.locator('.document-field').first().locator('[contenteditable=true]').fill('Exact unsaved initial writing');await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.reload();
-  await page.getByRole('button',{name:'Review drafts',exact:true}).click();const row=page.locator('.record-draft-row').filter({hasText:'Reloadable initial checkpoint'});await row.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.locator('.record-draft-preview')).toContainText('Exact unsaved initial writing');await page.locator('.record-draft-preview [data-preview-recover]').click();
-  const review=page.locator('.record-draft-review');await expect(review).toContainText('This draft has not been saved as a record.');await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Reloadable initial checkpoint');expect((await inspect(f.workspace,recovered)).count).toBe(2);
-  expect(requests.some(request=>request.route==='/api/research/records/save'||request.route==='/api/workspace/read/page'||request.route.includes('/drafts/transfer/read'))).toBe(false);expect(errors).toEqual([]);
- }finally{releaseCheckpoint?.();releaseApply?.();ResearchCatalogue.prototype.record=original;await page.unrouteAll({behavior:'wait'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+
+  // Title, sections and tags are written on the record page into the draft.
+  const id=await create(page,book.notebooks[0].id);await setTitle(page,'River bank survey');
+  // The draft being written is open, not waiting for recovery.
+  await expect(page.getByRole('button',{name:'Review drafts',exact:true})).toHaveCount(0);
+  const sections=[['Transect one','Eroded bank '+'界'.repeat(2000)],['Transect two','Stable bank '+'界'.repeat(2000)],['Transect three','Reed bed '+'界'.repeat(2000)]];
+  for(const [title,body] of sections)await addSection(page,title,body);
+  await (await revealInEditor(page,page.getByLabel('New tag',{exact:true}),'Record details')).fill('river');await page.getByRole('button',{name:'Add tag',exact:true}).click();await expect(page.locator('.record-tags')).toContainText('river');
+  expect((await inspect(f.workspace,id)).row).toBe(null);
+
+  // The first Save's acknowledgement is lost; Save again replays the same save, never a second record.
+  let lost=false;
+  await page.context().route('**/api/research/drafts/review/apply',async route=>{if(lost)return route.continue();lost=true;await route.fetch();await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost creation acknowledgement'}});});
+  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('main [role=alert]').first()).toContainText('Synthetic lost creation acknowledgement');
+  expect((await inspect(f.workspace,id)).count).toBe(1);
+  await page.getByRole('button',{name:'Save record',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Read record',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Save record',exact:true})).toHaveCount(0);
+  const saved=await inspect(f.workspace,id);expect(saved.count).toBe(1);
+  await f.workspace.catalogue(async store=>withRecordDocument(store,id,saved.row.revision,async document=>{
+   expect((await document.field(['title'])).value).toBe('River bank survey');expect((await document.field(['tags'])).value).toEqual(['river']);
+   const total=await document.tree.arrayLength(document.root,['sections']),written=[];
+   for(let i=total-3;i<total;i++)written.push([(await document.field(['sections',String(i),'title'])).value,proseText((await document.field(['sections',String(i),'body'])).value)]);
+   expect(written).toEqual(sections);
+  }));
+  expect((await drafts.list({workspaceId:book.id})).drafts).toEqual([]);
+
+  // A draft left by a reload is kept and saved from Review drafts.
+  await page.getByRole('button',{name:'Back to records',exact:true}).click();const recovered=await create(page,book.notebooks[0].id);await setTitle(page,'Reloadable new record');
+  const writing=await openRecordWriting(page);await writing.locator('.ProseMirror').fill('Exact unsaved summary');await writing.getByRole('button',{name:'Save changes',exact:true}).click();await expect(writing).not.toBeVisible();
+  page.on('dialog',dialog=>dialog.accept());await page.reload();await expect(page.locator('.brand[data-action=workspace-refresh]')).toBeVisible();
+  await page.getByRole('button',{name:'Review drafts',exact:true}).click();const row=page.locator('.record-draft-row').filter({hasText:'Reloadable new record'});await row.getByRole('button',{name:'Review draft',exact:true}).click();
+  const preview=page.locator('.record-draft-preview');await expect(preview.locator('h2')).toHaveText('Reloadable new record');await expect(preview).toContainText('Exact unsaved summary');await preview.getByRole('button',{name:'Recover this draft',exact:true}).click();
+  const review=page.locator('.record-draft-review');await expect(review).toContainText('This draft has not been saved as a record.');await review.getByRole('button',{name:'Save recovered record',exact:true}).click();
+  await expect(page.locator('.record-reader h1')).toHaveText('Reloadable new record');await expect(page.locator('.record-reader')).toContainText('Exact unsaved summary');
+  expect((await inspect(f.workspace,recovered)).row).not.toBe(null);
+  expect(requests.filter(route=>route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
+ }finally{await page.unrouteAll({behavior:'wait'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

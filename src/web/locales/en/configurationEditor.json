@@ -80,5 +80,9 @@
  "property.format":"exact format",
  "property.uncertainty":"uncertainty",
  "addProfile":"Add lab-book type",
- "profileToAdd":"Lab-book type to add"
+ "profileToAdd":"Lab-book type to add",
+ "saveRecord":"Save record",
+ "discardRecord":"Discard record",
+ "confirmDiscardRecord":"Discard this new record?",
+ "savingRecord":"Saving the record…"
 }

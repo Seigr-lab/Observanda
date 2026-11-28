@@ -61,7 +61,9 @@ export function recordPreparationUI({state,api,esc,field,notify,onSaved,onClosed
  async function close(){busy=true;paint();try{if(dirty&&!saveCommand&&!rebaseRequest)await flush();finish();}catch{busy=false;paint();}}
  async function save(){
   if(rebaseRequest)return;guard();read();if([...dialog.querySelectorAll('input,select,textarea')].some(el=>!el.reportValidity()))return;const at=owner;busy=true;paint();
-  try{if(!saveCommand){await flush();guard();saveCommand=clone(command());}status=text('saving');paint();const saved=await call('save',saveCommand);if(!valid(at))return;if(saved?.saved!==true||!revisionId(saved.revision)||!revisionId(saved.etag))throw Error(text('invalidSave'));
+  try{if(!saveCommand){await flush();guard();saveCommand=clone(command());}status=text('saving');paint();const saved=await call('save',saveCommand);if(!valid(at))return;
+  // A new record's preparation is saved into its draft as one edit, with no workspace version.
+  if(saved?.saved!==true||!revisionId(saved.revision)||!(base.selection.recordDraft?revisionId(saved.editRevision):revisionId(saved.etag)))throw Error(text('invalidSave'));
    dirty=false;let retained=false;try{await remove();}catch{retained=true;}if(!valid(at))return;
    try{await onSaved(saved,{workspaceId:base.workspaceId,recordId:base.recordId,field:base.selection.field},{completedDialog:dialog});}finally{if(valid(at)){finish();notify(text(retained?'savedDraftRemains':'saved'));}}
   }catch(failure){if(valid(at)){if(failure.code==='ATTEMPT_CONFLICT'&&rebase)rebaseAvailable=true;if(['INVALID','ATTEMPT_CONFLICT','ATTEMPT_IMMUTABLE','ATTEMPT_REFERENCE','DRAFT_CHANGED'].includes(failure.code))saveCommand=null;error=failure.message||text('failed');busy=false;paint();}}
@@ -101,7 +103,7 @@ export function recordPreparationUI({state,api,esc,field,notify,onSaved,onClosed
  async function open(input,retained=null,pendingSave=null){
   if(dialog.open)return;owner={context:context(),id:crypto.randomUUID()};const at=owner;focusBefore=document.activeElement;loading=true;status=text('loading');draw();dialog.showModal();
   try{if(retained){base={workspaceId:retained.draft.workspaceId,recordId:retained.draft.base.recordId,selection:retained.draft.selection,recordTitle:retained.draft.titles[0]};writer={id:retained.draft.id,revision:retained.revision};dirty=true;}
-   else{const selected=await api('/api/research/records/values/read',{workspaceId:state.book.id,recordId:input.recordId,field:input.field},{adopt:false});if(!valid(at))return;if(selected.value?.value!==null)throw Error(t('errors','ATTEMPT_IMMUTABLE'));base={workspaceId:selected.workspaceId,recordId:selected.recordId,recordTitle:selected.recordTitle,selection:{field:selected.field,revision:selected.revision,storageRevision:selected.storageRevision}};writer={id:crypto.randomUUID(),revision:null};}
+   else{const selected=await api('/api/research/records/values/read',{workspaceId:state.book.id,recordId:input.recordId,field:input.field},{adopt:false});if(!valid(at))return;if(selected.value?.value!==null)throw Error(t('errors','ATTEMPT_IMMUTABLE'));base={workspaceId:selected.workspaceId,recordId:selected.recordId,recordTitle:selected.recordTitle,selection:{field:selected.field,revision:selected.revision,...(selected.recordDraft?{recordDraft:selected.recordDraft}:{storageRevision:selected.storageRevision})}};writer={id:crypto.randomUUID(),revision:null};}
    const result=await call('open',command());if(!valid(at))return;adopt(result);saveCommand=pendingSave?clone(pendingSave):null;loading=false;status=retained?text('checkpointed'):'';draw();dialog.querySelector('input,textarea')?.focus();
   }catch(failure){if(valid(at)){loading=false;error=failure.message||text('failed');status='';paint();}}
   return new Promise(resolve=>{resolveClose=resolve;});

@@ -80,5 +80,9 @@
  "property.format":"eksakt format",
  "property.uncertainty":"usikkerheit",
  "addProfile":"Legg til labbboktype",
- "profileToAdd":"Labboktype som skal leggjast til"
+ "profileToAdd":"Labboktype som skal leggjast til",
+ "saveRecord":"Lagre oppføringa",
+ "discardRecord":"Forkast oppføringa",
+ "confirmDiscardRecord":"Vil du forkaste denne nye oppføringa?",
+ "savingRecord":"Lagrar oppføringa …"
 }

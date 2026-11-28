@@ -14,7 +14,9 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
  const context=()=>state.access?.locked?null:JSON.stringify([state.storage?.contextId,state.book?.id]);
  const view=adapter.view({context:()=>owner?owner.id+':'+editorEpoch:null,refresh:()=>paint(),draftRead,draftChange,draftState:()=>writer?{id:writer.id,revision:writer.revision}:null,close:async()=>{if(busy||loading)return false;await close();return !dialog.open;}});
  const target=base=>({workspaceId:base.workspaceId,recordId:base.recordId,...adapter.target(base)});
- const selection=base=>({...adapter.target(base),revision:base.revision,storageRevision:base.storageRevision});
+ // A saved record's value is based on a stored version; a new record's on its draft at one edit.
+ const selection=base=>({...adapter.target(base),revision:base.revision,...(base.recordDraft?{recordDraft:base.recordDraft}:{storageRevision:base.storageRevision})});
+ const validBase=value=>value?.recordDraft?revisionId(value.recordDraft.id)&&(value.recordDraft.edit===null||revisionId(value.recordDraft.edit)):revisionId(value?.storageRevision);
  const button=(label,action,primary=false)=>'<button type="button" class="button'+(primary?' primary':'')+'" data-writing="'+action+'">'+esc(text(label))+'</button>';
  const validContext=()=>owner?.context===context();
  const navigation=adapter.navigation;
@@ -57,7 +59,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
   const task=queue.then(async()=>{draftCurrent(captured);return writeDraftChange(action,body,options);});queue=task.catch(()=>{});return task;
  }
  function readReply(result,expected){
-  if(!result||Object.entries(expected).some(([key,value])=>result[key]!==value)||!revisionId(result.revision)||!revisionId(result.storageRevision)||!revisionId(result.etag)||typeof result.recordTitle!=='string'||!result.value||typeof result.value!=='object'||Array.isArray(result.value))throw Error(text('invalidRead'));
+  if(!result||Object.entries(expected).some(([key,value])=>result[key]!==value)||!revisionId(result.revision)||!validBase(result)||!result.recordDraft&&!revisionId(result.etag)||typeof result.recordTitle!=='string'||!result.value||typeof result.value!=='object'||Array.isArray(result.value))throw Error(text('invalidRead'));
   return result;
  }
  function paint(){
@@ -134,7 +136,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
    await flush();if(owner!==savingOwner||!validContext())return;status=text('saving');paint();
    const savedTarget=target(base),result=await api('/api/research/records/'+adapter.route+'/save',{...savedTarget,expectedRevision:base.revision,value},{adopt:false});
    if(owner!==savingOwner||!validContext())return;
-   if(result?.saved!==true||!revisionId(result.revision)||!revisionId(result.etag)||navigation?.active&&!revisionId(result.storageRevision))throw Error(text('invalidSave'));
+   if(result?.saved!==true||!revisionId(result.revision)||!result.recordDraft&&(!revisionId(result.etag)||navigation?.active&&!revisionId(result.storageRevision)))throw Error(text('invalidSave'));
    dirty=false;status=text('finishingSave');paint();let retained=false;try{await removeCheckpoint();}catch{retained=true;}
    if(owner!==savingOwner)return;
    // Keep the acknowledged editor busy until its reader has adopted the save.
@@ -145,7 +147,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
      navigation.forget(base.sectionId);
      // Keep the immutable field revision the author just saved, even if a
      // subsequent refresh fails or another author immediately edits it.
-     Object.assign(base,{value:structuredClone(value),revision:result.revision,etag:result.etag,storageRevision:result.storageRevision});
+     Object.assign(base,{value:structuredClone(value),revision:result.revision,...(result.recordDraft?{recordDraft:result.recordDraft,editRevision:result.editRevision}:{etag:result.etag,storageRevision:result.storageRevision})});
      writer={id:crypto.randomUUID(),revision:null};last='';status=text(retained?'savedDraftRemains':'saved');navigation.show(dialog,base,switchField);
     }else finish();
     notify(text(retained?'savedDraftRemains':'saved'));
@@ -200,7 +202,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
   const result=await api('/api/research/drafts/'+adapter.route+'/read',{workspaceId:expected.workspaceId,id:receipt.id,expectedRevision:receipt.revision},{adopt:false});
   const draft=result?.draft,selected=draft?.[adapter.baseName];
   if(draft?.id!==receipt.id||result.revision!==receipt.revision||draft.workspaceId!==expected.workspaceId||draft.base?.recordId!==expected.recordId||
-     !revisionId(selected?.revision)||!revisionId(selected.storageRevision)||!Object.entries(adapter.target(expected)).every(([key,v])=>v===selected[key])||!result.value)throw Error(text('invalidCheckpoint'));
+     !revisionId(selected?.revision)||!validBase(selected)||!Object.entries(adapter.target(expected)).every(([key,v])=>v===selected[key])||!result.value)throw Error(text('invalidCheckpoint'));
   return {base:{...expected,...selected,definition:result.definition,recordTitle:draft.titles[0]},value:result.value,writer:{id:draft.id,revision:result.revision}};
  }
  function adoptField(field){

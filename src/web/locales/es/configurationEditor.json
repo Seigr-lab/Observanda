@@ -80,5 +80,9 @@
  "property.format":"formato exacto",
  "property.uncertainty":"incertidumbre",
  "addProfile":"Añadir tipo de cuaderno de laboratorio",
- "profileToAdd":"Tipo de cuaderno de laboratorio para añadir"
+ "profileToAdd":"Tipo de cuaderno de laboratorio para añadir",
+ "saveRecord":"Guardar registro",
+ "discardRecord":"Descartar registro",
+ "confirmDiscardRecord":"¿Descartar este registro nuevo?",
+ "savingRecord":"Guardando el registro…"
 }

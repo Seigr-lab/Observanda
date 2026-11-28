@@ -5,6 +5,7 @@ import {sessionHeaders} from './session-store.js';
 import {confirmAction} from './confirm-action.js';
 import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
+import {recordDraftTransport} from './record-draft-transport.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
 import {moduleLabel} from './module-presentation.js';
 import {researchReturn,researchReturnNavigation} from './research-return.js';
@@ -181,7 +182,7 @@ function sourceVisibilityWrite(route,data){
 
 wireCustomFieldClipboard(document.body,{available:()=>!state.access?.locked&&!state.storageUnavailable});
 let previewSurfaces=[],dialogSurface=null;
-let noticeTimer, noticeToken = 0, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null;
+let noticeTimer, noticeToken = 0, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null,draftTransport=null;
 const drafts=formDrafts(),recordChanges=recordDraftTracker();
 expandingText();
 let uploading = false, fieldSequence = 0;
@@ -226,7 +227,12 @@ function adoptSnapshot(result){
   savedRecordBases=Object.fromEntries(savedBook.entries.map(record=>[record.id,record]));
   recordChanges.reset(savedBook,savedRecordRevisions);
 }
-async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false,view=location.hash,owner=researchOwner(state),websitePin}={}) {
+async function api(route, data, options={}) {
+  // A new record is written into its draft until its first Save (record-draft-transport.js).
+  const drafted=draftTransport?.(route,data,options);if(drafted)return drafted;
+  return workspaceApi(route,data,options);
+}
+async function workspaceApi(route, data, {adopt=true,signal,onProgress,metadataOnly=false,view=location.hash,owner=researchOwner(state),websitePin}={}) {
   if(['/api/session','/api/access/unlock'].includes(route)&&data&&(fileEditorHash(location.hash)||new URLSearchParams(location.search).get('view')==='website'))data={...data,filesOnly:true};
   if(route==='/api/workspace/read/selection'&&!validRecordSelection(data?.ids)){
     const result=await readRecordSelection(data,{signal});
@@ -488,7 +494,7 @@ function recordCheckpoint(){
 }
 const recordRecovery=recordRecoveryUI({esc});
 const recordDraftReview=recordDraftReviewUI({state,api,esc,field,notify,destinations:recordLinkDestinations,figures:()=>[],onSaved:async result=>{await workspaceLive.check();if(result.absent){state.page='entries';state.selected=null;render();}else await openRecordReading(result.recordId);}});
-const recordDrafts=recordDraftsUI({api,esc,snapshot:recordCheckpoint,compact:()=>true,onReset:()=>recordDraftReview.close(),onChange:()=>{recordDrafts.update();updateSaveStatus();},notify,recoverWriting:header=>recordWriting.recover(header),recoverValue:header=>recordValues.recover(header),recoverDocument:async(header,options)=>{let accepted=false;await leave.run(async()=>{accepted=await recordDraftReview(header,options);});return accepted;},recover:async draft=>{
+const recordDrafts=recordDraftsUI({api,esc,snapshot:recordCheckpoint,openDraft:()=>configurationRecord?.draftId()??null,compact:()=>true,onReset:()=>recordDraftReview.close(),onChange:()=>{recordDrafts.update();updateSaveStatus();},notify,recoverWriting:header=>recordWriting.recover(header),recoverValue:header=>recordValues.recover(header),recoverDocument:async(header,options)=>{let accepted=false;await leave.run(async()=>{accepted=await recordDraftReview(header,options);});return accepted;},recover:async draft=>{
   let applied=false;
   await leave.run(async()=>{
     const ids=draft.changes.map(change=>change.record.id);
@@ -563,7 +569,7 @@ const recordWriting=recordWritingUI({state,api,esc,field,onOpen:dismissPreviousS
  if(selected()&&target.sectionId)state.recordSection=target.sectionId;
  await workspaceLive.check(options);if(selected())render();
 },onClosed:()=>recordDrafts.refresh()});
-const recordValues=recordValuesUI({state,api,esc,field,notify,access:operation=>withProjectAccess(operation),onOpen:dismissPreviousSuccess,onSaved:async(result,target,options)=>{await workspaceLive.check(options);if(target?.field?.startsWith('figure:'))await recordContent.revealFigure(target,result.position);},onClosed:()=>recordDrafts.refresh()});
+const recordValues=recordValuesUI({state,api,esc,field,notify,access:operation=>withProjectAccess(operation),onOpen:dismissPreviousSuccess,onSaved:async(result,target,options)=>{await refreshRecord(options);if(target?.field?.startsWith('figure:'))await recordContent.revealFigure(target,result.position);},onClosed:()=>recordDrafts.refresh()});
 const runCreation=recordRunCreationUI({state,api,esc,notify,onCreated:async result=>{await workspaceLive.check();await openRecordReading(result.recordId);}});
 const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordContent.locationTarget(),refresh:()=>workspaceLive.check(),choose:options=>recordDestination.open(options),access:operation=>withProjectAccess(operation),moved:result=>{location.hash=ownedRoute('#/records/'+result.recordId+'/read',{projectId:result.projectId,labBookId:result.labBookId});}});
 const recordRemoval=recordRemovalUI({state,api,esc,notify,target:()=>recordContent.removalTarget(),refresh:()=>workspaceLive.check(),onRemoved:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.selected=null;state.page='entries';state.preview=null;render();}});
@@ -602,12 +608,15 @@ const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>{const side
 const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),directoryChanged:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);},access:operation=>withProjectAccess(operation)});
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
-const recordContent=recordContentUI({state,api,esc,field,render,report,returnLabel:fallback=>recordReturnLabel(fallback),refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:({readonly})=>recordHistory.button({saved:true})+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary><div class="record-action-menu">'+bookReferences.button()+reviews.button()+migrationProvenance.button()+recordLocation.button()+(readonly?'':recordStarters.button()+recordRemoval.view())+'</div></details>',before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
-configurationRecord=configurationRecordCreation({state,api,esc,field,render,returnLabel:fallback=>recordReturnLabel(fallback),onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},editorOptions:{notify,destinations:recordLinkDestinations,figures:()=>[]},onSaved:async(result,original)=>{
+// The selected record page reads again: from its draft for a new record, else from the workspace.
+const refreshRecord=options=>{if(configurationRecord?.active()){configurationRecord.written();render();return;}return workspaceLive.check(options);};
+const recordContent=recordContentUI({state,api,esc,field,render,report,returnLabel:fallback=>recordReturnLabel(fallback),refresh:()=>refreshRecord(),draft:()=>configurationRecord?.draft(),draftControls:()=>configurationRecord?.controls()??'',editWriting:target=>recordWriting.open(target),tools:({readonly})=>recordHistory.button({saved:true})+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary><div class="record-action-menu">'+bookReferences.button()+reviews.button()+migrationProvenance.button()+recordLocation.button()+(readonly?'':recordStarters.button()+recordRemoval.view())+'</div></details>',before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
+configurationRecord=configurationRecordCreation({state,api,esc,render,onOpened:showCreatedRecord,onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},onSaved:async(result,original)=>{
  const [outline,content]=await Promise.all([newWorkspaceReader({snapshotId:result.etag}).read({requireOutline:true}),api('/api/workspace/read/record-content',{workspaceId:state.book.id,recordId:result.recordId,snapshotId:result.etag,offset:0,pagedHeader:true},{adopt:false})]);
  if(outline.etag!==result.etag||content.etag!==result.etag||content.recordId!==original.id||content.header?.createdAt!==original.createdAt||!revisionId(content.storageRevision))throw Error(t('recordDrafts','invalidPage'));
  adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=result.recordId;state.page='record-reader';state.recordReading=false;state.recordSection=null;state.dirty=false;recordContent.clear();render();await recordDrafts.refresh();
 },onDiscard:async()=>{const latest=await newWorkspaceReader().read({requireOutline:true});adoptSnapshot(latest);state.book=latest.book;state.etag=latest.etag;state.dirty=false;state.selected=null;state.page='entries';render();}});
+draftTransport=recordDraftTransport({api:workspaceApi,draft:()=>configurationRecord.draft(),written:()=>configurationRecord.written()});
 const recordList=recordListUI({state,api,esc,showDialog,render,access:operation=>withProjectAccess(operation),decorate:root=>decorateRecordLinks(root,state.book),chooseType:value=>{state.filter=value;refreshRecordResults();},table:rows=>renderRecordTable(rows,{action:'browse-record'})});
 const ownerOperation=projectOperationView({state,esc,projectDirectory:projectDirectoryUI,restore:restoreRoute,render});
 const activity=activityUI({onChange:snapshot=>{
@@ -667,7 +676,7 @@ function pendingChanges(scope='all'){
   if(scientificForm&&!forms.includes(scientificForm))forms.push(scientificForm);
   const labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':appText('workspaceDetails'),'storage-access-form':appText('localAccess'),'create-form':appText('workspaceSetup'),'publish-token-form':appText('unsubmittedConnection')}[form.id]??appText('unsubmittedForm')));
   if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?appText('labBookTemplate'):appText('projectBookSettings'));
-  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(state.page==='editor'?appText('recordEdits',{title:entry()?.title??appText('newRecord')}):appText('namedEdits',{name:document.querySelector('main h1')?.textContent??appText('workspace')}));
+  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(configurationRecord?.active()?appText('recordEdits',{title:recordContent.title()??configurationRecord.title()??appText('newRecord')}):state.page==='editor'?appText('recordEdits',{title:entry()?.title??appText('newRecord')}):appText('namedEdits',{name:document.querySelector('main h1')?.textContent??appText('workspace')}));
   if(scope==='all'&&state.publishing?.dirty)labels.push(appText('publishingDestination'));
   if(scope==='all'&&modules.needsNavigationGuard())labels.push(appText('moduleEdits'));
   if(scope==='all'&&(navigation?dashboard.needsNavigationGuard():dashboard.isDirty()))labels.push(appText('moduleSettings'));
@@ -861,7 +870,7 @@ function render() {
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe.preview-frame')].map(frame=>previewSurface(frame));
   syncRoute();storageControls.workspaces.bind();storageControls.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
-  userProfile.bind();configurationRecord?.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
+  userProfile.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
 }
 
 function renderGeneralPreferences(){return storageControls.recoveryPanel()||structureUI.generalPreferences()+storageControls.appPreferences();}
@@ -930,7 +939,6 @@ function recordReturnLabel(fallback){
   return module?ux('returnTask',{name:moduleLabel(module)}):fallback;
 }
 function renderEditor() {
-  if(configurationRecord?.active())return configurationRecord.view();
   const e=entry();
   if(!e){state.page='entries';return renderEntries();}
   if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">${esc(recordReturnLabel(appText('backRecords')))}</button><button class="button" data-action="record-edit">${esc(appText('editRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
@@ -968,15 +976,17 @@ async function addEntry(type, notebookId,section=null,subject=null) {
   const e = { id: crypto.randomUUID(), notebookId, type, title: t('recordAuthoring','untitled',{type:templateText(section?.label??template.label).toLocaleLowerCase()}), body: '', contributors: [], relations: [], tags: [], occurredOn, createdAt: now, updatedAt: now, share: false, figures: [], status: 'draft', sections: template.sections.map(title => ({ id: crypto.randomUUID(), title, body: '' })), attachments: [] };
   if(section&&!section.configurationPin)e.template=templateFrom(section);
   if(subject){documentRecord(state.book.id,e,subject);e.title=t('recordAuthoring','subjectTitle',{type:templateText(section?.label??template.label),subject:subject.title,date:occurredOn}).slice(0,180);}
-  if(section?.configurationPin){openCreatedRecord(e,{selectedDraft:true});await configurationRecord.open(e,section);return;}
-  openCreatedRecord(e);
+  openCreatedRecord(e,section);
 }
-function openCreatedRecord(e,{selectedDraft=false}={}){
-  const notebookId=e.notebookId;
-  const scoped=recordCreationBase({book:savedBook,etag:state.etag,recordRevisions:savedRecordRevisions,recordScope:state.recordScope,outline:Boolean(state.workspaceOutline),...state.workspaceOutline},e.id);
-  adoptSnapshot(scoped);state.book=scoped.book;
-  state.recordReturn = {bookReading:!!state.bookReading,page:['editor','record-reader'].includes(state.page)?'entries':state.page,project:state.project,notebook:state.notebook,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id}; state.book.entries.push(e); state.notebook=notebookId; state.project=state.book.notebooks.find(n=>n.id===notebookId).projectId; state.selected = e.id; state.page = 'editor'; state.recordReading=false;state.recordSection=null;if(selectedDraft){state.dirty=true;changeVersion++;return;}dirty();render();
-  $('[data-entry=title]').focus(); $('[data-entry=title]').select();
+// Every new record, built-in or of the lab book's own types, is a draft on the record page until its first Save.
+function openCreatedRecord(e,section=null){
+  void configurationRecord.open(e,section?.configurationPin?section:null).catch(error=>{if(error?.name!=='AbortError')notify(error.message,true);});
+}
+function showCreatedRecord(e){
+  state.recordReturn = {bookReading:!!state.bookReading,page:state.page==='record-reader'?'entries':state.page,project:state.project,notebook:state.notebook,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id};
+  state.notebook=e.notebookId;state.project=state.book.notebooks.find(n=>n.id===e.notebookId).projectId;
+  recordContent.clear();state.selected=e.id;state.page='record-reader';state.recordReading=false;state.recordSection=null;
+  void recordDrafts.refresh();
 }
 
 const structureActions=new Set(['book-convert-open','book-convert-resume','book-convert-return','configuration-profile-retry','configuration-edit','new-project','edit-project','edit-project-template','project-template-command','new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook','lab-book-delete','lab-book-delete-cancel','workspace-reorganize','location-counts-retry']);

@@ -80,5 +80,9 @@
  "property.format":"format exacte",
  "property.uncertainty":"incertesa",
  "addProfile":"Afegeix el tipus de llibre de laboratori",
- "profileToAdd":"Tipus de llibre de laboratori per afegir"
+ "profileToAdd":"Tipus de llibre de laboratori per afegir",
+ "saveRecord":"Desa el registre",
+ "discardRecord":"Descarta el registre",
+ "confirmDiscardRecord":"Vols descartar aquest registre nou?",
+ "savingRecord":"S'està desant el registre…"
 }

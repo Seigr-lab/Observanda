@@ -7,11 +7,11 @@ import {language as appLanguage} from './i18n/index.js';
 const text=(key,args)=>t('recordDrafts',key,args);
 // Writer identities stay in browser memory. Research checkpoints are stored
 // through the authenticated workspace writer, never in browser local storage.
-export function recordDraftsUI({api,esc,snapshot,onChange,onReset,recover,recoverWriting,recoverValue,recoverDocument,notify,compact=()=>false}){
+export function recordDraftsUI({api,esc,snapshot,onChange,onReset,recover,recoverWriting,recoverValue,recoverDocument,notify,compact=()=>false,openDraft}){
   let writer=null,generation=0,editVersion=0,timer=null,queue=Promise.resolve(),message='',failed=false,last='',checkpointTime='',pendingSave=null;
   const wire=changes=>compact()&&changes?.length===1?changes.map(({base,...change})=>({...change,baseRevision:change.expectedRevision})):changes;
   const fingerprint=async()=> (await recordCheckpointIdentity(wire(snapshot()))).sha256;
-  const list=recordDraftList({api,esc,onChange,recover,recoverWriting,recoverValue,recoverDocument,notify,checkpoint:async()=>{
+  const list=recordDraftList({api,esc,onChange,recover,recoverWriting,recoverValue,recoverDocument,notify,openDraft,checkpoint:async()=>{
     const epoch=generation;last='';await flush();const version=editVersion,current=await fingerprint();
     return epoch===generation&&version===editVersion&&!failed&&Boolean(writer?.revision)&&last===current;
   }});

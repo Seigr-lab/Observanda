@@ -15,12 +15,15 @@ export function recordMediaActions({state,api,esc,current,refresh,reveal,render,
  const move=(item,key,action,target,disabled)=>'<button type="button" class="button" data-action="stored-media-'+action+'" data-media="'+esc(item.id)+'" data-position="'+target+'" aria-label="'+esc(text(key+'Label',{label:item.caption||text('unnamedMedia')}))+'"'+(saving||disabled?' disabled':'')+'>'+esc(text(key))+'</button>';
  const controls=item=>{const at=place(item);return (at?move(item,'moveMediaEarlier','earlier',at.position-1,waiting()||at.position===0)+move(item,'moveMediaLater','later',at.position+1,waiting()||at.position>=at.total-1):'')+button(text('removeMedia'),'remove',item.id,waiting());};
  const add=()=>'<div class="record-media-intake"><div class="field"><label for="record-media-upload">'+esc(text('addMedia'))+'</label><input id="record-media-upload" type="file" data-upload="record-attachment" accept="image/*,audio/*,video/*,.svg"'+(saving||waiting()?' disabled':'')+'></div><p class="muted">'+esc(text('addMediaHelp'))+'</p>'+(waiting()?'<p role="status">'+esc(text('mediaPending'))+'</p>'+button(text('retryMedia'),'retry'):'')+'</div>';
- async function execute(reading,command){
+ const kinds=new Map();
+ async function execute(reading,command,{mediaKind=kinds.get(command.mediaId)}={}){
+  if(mediaKind)kinds.set(command.mediaId,mediaKind);
   const key=owner(reading),storageContext=state.storage?.contextId;
   const owned=()=>state.page==='record-reader'&&state.storage?.contextId===storageContext&&state.book?.id===command.workspaceId&&state.selected===command.recordId&&!state.access?.locked;
   pending.set(key,command);saving=true;render();
   try{
-   const result=await api('/api/research/records/media',command,{adopt:false});pending.delete(key);
+   // A new record's draft names the file's kind when it is attached; a saved record reads it itself.
+   const result=await api('/api/research/records/media',command,{adopt:false,...(mediaKind?{mediaKind}:{})});pending.delete(key);
    if(owned()){await refresh();if(owned()&&['attach','move'].includes(command.action))await reveal(result.position);}
    return result;
   }catch(error){if(['INVALID','MISSING','FORMAT','WORKSPACE_CHANGED','RECORD_CHANGED','INTAKE_COMPLETION','MEDIA_IN_USE','MEDIA_INVALID'].includes(error.code))pending.delete(key);throw error;}
@@ -30,7 +33,7 @@ export function recordMediaActions({state,api,esc,current,refresh,reveal,render,
   checkContext();const reading=current();
   if(!reading||state.page!==intent.page||state.selected!==intent.recordId||reading.workspaceId!==intent.workspaceId)throw Error(text('mediaDestinationChanged'));
   if(saving||waiting())throw Error(text('mediaPending'));
-  return execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,action:'attach',mediaId:asset.id});
+  return execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,action:'attach',mediaId:asset.id},{mediaKind:asset.kind});
  }
  async function action(control){
   if(!control.dataset.action?.startsWith('stored-media-'))return false;
