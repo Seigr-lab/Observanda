@@ -202,14 +202,15 @@ export class RecordDraftReview{
   if(!command||typeof command!=='object'||Object.keys(command).some(key=>!['id','workspaceId','expectedRevision','offset','windows'].includes(key)))invalid();
   const offset=command.offset??0;
   if(!natural(offset)||command?.windows!==undefined&&!validHeaderWindows(command.windows))invalid();
-  return this.workspace.catalogue(store=>this.context(store,{id:command.id,workspaceId:command.workspaceId,expectedRevision:command.expectedRevision},async(plan,document)=>{
-   const mine=new RecordDocument(document.blocks,plan.roots.mine),total=await mine.tree.arrayLength(mine.root,['sections']);
+  // The page shows the draft with every edit written into it so far.
+  return this.workspace.catalogue(store=>this.context(store,{id:command.id,workspaceId:command.workspaceId,expectedRevision:command.expectedRevision},async(plan,document)=>new RecordDraftEdits(store).mine(plan,document,async(mine,editRevision)=>{
+   const total=await mine.tree.arrayLength(mine.root,['sections']);
    const sections=await sectionWindow((at,limit=4)=>{signal?.throwIfAborted();return mine.tree.page(mine.root,['sections'],{offset:at,limit});},Math.min(offset,Math.max(0,total-1)));
    const notebookId=(await mine.field(['notebookId'],{signal})).value;
    const paged=await recordReadingHeader(store,{id:plan.recordId,notebookId},mine,sections.values,{windows:command.windows??{},signal});
    signal?.throwIfAborted();
-   return {workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:plan.draftId,draftRevision:plan.draftRevision,planRevision:revision(plan),newRecord:plan.storageRevision===null,sections,...paged};
-  }));
+   return {workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:plan.draftId,draftRevision:plan.draftRevision,planRevision:revision(plan),editRevision,newRecord:plan.storageRevision===null,sections,...paged};
+  })));
  }
  async selectedPlan(store,command,{retryChoice=false}={}){
   if(!command||!researchId(command.workspaceId)||!revisionId(command.id)||!revisionId(command.expectedRevision))invalid();
