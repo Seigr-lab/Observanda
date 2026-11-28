@@ -170,6 +170,8 @@ const assets=await createApplicationAssets();
 // A window's session ends this long after its last renewal. An open window renews
 // it (/api/session/renew), so it ends only once the window has gone.
 const SESSION_LIFETIME=8*60*60*1000;
+// The most of a refused request body that is read and discarded before the connection closes.
+const REFUSED_BODY_DRAIN=64*1024*1024,REFUSED_BODY_DRAIN_MS=15000;
 const mime = name => name.endsWith('.bin') ? 'application/octet-stream' : name.endsWith('.csv') ? 'text/csv; charset=utf-8' : name.endsWith('.png') ? 'image/png' : name.endsWith('.mp4') ? 'video/mp4' : name.endsWith('.wav') ? 'audio/wav' : name.endsWith('.ttf') ? 'font/ttf' : name.endsWith('.otf') ? 'font/otf' : name.endsWith('.woff2') ? 'font/woff2' : name.endsWith('.woff') ? 'font/woff' : name.endsWith('.txt') ? 'text/plain; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.svg') ? 'image/svg+xml' : name.endsWith('.json') ? 'application/json' : 'text/html; charset=utf-8';
 
 async function body(req,limit=MAX_BYTES,capacityOwner=null) {
@@ -1492,7 +1494,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const safe = safeError(error);
       const statuses = { WEBSITE_CHANGED:409, TASK_DEPENDENCY_OWNER_LIMIT:422, TASK_DEPENDENCY_DATABASE_LIMIT:422, TASK_PREREQUISITE_ACCESS:403, TASK_PREREQUISITE_CHANGED:409, TASK_PREREQUISITE_UNSUPPORTED:422, RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, RESOURCE_QUALITY_BLOCK:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, AGENT_KEY_INVALID: 401, AGENT_KEY_SCOPE: 403, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
       if (!res.headersSent){
-       if(!req.complete){req.pause();res.setHeader('Connection','close');}
+       // A request refused for its size is read to its end (discarded, within a byte and time
+       // cap) so the client receives this answer instead of a broken connection. Any other
+       // unfinished request, such as a slow one, is not waited for.
+       if(!req.complete){
+        res.setHeader('Connection','close');
+        if(statuses[safe.code]!==413)req.pause();
+        else await new Promise(resolve=>{let drained=0;const stop=()=>{req.destroy();resolve();},timer=setTimeout(stop,REFUSED_BODY_DRAIN_MS);req.on('data',chunk=>{drained+=chunk.length;if(drained>REFUSED_BODY_DRAIN)stop();});for(const name of ['end','error','close'])req.once(name,()=>{clearTimeout(timer);resolve();});req.resume();});
+       }
        if(safe.code==='WORKLOAD_BUSY')res.setHeader('Retry-After','1');
        json(safe,safe.code==='WORKLOAD_BUSY'?503:safe.code==='REQUEST_TIMEOUT'?408:identityRecoveryStatus[safe.code] ?? organizationErrorStatus[safe.code] ?? statuses[safe.code] ?? 422);
       }else res.destroy();
