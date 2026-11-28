@@ -272,7 +272,7 @@
   "MEDIA_LIMIT": "Denne fila overskrid ei mediegrense som er sett i Lagring og tilgang.",
   "INVALID": "Nokre felt er ugyldige. Kontroller den markerte oppføringa og prøv på nytt.",
   "FORMAT": "Dette arbeidsområdet bruker eit ustøtta eller skadd format. Kjelda er ikkje endra.",
-  "MISSING": "Det finst ikkje noko arbeidsområde her enno. Opprett eitt for å starte.",
+  "MISSING": "Det du bad om, finst ikkje her. Det kan vere flytta eller fjerna; oppdater og prøv på nytt.",
   "EXISTS": "Eit arbeidsområde eller utdata finst allereie her. Vel eit nytt mål.",
   "CONFLICT": "Dette arbeidsområdet er endra sidan du opna det. Last inn på nytt før lagring; utkastet ditt er bevart på skjermen.",
   "LOCKED": "Ein annan operasjon bruker denne skrivaren no.",

@@ -272,7 +272,7 @@
   "MEDIA_LIMIT": "Aquest fitxer supera un límit multimèdia configurat a Emmagatzematge i accés.",
   "INVALID": "Alguns camps no són vàlids. Comprova el registre ressaltat i torna-ho a provar.",
   "FORMAT": "Aquest espai de treball utilitza un format no admès o malmès. La font no s'ha modificat.",
-  "MISSING": "Encara no existeix cap espai de treball aquí. Crea'n un per començar.",
+  "MISSING": "No s'ha trobat aquí el que has demanat. Potser s'ha mogut o eliminat; actualitza i torna-ho a provar.",
   "EXISTS": "Ja existeix un espai de treball o una sortida aquí. Tria una destinació nova.",
   "CONFLICT": "Aquest espai de treball ha canviat des que l'has obert. Torna'l a carregar abans de guardar; l'esborrany s'ha conservat a la pantalla.",
   "LOCKED": "Una altra operació està utilitzant actualment aquest procés d'escriptura.",

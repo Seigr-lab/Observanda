@@ -272,7 +272,7 @@
   "MEDIA_LIMIT": "This file exceeds a media limit configured in Storage & access.",
   "INVALID": "Some fields are invalid. Check the highlighted record and try again.",
   "FORMAT": "This workspace uses an unsupported or damaged format. The source has not been changed.",
-  "MISSING": "No workspace exists here yet. Create one to begin.",
+  "MISSING": "What you asked for could not be found here. It may have been moved or removed; refresh and try again.",
   "EXISTS": "A workspace or output already exists here. Choose a new destination.",
   "CONFLICT": "This workspace changed since you opened it. Reload before saving; your draft has been kept on screen.",
   "LOCKED": "Another operation is currently using this writer.",

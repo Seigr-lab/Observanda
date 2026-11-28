@@ -272,7 +272,7 @@
   "MEDIA_LIMIT": "Este archivo supera un límite multimedia configurado en Almacenamiento y acceso.",
   "INVALID": "Algunos campos no son válidos. Comprueba el registro resaltado y vuelve a intentarlo.",
   "FORMAT": "Este espacio de trabajo utiliza un formato no compatible o dañado. El origen no se ha modificado.",
-  "MISSING": "Todavía no existe ningún espacio de trabajo aquí. Crea uno para empezar.",
+  "MISSING": "No se ha encontrado aquí lo que has pedido. Puede que se haya movido o eliminado; actualiza y vuelve a intentarlo.",
   "EXISTS": "Aquí ya existe un espacio de trabajo o una salida. Elige un destino nuevo.",
   "CONFLICT": "Este espacio de trabajo ha cambiado desde que lo abriste. Recarga antes de guardar; tu borrador se ha conservado en pantalla.",
   "LOCKED": "Otra operación está utilizando actualmente este acceso de escritura.",
