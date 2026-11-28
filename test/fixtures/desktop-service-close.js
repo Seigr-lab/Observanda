@@ -1,18 +1,22 @@
 import {WorkspaceDatabases} from '../../src/workspace-databases.js';
-import {WorkspacePostgres} from '../../src/workspace-postgres.js';
+import {ProjectPostgres} from '../../src/project-postgres.js';
+import {LabBookPostgres} from '../../src/lab-book-postgres.js';
 
-// Reject one selected shutdown before the real database close begins.
-// Application and nested-owner cleanup must still drain every live runtime.
-let failClose=false,failRuntimeRoot=null;
+// Reject one selected shutdown before the real database close begins: the whole
+// workspace's, or a project's or lab book's role in the workspace cluster. The
+// workspace cluster must still stop and every runtime drain.
+let failClose=false,failOwner=null;
 process.on('message',message=>{
  if(message?.type!=='inject-close-failure')return;
- if(message.owner==='workspace')failClose=true;else failRuntimeRoot=message.root;
+ if(message.owner==='workspace')failClose=true;else failOwner=message.owner;
 });
-const closeRuntime=WorkspacePostgres.prototype.closeWorkspace;
-WorkspacePostgres.prototype.closeWorkspace=async function(root){
- if(root===failRuntimeRoot){failRuntimeRoot=null;throw Error('Injected owned runtime shutdown failure');}
- return closeRuntime.call(this,root);
-};
+for(const [kind,type] of [['project',ProjectPostgres],['book',LabBookPostgres]]){
+ const closeHome=type.prototype.closeHome;
+ type.prototype.closeHome=async function(home){
+  if(failOwner===kind){failOwner=null;throw Error('Injected '+kind+' shutdown failure');}
+  return closeHome.call(this,home);
+ };
+}
 const closeWorkspace=WorkspaceDatabases.prototype.closeWorkspace;
 WorkspaceDatabases.prototype.closeWorkspace=async function(root){
  if(failClose){failClose=false;throw Error('Injected desktop shutdown failure');}

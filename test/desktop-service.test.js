@@ -13,7 +13,7 @@ function within(promise,milliseconds,message){
 }
 async function pidFile(root){return readFile(path.join(root,'.observanda/postgresql/data/postmaster.pid'),'utf8').catch(error=>{if(error.code==='ENOENT')return '';throw error;});}
 
-for(const [kind,ownerIndex] of [['workspace',0],['project',1],['book',2]])test('desktop '+kind+' shutdown failure closes nested database owners and reopens retained work',{timeout:240000},async t=>{
+for(const kind of ['workspace','project','book'])test('desktop '+kind+' shutdown failure closes nested database owners and reopens retained work',{timeout:240000},async t=>{
  const runtime=await findPostgres({...process.env,...(process.env.OBSERVANDA_TEST_POSTGRES_BIN?{OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}:{})});
  assert.ok(runtime,'A qualified PostgreSQL runtime is required');
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-desktop-service-'));
@@ -61,8 +61,10 @@ for(const [kind,ownerIndex] of [['workspace',0],['project',1],['book',2]])test('
  const record={...structuredClone(sampleNotebook().entries[0]),id:randomUUID(),notebookId:book.labBookId,title:'Observation before failed close',body:'Exact retained observation.',attachments:[],figures:[],relations:[],sections:[]};
  const bookPrefix=prefix+'/lab-books/'+book.labBookId;await service.call(bookPrefix+'/access/unlock',{username:'',password});
  await service.call(bookPrefix+'/research/records/save',{workspaceId:book.namespaceId,changes:[{id:record.id,expectedRevision:null,record}]});
- for(const root of roots)assert.ok((await pidFile(root)).trim(),'Owner must be running before shutdown');
- service.process.send({type:'inject-close-failure',owner:kind,root:roots[ownerIndex]});service.process.send({type:'stop'});
+ // One workspace, one database: projects and lab books use the workspace's cluster and run none of their own.
+ assert.ok((await pidFile(roots[0])).trim(),'The workspace database must be running before shutdown');
+ for(const root of roots.slice(1))assert.equal((await pidFile(root)).trim(),'',root);
+ service.process.send({type:'inject-close-failure',owner:kind});service.process.send({type:'stop'});
  const stopped=await within(service.exited,60000,'Desktop service did not exit after failed shutdown');
  for(const root of roots)assert.equal((await pidFile(root)).trim(),'','Desktop shutdown left a database process running');
  assert.equal(stopped.code,1,'Shutdown failure remains visible through the service exit code');
