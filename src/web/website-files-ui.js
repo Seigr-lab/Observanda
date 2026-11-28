@@ -325,9 +325,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function scrollToAnchor(doc,hash){if(!hash)return;let id;try{id=decodeURIComponent(hash.slice(1));}catch{return;}doc.getElementById(id)?.scrollIntoView();}
  function bindNavigation(doc,path,preview,base=directory(),pages=previewPages()){
   bindSavedLinks(doc,{url:new URL(path,base).href,directory:base,pages,unavailable:()=>notify(tr('outsidePreview')),
-   external:preview?href=>window.open(href,'_blank','noopener,noreferrer'):null,download:preview?(url,name)=>void downloadResource(url,name).catch(e=>notify(e.message,true)):null,navigate:page=>{
+   external:preview?href=>window.open(href,'_blank','noopener,noreferrer'):null,download:preview?(url,name)=>void downloadResource(url,name).catch(e=>notify(e.message,true)):null,navigate:(page,event)=>{
    if(busy||stale)return;
    if(preview){navigatePreview(page);return;}
+   // While editing, a click on a link places the cursor in its text; Ctrl+click (or Open linked page) follows it.
+   if(!event?.ctrlKey&&!event?.metaKey)return;
    if(opened.site.feedPages?.some(member=>member.path===page.path)){
     void run(async()=>{await save();resetPreview();mode='preview';navigatePreview(page);}).catch(reason=>notify(reason.message,true));return;
    }

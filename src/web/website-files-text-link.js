@@ -31,7 +31,8 @@ export function websiteTextLinks({document,tools,t,listen,safeRange,beforeChange
  const host=tools.ownerDocument;
  const make=(tag,text)=>{const node=host.createElement(tag);if(text!==undefined)node.textContent=text;return node;};
  const button=(parent,label)=>{const node=make('button',t(label));node.type='button';parent.append(node);return node;};
- const edit=button(tools,'richLink'),remove=button(tools,'richUnlink');
+ const edit=button(tools,'richLink'),remove=button(tools,'richUnlink'),follow=button(tools,'richOpenLink');
+ follow.title=t('richOpenLinkHint');
  edit.setAttribute('aria-keyshortcuts','Control+K Meta+K');edit.setAttribute('aria-haspopup','dialog');
  let saved=null,textIntent=false;
  const dialog=make('dialog');dialog.className='website-author-dialog website-rich-link-dialog';dialog.setAttribute('aria-label',t('richLink'));
@@ -58,7 +59,7 @@ export function websiteTextLinks({document,tools,t,listen,safeRange,beforeChange
   for(const node of root.querySelectorAll('a,[contenteditable="false"],[id]'))if(range.intersectsNode(node))return false;
   return true;
  }
- function sync(){const yes=usable(saved);edit.disabled=!yes;remove.disabled=!yes||!anchor(saved);}
+ function sync(){const yes=usable(saved);edit.disabled=!yes;remove.disabled=!yes||!anchor(saved);follow.disabled=!anchor(saved)?.getAttribute('href');}
  function capture(){
   if(dialog.open)return;
   const selection=document.getSelection();if(selection?.rangeCount)saved=selection.getRangeAt(0).cloneRange();
@@ -93,6 +94,8 @@ export function websiteTextLinks({document,tools,t,listen,safeRange,beforeChange
   change();capture();
  }
  listen(edit,'click',open);
+ // Opens the linked page the way Ctrl+click on the link does.
+ listen(follow,'click',()=>{const node=anchor(saved);if(node?.getAttribute('href'))node.dispatchEvent(new (document.defaultView.MouseEvent)('click',{bubbles:true,cancelable:true,ctrlKey:true,button:0}));});
  listen(remove,'click',()=>{if(!restore())return;const node=anchor(saved);if(!node)return;beforeChange();node.replaceWith(...node.childNodes);change();capture();});
  listen(cancel,'click',()=>{dialog.close();restore();});listen(dialog,'cancel',event=>{event.preventDefault();dialog.close();restore();});
  listen(address,'input',()=>address.setCustomValidity(''));listen(apply,'click',submit);

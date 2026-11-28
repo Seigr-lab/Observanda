@@ -50,7 +50,7 @@ export function bindSavedLinks(doc, {url, directory, pages, navigate, download, 
     if (event.type === 'auxclick' || event.button !== 0) return;
     const href = link.getAttribute('href');
     const page = savedPageLink(href, url, directory, pages);
-    if (page) { navigate(page); return; }
+    if (page) { navigate(page,event); return; }
     let asset;try{asset=new URL(href,url);}catch{unavailable();return;}
     if (external && asset.origin !== directory.origin && ['https:','http:'].includes(asset.protocol) && validWebsiteLink(asset.href,url)) {
       if(event.isTrusted)external(asset.href);

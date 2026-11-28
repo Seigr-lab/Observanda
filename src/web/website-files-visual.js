@@ -6,6 +6,7 @@ import {responsiveLayout} from './website-files-responsive.js';
 import {pinStyleText,websiteTextRuns} from './website-text-style.js';
 import {websiteScientificReferences} from './website-files-science.js';
 import {uiTheme} from './ui-theme-values.js';
+import {websiteContentFields} from './website-files-content-fields.js';
 
 const chrome = '[data-observanda-editor]';
 const source = '[data-observanda-source]';
@@ -108,7 +109,10 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   action.type='button'; action.textContent=t('sectionEdit');
   grip.type='button';grip.style.touchAction='none';grip.textContent='⠿ '+t('layerDrag');grip.hidden=true;
   overlayStyle.textContent+='.actions.moving button{pointer-events:none}';
-  actions.append(grip,action);outline.hidden=actions.hidden=true;shadow.append(overlayStyle,outline,actions);
+  // The text being edited from the Content tab has its own outline, apart from the pointer's.
+  const editing=document.createElement('div');editing.className='outline editing';editing.hidden=true;
+  overlayStyle.textContent+='.outline.editing{border-style:dashed}';
+  actions.append(grip,action);outline.hidden=actions.hidden=true;shadow.append(overlayStyle,outline,editing,actions);
 
   // A linked label and its destination belong to the linked entry's privacy
   // grant. Keep both intact even inside a freely editable source paragraph.
@@ -119,7 +123,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     link.contentEditable='false';
   }
 
-  let selected=null, hover=null, range=null, activePath=null, timer=0;
+  let selected=null, hover=null, pointed=null, range=null, activePath=null, timer=0;
   const observer=new win.ResizeObserver(schedule);
   const fields=visualStyleFields(document,t,{pictures,stylesheetPath}), controls=new Map(), paintLabels=new Map(), touched=new Set();
   const form=make('form'); form.className='website-visual-style';
@@ -175,8 +179,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     };
     listen(control,'input',touch);listen(control,'change',touch);
   }
-  const edit=make('button',t('sectionEditText')), apply=make('button',t('sectionApply')), reset=make('button',t('sectionReset'));
-  edit.type=reset.type='button';apply.type='submit';edit.className=reset.className='button';apply.className='button primary';
+  const apply=make('button',t('sectionApply')), reset=make('button',t('sectionReset'));
+  reset.type='button';apply.type='submit';reset.className='button';apply.className='button primary';
   const styleActions=make('div');styleActions.className='website-visual-actions';styleActions.append(apply,reset);
   const rich=websiteRichText({document,host,t,listen,make,beforeChange,change,safeRange:range=>safeRange(range,body)});
   const tableHost=make('div');
@@ -196,7 +200,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
    for(const tab of tabList.children){const on=tab.dataset.inspectorTab===name;tab.setAttribute('aria-selected',String(on));tab.tabIndex=on?0:-1;if(on&&focus)tab.focus();}
    for(const [key,panel] of Object.entries(panels))panel.hidden=key!==name;
   }
-  panels.content.append(edit);
+  // The section's texts as fields; the one in use is outlined in the page.
+  const contentFields=websiteContentFields({document,host:panels.content,t,make,listen,writable,beforeChange,change,point:node=>{pointed=node;schedule();},placeCaret:node=>caretIn(node)});
   panels.style.append(labelled(t('sectionScope'),scope),grid,...(extraGrid.children.length?[extra]:[]),styleActions);
   // Text formatting and table tools stay above the tabs: they follow the cursor in text and tables.
   form.append(title,prompt,rich.toolbar,tableHost,tabList,panels.content,panels.style,panels.layout);showTab(inspectorTab);
@@ -208,6 +213,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
 
   function position() {
     timer=0;
+    const shownText=pointed?.isConnected&&pointed.getBoundingClientRect();editing.hidden=!shownText;
+    if(shownText)Object.assign(editing.style,{left:shownText.left+'px',top:shownText.top+'px',width:shownText.width+'px',height:shownText.height+'px'});
     const node=hover??selected;
     if(!node?.isConnected){outline.hidden=actions.hidden=true;return;}
     const rect=node.getBoundingClientRect();
@@ -259,9 +266,6 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
       control.disabled=scope.value==='section'&&!!selected?.hasAttribute('data-website-feed')||selectionScope&&['padding','text-align'].includes(field.name);
     }
     touched.clear();apply.disabled=true;reset.disabled=scope.value==='section'&&!!selected?.hasAttribute('data-website-feed');
-    edit.hidden=!selected;
-    edit.disabled=!selected||!editableText(selected,document);
-    edit.title=edit.disabled?t('sectionNoText'):'';
     prompt.hidden=!!selected;
     responsive.refresh();
   }
@@ -271,20 +275,25 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     const same=node===selected;
     selected=node;hover=null;
     if(!same){
-      range=null;scope.value='section';observer.disconnect();observer.observe(node);
-      activePath=pathOf(node,body);onSelect?.({path:activePath});refresh();
+      range=null;pointed=null;scope.value='section';observer.disconnect();observer.observe(node);
+      activePath=pathOf(node,body);onSelect?.({path:activePath});refresh();contentFields.select(node);
     }
     if(scroll)node.scrollIntoView({block:'nearest',inline:'nearest'});schedule();
   }
+  // Put a visible cursor at the end of a text in the page, outlined, and scroll to it.
+  function caretIn(node){
+    const walker=document.createTreeWalker(node,4);let text=null;for(let next=walker.nextNode();next;next=walker.nextNode())if(next.data.trim()&&writable(next.parentElement))text=next;
+    if(!text)return;
+    text.parentElement.closest('[contenteditable="true"]')?.focus({preventScroll:true});const caret=document.createRange();caret.setStart(text,text.data.length);caret.collapse(true);
+    const selection=win.getSelection();selection.removeAllRanges();selection.addRange(caret);node.scrollIntoView({block:'nearest'});pointed=node;schedule();
+  }
+  // Edit section opens the section's texts in the Content tab; a section without plain texts gets the cursor in its first text.
   function editSelected(){
-    const text=editableText(selected,document);if(!text)return;
-    const leaf=text.parentElement.closest('[contenteditable="true"]');
-    leaf?.focus({preventScroll:true});const caret=document.createRange();caret.setStart(text,0);caret.collapse(true);
-    const selection=win.getSelection();selection.removeAllRanges();selection.addRange(caret);text.parentElement.scrollIntoView({block:'nearest'});schedule();
+    showTab('content',true);if(contentFields.focusFirst())return;
+    const text=editableText(selected,document);if(text)caretIn(text.parentElement);
   }
   listen(action,'click',()=>{const node=hover??selected,menu=openMenu&&menuTarget?.(node);if(menu){openMenu(menu);return;}setSelected(node);editSelected();});
   layerDrag?.bindGrip(grip,()=>hover??selected,signal);
-  listen(edit,'click',editSelected);
   listen(scope,'change',refresh);
   listen(body,'pointerover',event=>{
     if(frame.contains(event.target))return;

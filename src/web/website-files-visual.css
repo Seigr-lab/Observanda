@@ -39,3 +39,9 @@
 .website-area-row { display:grid; grid-template-columns:minmax(0,1fr) 4rem 4rem; align-items:end; gap:.45rem; border-block-end:1px solid var(--border,var(--ui-border)); padding:.3rem 0; }
 .website-area-row strong { overflow-wrap:anywhere; }
 .website-area-row input { min-width:0; max-width:100%; }
+/* The selected section's texts as fields in the Content tab. */
+.website-content-fields { display:grid;gap:.75rem; }
+.website-content-fields > p { margin:0;color:var(--ui-muted); }
+.website-content-field label { display:grid;gap:.25rem;font-weight:600; }
+.website-content-field textarea { inline-size:100%;box-sizing:border-box;resize:vertical;font:inherit;font-weight:400;min-block-size:0;block-size:auto;field-sizing:content; }
+.website-content-field .website-content-preview { display:block;margin:.25rem 0 .4rem;color:var(--ui-muted);overflow-wrap:anywhere; }
